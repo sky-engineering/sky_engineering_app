@@ -3,19 +3,25 @@ workflows:
     name: iOS Release → TestFlight
     instance_type: mac_mini_m2
 
-    # 👇 Add your App Store Connect integration NAME exactly as shown in Codemagic → Teams → Integrations
+    # 👉 Use the EXACT name of your App Store Connect integration here
     integrations:
       app_store_connect: "ASC-Sky"
 
     environment:
       flutter: stable
       xcode: latest
+      cocoapods: default
 
     scripts:
       - name: Flutter packages
         script: flutter pub get
-      - name: Automatic code signing (uses your Apple integration)
-        script: xcode-project use-profiles --bundle-id "com.skyengineering.sky-engineering-app"
+
+      - name: Set up code signing (fetch & apply)
+        script: |
+          keychain add-certificates
+          app-store-connect fetch-signing-files "com.skyengineering.sky-engineering-app" --type IOS_APP_STORE --create
+          xcode-project use-profiles
+
       - name: Build IPA for App Store (Release)
         script: xcode-project build-ipa --workspace "ios/Runner.xcworkspace" --scheme "Runner" --archive-configuration "Release" --export-method "app-store"
 
