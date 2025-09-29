@@ -5,32 +5,16 @@ workflows:
     environment:
       flutter: stable
       xcode: latest
-      cocoapods: default
-      vars:
-        BUNDLE_ID: com.skyengineering.sky-engineering-app
-      groups:
-        - appstore_credentials   # create this group in Codemagic → Teams → Environment variables
-    cache:
-      cache_paths:
-        - ~/.pub-cache
-        - ios/Pods
-        - ~/Library/Caches/CocoaPods
-        - ~/.cache
     scripts:
       - name: Flutter packages
         script: flutter pub get
-      - name: Automatic code signing (creates certs & profiles from API key)
-        script: xcode-project use-profiles --bundle-id "$BUNDLE_ID"
+      - name: Automatic code signing (uses your Apple integration)
+        script: xcode-project use-profiles --bundle-id "com.skyengineering.sky-engineering-app"
       - name: Build IPA for App Store (Release)
         script: xcode-project build-ipa --workspace "ios/Runner.xcworkspace" --scheme "Runner" --archive-configuration "Release" --export-method "app-store"
     artifacts:
       - build/ios/ipa/*.ipa
     publishing:
       app_store_connect:
-        ipa_path: build/ios/ipa/*.ipa
-        auth:
-          api_key:
-            key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
-            issuer_id: $APP_STORE_CONNECT_ISSUER_ID
-            private_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        auth: integration
         submit_to_testflight: true
