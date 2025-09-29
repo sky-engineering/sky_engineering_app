@@ -1,0 +1,725 @@
+// lib/src/widgets/invoices_section.dart
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../data/models/invoice.dart';
+import '../data/repositories/invoice_repository.dart';
+import 'form_helpers.dart';
+
+class InvoicesSection extends StatelessWidget {
+  /// Project whose invoices are shown.
+  final String projectId;
+
+  /// Whether current user owns the project (enables editing).
+  final bool isOwner;
+
+  /// Used to prefill in the Add dialog (we’ll show this exact string first).
+  final String? projectNumberString;
+
+  /// Optional section title. If null/empty and wrapInCard=true we suppress a header.
+  final String? title;
+
+  /// Optional filter for invoice type: 'Client' or 'Vendor'.
+  /// If null, shows all invoices.
+  final String? invoiceTypeFilter;
+
+  /// When false, renders content without an outer Card. Default: true.
+  final bool wrapInCard;
+
+  /// When false, hides the internal "New Invoice" button. Default: true.
+  final bool showNewButton;
+
+  /// When true, shows only invoices with a positive balance.
+  final bool unpaidOnly;
+
+  const InvoicesSection({
+    super.key,
+    required this.projectId,
+    required this.isOwner,
+    this.projectNumberString,
+    this.title,
+    this.invoiceTypeFilter,
+    this.wrapInCard = true,
+    this.showNewButton = true,
+    this.unpaidOnly = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final repo = InvoiceRepository();
+    final currency = NumberFormat.simpleCurrency();
+
+    Widget content = Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (title != null && title!.trim().isNotEmpty)
+          Text(title!, style: Theme.of(context).textTheme.titleLarge),
+        if (title != null && title!.trim().isNotEmpty) const SizedBox(height: 8),
+        StreamBuilder<List<Invoice>>(
+          stream: repo.streamByProject(projectId),
+          builder: (context, snap) {
+            if (snap.connectionState == ConnectionState.waiting) {
+              return const Padding(
+                padding: EdgeInsets.all(12),
+                child: CircularProgressIndicator(),
+              );
+            }
+
+            // start with all invoices
+            var invoices = (snap.data ?? const <Invoice>[]);
+
+            // filter by type
+            if (invoiceTypeFilter != null) {
+              invoices = invoices
+                  .where((inv) => inv.invoiceType == invoiceTypeFilter)
+                  .toList();
+            }
+
+            // filter by unpaid
+            if (unpaidOnly) {
+              invoices = invoices.where((inv) => (inv.balance) > 0.0001).toList();
+            }
+
+            if (invoices.isEmpty) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Text(
+                      invoiceTypeFilter == 'Vendor'
+                          ? 'No vendor invoices yet'
+                          : invoiceTypeFilter == 'Client'
+                          ? 'No client invoices yet'
+                          : 'No invoices yet',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  if (isOwner && showNewButton)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: FilledButton.icon(
+                        onPressed: () => showAddInvoiceDialog(
+                          context,
+                          projectId,
+                          defaultProjectNumber: projectNumberString,
+                          initialInvoiceType: invoiceTypeFilter ?? 'Client',
+                        ),
+                        icon: const Icon(Icons.add),
+                        label: const Text('New Invoice'),
+                      ),
+                    ),
+                ],
+              );
+            }
+
+            return Column(
+              children: [
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: invoices.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (context, i) {
+                    final inv = invoices[i];
+                    final dateBit =
+                    inv.invoiceDate != null ? fmtDate(inv.invoiceDate) : null;
+
+                    return InkWell(
+                      onTap: () => _showEditInvoiceDialog(context, inv, canEdit: isOwner),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // First line: "Invoice <#>" + (open link icon if any) ... "Balance: $x"
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          inv.invoiceNumber.isNotEmpty
+                                              ? 'Invoice ${inv.invoiceNumber}'
+                                              : 'Invoice ${inv.id.substring(0, 6)}',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 15,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      if ((inv.documentLink ?? '').trim().isNotEmpty)
+                                        IconButton(
+                                          tooltip: 'Open document link',
+                                          visualDensity: VisualDensity.compact,
+                                          iconSize: 18,
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(
+                                              minWidth: 28, minHeight: 28),
+                                          onPressed: () => _openLink(inv.documentLink!.trim()),
+                                          icon: const Icon(Icons.open_in_new),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Balance: ${currency.format(inv.balance)}',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            // Second line (small): "Original: $..." • date
+                            DefaultTextStyle(
+                              style: Theme.of(context).textTheme.bodySmall ??
+                                  const TextStyle(fontSize: 12),
+                              child: Row(
+                                children: [
+                                  Text('Original: ${currency.format(inv.invoiceAmount)}'),
+                                  if (dateBit != null) ...[
+                                    const SizedBox(width: 10),
+                                    Text('•  $dateBit'),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
+                if (isOwner && showNewButton)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: FilledButton.icon(
+                      onPressed: () => showAddInvoiceDialog(
+                        context,
+                        projectId,
+                        defaultProjectNumber: projectNumberString,
+                        initialInvoiceType: invoiceTypeFilter ?? 'Client',
+                      ),
+                      icon: const Icon(Icons.add),
+                      label: const Text('New Invoice'),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ]),
+    );
+
+    if (wrapInCard) {
+      return Card(child: content);
+    }
+    return content;
+  }
+}
+
+/// Public helper so other widgets can open the "New Invoice" dialog.
+Future<void> showAddInvoiceDialog(
+    BuildContext context,
+    String projectId, {
+      String? defaultProjectNumber,
+      String initialInvoiceType = 'Client',
+    }) {
+  return _showAddInvoiceDialog(
+    context,
+    projectId,
+    defaultProjectNumber: defaultProjectNumber,
+    initialInvoiceType: initialInvoiceType,
+  );
+}
+
+// ---------- Helpers ----------
+String _digitsOnly(String s) => s.replaceAll(RegExp(r'[^0-9]'), '');
+
+/// Returns true if a project exists with an exact projectNumber match to [text]
+/// OR whose digits-only value equals digits-only of [text].
+Future<bool> _projectNumberExists(String text) async {
+  final projects = FirebaseFirestore.instance.collection('projects');
+
+  // 1) Try exact match first (fast, indexed).
+  final exact = await projects.where('projectNumber', isEqualTo: text).limit(1).get();
+  if (exact.docs.isNotEmpty) return true;
+
+  // 2) Fallback: scan a reasonable number and compare digits-only client-side.
+  final digits = _digitsOnly(text);
+  if (digits.isEmpty) return false;
+
+  final scan = await projects.limit(500).get(); // adjust for your dataset scale
+  for (final d in scan.docs) {
+    final v = (d.data()['projectNumber'] as String?) ?? '';
+    if (_digitsOnly(v) == digits) return true;
+  }
+  return false;
+}
+
+Future<void> _openLink(String url) async {
+  final uri = Uri.tryParse(url);
+  if (uri == null) return;
+  if (await canLaunchUrl(uri)) {
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+}
+
+// ---------- dialog helpers (uses Amount Paid) ----------
+Future<void> _showAddInvoiceDialog(
+    BuildContext context,
+    String projectId, {
+      String? defaultProjectNumber,
+      String initialInvoiceType = 'Client',
+    }) async {
+  // Reordered fields per request:
+  // 1) Project Number (defaults to current project's projectNumber string)
+  // 2) Invoice Number
+  // 3) Invoice Amount
+  // 4) Amount Paid (default 0)
+  // then dates (Invoice Date defaults today, Due Date = today+30), type, link.
+
+  final now = DateTime.now();
+  DateTime? invoiceDate = DateTime(now.year, now.month, now.day);
+  DateTime? dueDate = DateTime(now.year, now.month, now.day).add(const Duration(days: 30));
+  DateTime? paidDate;
+
+  final projectNumberCtl = TextEditingController(text: defaultProjectNumber ?? '');
+  final invoiceNumberCtl = TextEditingController();
+  final invoiceAmountCtl = TextEditingController();
+  final amountPaidCtl = TextEditingController(text: '0');
+  final documentLinkCtl = TextEditingController();
+
+  String invoiceType = (initialInvoiceType == 'Vendor') ? 'Vendor' : 'Client';
+
+  final formKey = GlobalKey<FormState>();
+  final repo = InvoiceRepository();
+  final me = FirebaseAuth.instance.currentUser;
+
+  if (me == null) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('You must be signed in.')));
+    return;
+  }
+
+  Future<void> pickDate(String which) async {
+    final seed = (which == 'invoice')
+        ? (invoiceDate ?? DateTime.now())
+        : (which == 'due')
+        ? (dueDate ?? DateTime.now())
+        : (paidDate ?? DateTime.now());
+    final d = await showDatePicker(
+      context: context,
+      initialDate: seed,
+      firstDate: DateTime(seed.year - 5),
+      lastDate: DateTime(seed.year + 5),
+    );
+    if (d != null) {
+      switch (which) {
+        case 'invoice':
+          invoiceDate = d;
+          break;
+        case 'due':
+          dueDate = d;
+          break;
+        case 'paid':
+          paidDate = d;
+          break;
+      }
+    }
+  }
+
+  await showDialog<void>(
+    context: context,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: const Text('New Invoice'),
+            content: Form(
+              key: formKey,
+              child: SizedBox(
+                width: 520,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      appTextField(
+                        'Project Number',
+                        projectNumberCtl,
+                        required: true,
+                        hint: 'e.g., 026-01',
+                      ),
+                      const SizedBox(height: 10),
+                      appTextField('Invoice Number', invoiceNumberCtl,
+                          required: true, hint: 'e.g., 1220'),
+                      const SizedBox(height: 10),
+                      appTextField('Invoice Amount', invoiceAmountCtl,
+                          required: true,
+                          hint: 'e.g., 17150.91',
+                          keyboardType: TextInputType.number),
+                      const SizedBox(height: 10),
+                      appTextField('Amount Paid', amountPaidCtl,
+                          hint: '0', keyboardType: TextInputType.number),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: appDateField(
+                              label: 'Invoice Date',
+                              value: invoiceDate,
+                              onPick: () async {
+                                await pickDate('invoice');
+                                setState(() {});
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: appDateField(
+                              label: 'Due Date',
+                              value: dueDate,
+                              onPick: () async {
+                                await pickDate('due');
+                                setState(() {});
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      appDateField(
+                        label: 'Paid Date',
+                        value: paidDate,
+                        onPick: () async {
+                          await pickDate('paid');
+                          setState(() {});
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        value: invoiceType,
+                        items: const [
+                          DropdownMenuItem(value: 'Client', child: Text('Client')),
+                          DropdownMenuItem(value: 'Vendor', child: Text('Vendor')),
+                        ],
+                        onChanged: (v) => setState(() => invoiceType = v ?? 'Client'),
+                        decoration: const InputDecoration(
+                          labelText: 'Invoice Type',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      appTextField('Document Link', documentLinkCtl, hint: 'https://...'),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  if (!(formKey.currentState?.validate() ?? false)) return;
+
+                  // Validate that the project number exists before saving.
+                  final pnText = projectNumberCtl.text.trim();
+                  if (pnText.isEmpty || !(await _projectNumberExists(pnText))) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Project Number not found.')),
+                    );
+                    return;
+                  }
+
+                  final amt = double.tryParse(invoiceAmountCtl.text.trim()) ?? 0.0;
+                  final paid = amountPaidCtl.text.trim().isEmpty
+                      ? 0.0
+                      : (double.tryParse(amountPaidCtl.text.trim()) ?? 0.0);
+
+                  // Keep storing the numeric digits in the int field, but show the formatted
+                  // string in the UI dialogs (per your request).
+                  int? projNum;
+                  final digits = _digitsOnly(pnText);
+                  if (digits.isNotEmpty) projNum = int.tryParse(digits);
+
+                  final me = FirebaseAuth.instance.currentUser;
+                  final inv = Invoice(
+                    id: '_',
+                    projectId: projectId,
+                    ownerUid: me?.uid,
+                    invoiceNumber: invoiceNumberCtl.text.trim(),
+                    projectNumber: projNum,
+                    invoiceAmount: amt,
+                    amountPaid: paid,
+                    invoiceDate: invoiceDate,
+                    dueDate: dueDate,
+                    paidDate: paidDate,
+                    documentLink:
+                    documentLinkCtl.text.trim().isNotEmpty ? documentLinkCtl.text.trim() : null,
+                    invoiceType: invoiceType,
+                  );
+
+                  try {
+                    await repo.add(inv);
+                    // ignore: use_build_context_synchronously
+                    Navigator.pop(context);
+                  } catch (e) {
+                    // ignore: use_build_context_synchronously
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to create invoice: $e')),
+                    );
+                  }
+                },
+                child: const Text('Create'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
+
+Future<void> _showEditInvoiceDialog(BuildContext context, Invoice inv,
+    {required bool canEdit}) async {
+  // Prefill the formatted project number string from the actual project doc.
+  String initialProjectNumberText = inv.projectNumber?.toString() ?? '';
+  try {
+    final projSnap = await FirebaseFirestore.instance
+        .collection('projects')
+        .doc(inv.projectId)
+        .get();
+    final pn = (projSnap.data()?['projectNumber'] as String?) ?? '';
+    if (pn.isNotEmpty) initialProjectNumberText = pn;
+  } catch (_) {
+    // fall back to digits
+  }
+
+  final projectNumberCtl = TextEditingController(text: initialProjectNumberText);
+  final invoiceNumberCtl = TextEditingController(text: inv.invoiceNumber);
+  final invoiceAmountCtl =
+  TextEditingController(text: inv.invoiceAmount.toStringAsFixed(2));
+  final amountPaidCtl =
+  TextEditingController(text: inv.amountPaid.toStringAsFixed(2));
+  final documentLinkCtl = TextEditingController(text: inv.documentLink ?? '');
+
+  String invoiceType = inv.invoiceType;
+  DateTime? invoiceDate = inv.invoiceDate;
+  DateTime? dueDate = inv.dueDate;
+  DateTime? paidDate = inv.paidDate;
+
+  final formKey = GlobalKey<FormState>();
+  final repo = InvoiceRepository();
+
+  Future<void> pickDate(String which) async {
+    final seed = (which == 'invoice')
+        ? (invoiceDate ?? DateTime.now())
+        : (which == 'due')
+        ? (dueDate ?? DateTime.now())
+        : (paidDate ?? DateTime.now());
+    final d = await showDatePicker(
+      context: context,
+      initialDate: seed,
+      firstDate: DateTime(seed.year - 5),
+      lastDate: DateTime(seed.year + 5),
+    );
+    if (d != null) {
+      switch (which) {
+        case 'invoice':
+          invoiceDate = d;
+          break;
+        case 'due':
+          dueDate = d;
+          break;
+        case 'paid':
+          paidDate = d;
+          break;
+      }
+    }
+  }
+
+  void _viewOnlyTap() {
+    if (!canEdit) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('View-only: only the project owner can modify invoices.')),
+      );
+    }
+  }
+
+  await showDialog<void>(
+    context: context,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: Text('Invoice ${inv.invoiceNumber.isNotEmpty ? inv.invoiceNumber : inv.id.substring(0, 6)}'),
+            content: Form(
+              key: formKey,
+              child: SizedBox(
+                width: 520,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      appTextField('Project Number', projectNumberCtl,
+                          required: true, hint: 'e.g., 026-01'),
+                      const SizedBox(height: 10),
+                      appTextField('Invoice Number', invoiceNumberCtl,
+                          required: true),
+                      const SizedBox(height: 10),
+                      appTextField('Invoice Amount', invoiceAmountCtl,
+                          required: true, keyboardType: TextInputType.number),
+                      const SizedBox(height: 10),
+                      appTextField('Amount Paid', amountPaidCtl,
+                          keyboardType: TextInputType.number),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: appDateField(
+                              label: 'Invoice Date',
+                              value: invoiceDate,
+                              onPick: () async {
+                                if (!canEdit) return _viewOnlyTap();
+                                await pickDate('invoice');
+                                setState(() {});
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: appDateField(
+                              label: 'Due Date',
+                              value: dueDate,
+                              onPick: () async {
+                                if (!canEdit) return _viewOnlyTap();
+                                await pickDate('due');
+                                setState(() {});
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      appDateField(
+                        label: 'Paid Date',
+                        value: paidDate,
+                        onPick: () async {
+                          if (!canEdit) return _viewOnlyTap();
+                          await pickDate('paid');
+                          setState(() {});
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        value: invoiceType,
+                        items: const [
+                          DropdownMenuItem(value: 'Client', child: Text('Client')),
+                          DropdownMenuItem(value: 'Vendor', child: Text('Vendor')),
+                        ],
+                        onChanged: canEdit
+                            ? (v) => setState(() => invoiceType = v ?? invoiceType)
+                            : (v) => _viewOnlyTap(),
+                        decoration: const InputDecoration(
+                          labelText: 'Invoice Type',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      appTextField('Document Link', documentLinkCtl),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            actions: [
+              if (canEdit)
+                TextButton(
+                  onPressed: () async {
+                    final ok = await confirmDialog(context, 'Delete this invoice?');
+                    if (!ok) return;
+                    try {
+                      await repo.delete(inv.id);
+                      // ignore: use_build_context_synchronously
+                      Navigator.pop(context);
+                    } catch (e) {
+                      // ignore: use_build_context_synchronously
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Failed to delete: $e')));
+                    }
+                  },
+                  child: const Text('Delete'),
+                ),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(canEdit ? 'Cancel' : 'Close'),
+              ),
+              if (canEdit)
+                FilledButton(
+                  onPressed: () async {
+                    if (!(formKey.currentState?.validate() ?? false)) return;
+
+                    // Validate that the project number exists before saving.
+                    final pnText = projectNumberCtl.text.trim();
+                    if (pnText.isEmpty || !(await _projectNumberExists(pnText))) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Project Number not found.')),
+                      );
+                      return;
+                    }
+
+                    final amt = double.tryParse(invoiceAmountCtl.text.trim()) ??
+                        inv.invoiceAmount;
+                    final paid = amountPaidCtl.text.trim().isEmpty
+                        ? inv.amountPaid
+                        : (double.tryParse(amountPaidCtl.text.trim()) ??
+                        inv.amountPaid);
+
+                    // Keep storing digits in int field; show formatted string in UI.
+                    int? projNum;
+                    final digits = _digitsOnly(pnText);
+                    if (digits.isNotEmpty) projNum = int.tryParse(digits);
+
+                    try {
+                      await repo.update(inv.id, {
+                        'invoiceNumber': invoiceNumberCtl.text.trim(),
+                        'projectNumber': projNum,
+                        'invoiceAmount': amt,
+                        'amountPaid': paid,
+                        'invoiceDate':
+                        invoiceDate != null ? Timestamp.fromDate(invoiceDate!) : null,
+                        'dueDate': dueDate != null ? Timestamp.fromDate(dueDate!) : null,
+                        'paidDate': paidDate != null ? Timestamp.fromDate(paidDate!) : null,
+                        'documentLink': documentLinkCtl.text.trim().isNotEmpty
+                            ? documentLinkCtl.text.trim()
+                            : null,
+                        'invoiceType': invoiceType,
+                      });
+                      // ignore: use_build_context_synchronously
+                      Navigator.pop(context);
+                    } catch (e) {
+                      // ignore: use_build_context_synchronously
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Failed to save: $e')));
+                    }
+                  },
+                  child: const Text('Save'),
+                ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}

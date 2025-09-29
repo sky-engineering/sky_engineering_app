@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "701989214865",
+    "project_id": "sky-eng-app-18242",
+    "storage_bucket": "sky-eng-app-18242.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:701989214865:android:acbba606ededa7ae687d30",
+        "android_client_info": {
+          "package_name": "com.skyengineering.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCdp3ze7g6kJgq5u7rj1xiTyHF-5DFxYio"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:701989214865:android:016f270d30263cc1687d30",
+        "android_client_info": {
+          "package_name": "com.skyengineering.sky_engineering_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCdp3ze7g6kJgq5u7rj1xiTyHF-5DFxYio"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
