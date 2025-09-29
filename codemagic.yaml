@@ -3,9 +3,8 @@ workflows:
     name: iOS Release → TestFlight
     instance_type: mac_mini_m2
 
-    # 👉 Use the EXACT name of your App Store Connect integration here
     integrations:
-      app_store_connect: "ASC-Sky"
+      app_store_connect: "ASC-Sky"   # EXACT name from Teams → Integrations
 
     environment:
       flutter: stable
@@ -23,7 +22,7 @@ workflows:
           xcode-project use-profiles
 
       - name: Build IPA for App Store (Release)
-        script: xcode-project build-ipa --workspace "ios/Runner.xcworkspace" --scheme "Runner" --archive-configuration "Release" --export-method "app-store"
+        script: xcode-project build-ipa --workspace "ios/Runner.xcworkspace" --scheme "Runner"
 
     artifacts:
       - build/ios/ipa/*.ipa
