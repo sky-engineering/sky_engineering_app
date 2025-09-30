@@ -3,14 +3,18 @@ workflows:
     name: iOS Release → TestFlight
     instance_type: mac_mini_m2
 
+    # EXACT integration name from Teams → Integrations
     integrations:
-      app_store_connect: "ASC-Sky"   # EXACT name from Teams → Integrations
+      app_store_connect: "ASC-Sky"
 
     environment:
       flutter: stable
       xcode: latest
       cocoapods: default
-      # If your three env vars live inside a group named ios_signing, keep this:
+      vars:
+        BUNDLE_ID: com.skyengineering.sky-engineering-app
+        TEAM_ID: NJGU3G29BR     # <-- your Apple Team ID
+      # If your three env vars live in a group named ios_signing, keep this:
       groups:
         - ios_signing
 
@@ -22,7 +26,7 @@ workflows:
         script: |
           set -eo pipefail
 
-          # Sanity check env vars are present
+          # Sanity check env vars
           if [ -z "${IOS_DIST_CERT_P12_BASE64:-}" ] || [ -z "${IOS_PROFILE_BASE64:-}" ]; then
             echo "✗ Missing env vars. Ensure IOS_DIST_CERT_P12_BASE64 and IOS_PROFILE_BASE64 are set (in app Settings → Environment variables, optionally inside ios_signing group)."
             exit 1
@@ -30,42 +34,83 @@ workflows:
 
           # Write files from base64
           echo "$IOS_DIST_CERT_P12_BASE64" | base64 --decode > /tmp/dist.p12
-          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          echo "$IOS_PROFILE_BASE64" | base64 --decode > "$HOME/Library/MobileDevice/Provisioning Profiles/appstore.mobileprovision"
+          PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILE_DIR"
+          echo "$IOS_PROFILE_BASE64" | base64 --decode > "$PROFILE_DIR/appstore.mobileprovision"
 
-          # Create and use our own keychain (with a non-empty password)
+          # Create and use our own keychain with a password
           KEYCHAIN_NAME="build"
           KEYCHAIN_PASSWORD="ci_password_123"
           KEYCHAIN_PATH="$HOME/Library/Keychains/${KEYCHAIN_NAME}.keychain-db"
-
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          # Make our keychain the only one in the search list to avoid confusion
           security list-keychains -d user -s "$KEYCHAIN_PATH"
           security default-keychain -s "$KEYCHAIN_PATH"
 
-          # Import the .p12 (handles both with/without password)
+          # Import the .p12 (with or without password)
           if [ -n "${IOS_DIST_CERT_PASSWORD:-}" ]; then
             security import /tmp/dist.p12 -k "$KEYCHAIN_PATH" -P "$IOS_DIST_CERT_PASSWORD" -A -t cert -f pkcs12
           else
             security import /tmp/dist.p12 -k "$KEYCHAIN_PATH" -A -t cert -f pkcs12
           fi
 
-          # Allow codesign tools to use the private key in our keychain
+          # Allow codesign to use the private key
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" || true
 
-          echo "== Available code signing identities in our keychain =="
+          echo "== Code signing identities in our keychain =="
           security find-identity -v -p codesigning "$KEYCHAIN_PATH" || true
 
-          # Apply provisioning profile to the Xcode project
-          xcode-project use-profiles
+          # Extract provisioning profile NAME and UUID
+          PROFILE_PLIST=$(mktemp)
+          security cms -D -i "$PROFILE_DIR/appstore.mobileprovision" > "$PROFILE_PLIST"
+          PROFILE_NAME=$(/usr/libexec/PlistBuddy -c 'Print:Name' "$PROFILE_PLIST")
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print:UUID' "$PROFILE_PLIST")
+          echo "Using provisioning profile: $PROFILE_NAME ($PROFILE_UUID)"
 
-          echo "== Signing settings =="
-          xcode-project show-build-settings --workspace "ios/Runner.xcworkspace" --scheme "Runner" | egrep "PRODUCT_BUNDLE_IDENTIFIER|DEVELOPMENT_TEAM|PROVISIONING_PROFILE|CODE_SIGN_STYLE"
+          # Show current Xcode signing settings
+          echo "== Signing settings BEFORE =="
+          xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -showBuildSettings | egrep "PRODUCT_BUNDLE_IDENTIFIER|DEVELOPMENT_TEAM|PROVISIONING_PROFILE|CODE_SIGN_STYLE" || true
 
-      - name: Build IPA (Release)
-        script: xcode-project build-ipa --workspace "ios/Runner.xcworkspace" --scheme "Runner"
+          # Archive (force manual signing with our profile)
+          ARCHIVE_PATH="$PWD/build/ios/xcarchive/Runner.xcarchive"
+          xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -configuration Release \
+            -archivePath "$ARCHIVE_PATH" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            "PRODUCT_BUNDLE_IDENTIFIER=$BUNDLE_ID" \
+            "CODE_SIGN_IDENTITY=Apple Distribution" \
+            CODE_SIGN_STYLE=Manual \
+            "PROVISIONING_PROFILE_SPECIFIER=$PROFILE_NAME" \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            clean archive
+
+          # Create ExportOptions.plist with explicit mapping
+          cat > /tmp/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>${BUNDLE_ID}</key><string>${PROFILE_NAME}</string>
+            </dict>
+            <key>uploadBitcode</key><false/>
+            <key>compileBitcode</key><false/>
+          </dict>
+          </plist>
+          EOF
+
+          # Export IPA
+          mkdir -p build/ios/ipa
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportOptionsPlist /tmp/ExportOptions.plist \
+            -exportPath build/ios/ipa
+
+      - name: List produced IPA
+        script: ls -la build/ios/ipa || true
 
     artifacts:
       - build/ios/ipa/*.ipa
