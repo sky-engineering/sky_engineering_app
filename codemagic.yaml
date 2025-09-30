@@ -3,7 +3,6 @@ workflows:
     name: iOS Release → TestFlight
     instance_type: mac_mini_m2
 
-    # EXACT integration name from Teams → Integrations
     integrations:
       app_store_connect: "ASC-Sky"
 
@@ -13,8 +12,8 @@ workflows:
       cocoapods: default
       vars:
         BUNDLE_ID: com.skyengineering.sky-engineering-app
-        TEAM_ID: NJGU3G29BR     # <-- your Apple Team ID
-      # If your three env vars live in a group named ios_signing, keep this:
+        TEAM_ID: NJGU3G29BR
+      # keep this if your env vars are in the ios_signing group
       groups:
         - ios_signing
 
@@ -26,19 +25,19 @@ workflows:
         script: |
           set -eo pipefail
 
-          # Sanity check env vars
+          # sanity checks
           if [ -z "${IOS_DIST_CERT_P12_BASE64:-}" ] || [ -z "${IOS_PROFILE_BASE64:-}" ]; then
-            echo "✗ Missing env vars. Ensure IOS_DIST_CERT_P12_BASE64 and IOS_PROFILE_BASE64 are set (in app Settings → Environment variables, optionally inside ios_signing group)."
+            echo "✗ Missing IOS_DIST_CERT_P12_BASE64 / IOS_PROFILE_BASE64"
             exit 1
           fi
 
-          # Write files from base64
+          # write files
           echo "$IOS_DIST_CERT_P12_BASE64" | base64 --decode > /tmp/dist.p12
           PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
           mkdir -p "$PROFILE_DIR"
           echo "$IOS_PROFILE_BASE64" | base64 --decode > "$PROFILE_DIR/appstore.mobileprovision"
 
-          # Create and use our own keychain with a password
+          # dedicated keychain with password
           KEYCHAIN_NAME="build"
           KEYCHAIN_PASSWORD="ci_password_123"
           KEYCHAIN_PATH="$HOME/Library/Keychains/${KEYCHAIN_NAME}.keychain-db"
@@ -48,31 +47,26 @@ workflows:
           security list-keychains -d user -s "$KEYCHAIN_PATH"
           security default-keychain -s "$KEYCHAIN_PATH"
 
-          # Import the .p12 (with or without password)
+          # ❗ Import the PKCS#12 WITHOUT forcing -t cert (keeps the private key)
           if [ -n "${IOS_DIST_CERT_PASSWORD:-}" ]; then
-            security import /tmp/dist.p12 -k "$KEYCHAIN_PATH" -P "$IOS_DIST_CERT_PASSWORD" -A -t cert -f pkcs12
+            security import /tmp/dist.p12 -k "$KEYCHAIN_PATH" -P "$IOS_DIST_CERT_PASSWORD" -A -f pkcs12
           else
-            security import /tmp/dist.p12 -k "$KEYCHAIN_PATH" -A -t cert -f pkcs12
+            security import /tmp/dist.p12 -k "$KEYCHAIN_PATH" -A -f pkcs12
           fi
 
-          # Allow codesign to use the private key
+          # allow codesign to access the key
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" || true
 
           echo "== Code signing identities in our keychain =="
           security find-identity -v -p codesigning "$KEYCHAIN_PATH" || true
 
-          # Extract provisioning profile NAME and UUID
+          # extract profile name for specifier
           PROFILE_PLIST=$(mktemp)
           security cms -D -i "$PROFILE_DIR/appstore.mobileprovision" > "$PROFILE_PLIST"
           PROFILE_NAME=$(/usr/libexec/PlistBuddy -c 'Print:Name' "$PROFILE_PLIST")
-          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print:UUID' "$PROFILE_PLIST")
-          echo "Using provisioning profile: $PROFILE_NAME ($PROFILE_UUID)"
+          echo "Using provisioning profile: $PROFILE_NAME"
 
-          # Show current Xcode signing settings
-          echo "== Signing settings BEFORE =="
-          xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -showBuildSettings | egrep "PRODUCT_BUNDLE_IDENTIFIER|DEVELOPMENT_TEAM|PROVISIONING_PROFILE|CODE_SIGN_STYLE" || true
-
-          # Archive (force manual signing with our profile)
+          # archive with explicit manual signing
           ARCHIVE_PATH="$PWD/build/ios/xcarchive/Runner.xcarchive"
           xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -configuration Release \
             -archivePath "$ARCHIVE_PATH" \
@@ -84,7 +78,7 @@ workflows:
             COMPILER_INDEX_STORE_ENABLE=NO \
             clean archive
 
-          # Create ExportOptions.plist with explicit mapping
+          # export IPA
           cat > /tmp/ExportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -102,12 +96,8 @@ workflows:
           </plist>
           EOF
 
-          # Export IPA
           mkdir -p build/ios/ipa
-          xcodebuild -exportArchive \
-            -archivePath "$ARCHIVE_PATH" \
-            -exportOptionsPlist /tmp/ExportOptions.plist \
-            -exportPath build/ios/ipa
+          xcodebuild -exportArchive -archivePath "$ARCHIVE_PATH" -exportOptionsPlist /tmp/ExportOptions.plist -exportPath build/ios/ipa
 
       - name: List produced IPA
         script: ls -la build/ios/ipa || true
