@@ -10,42 +10,54 @@ workflows:
       flutter: stable
       xcode: latest
       cocoapods: default
+      # If you put the 3 vars inside a group named ios_signing, keep this:
       groups:
-        - ios_signing               # imports your env vars from Step 3
+        - ios_signing
 
     scripts:
       - name: Flutter packages
         script: flutter pub get
 
-      - name: Install cert & provisioning profile from env vars
+      - name: Install cert & provisioning profile (own keychain)
         script: |
           set -eo pipefail
-          # Verify vars loaded
+
+          # Sanity check env vars
           if [ -z "${IOS_DIST_CERT_P12_BASE64:-}" ] || [ -z "${IOS_PROFILE_BASE64:-}" ]; then
-            echo "✗ Missing env vars. Ensure ios_signing group has IOS_DIST_CERT_P12_BASE64 and IOS_PROFILE_BASE64."
+            echo "✗ Missing env vars. Ensure IOS_DIST_CERT_P12_BASE64 and IOS_PROFILE_BASE64 are set."
             exit 1
           fi
 
-          # Write files from base64 variables
+          # Write files from base64
           echo "$IOS_DIST_CERT_P12_BASE64" | base64 --decode > /tmp/dist.p12
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
           echo "$IOS_PROFILE_BASE64" | base64 --decode > "$HOME/Library/MobileDevice/Provisioning Profiles/appstore.mobileprovision"
 
-          # Import .p12 into keychain (handles with/without password)
+          # Create our own keychain and make it default/searchable
+          KEYCHAIN=build.keychain
+          security create-keychain -p "" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "" "$KEYCHAIN"
+          # Add to search list (keeping existing keychains too)
+          CURRENT_LIST=$(security list-keychains -d user | tr -d '"')
+          security list-keychains -d user -s $KEYCHAIN $CURRENT_LIST
+          security default-keychain -s $KEYCHAIN
+
+          # Import the .p12 into our keychain (with or without password)
           if [ -n "${IOS_DIST_CERT_PASSWORD:-}" ]; then
-            security import /tmp/dist.p12 -P "$IOS_DIST_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$HOME/Library/Keychains/login.keychain-db"
+            security import /tmp/dist.p12 -k "$KEYCHAIN" -P "$IOS_DIST_CERT_PASSWORD" -A -t cert -f pkcs12
           else
-            security import /tmp/dist.p12 -A -t cert -f pkcs12 -k "$HOME/Library/Keychains/login.keychain-db"
+            security import /tmp/dist.p12 -k "$KEYCHAIN" -A -t cert -f pkcs12
           fi
 
-          # Allow codesign to use the private key
-          security set-key-partition-list -S apple-tool:,apple: -s -k "" "$HOME/Library/Keychains/login.keychain-db"
+          # Allow codesign tools to use the key in our keychain
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" "$KEYCHAIN"
 
           # Apply provisioning profile to the Xcode project
           xcode-project use-profiles
 
           echo "== Signing settings =="
-          xcode-project show-build-settings --workspace "ios/Runner.xcworkspace" --scheme "Runner" | egrep "PRODUCT_BUNDLE_IDENTIFIER|DEVELOPMENT_TEAM|PROVISIONING_PROFILE|CODE_SIGN_STYLE"
+          xcode-project show-build-settings --workspace "ios/Runner.xcworkspace" --scheme "Runner" | grep -E "PRODUCT_BUNDLE_IDENTIFIER|DEVELOPMENT_TEAM|PROVISIONING_PROFILE|CODE_SIGN_STYLE"
 
       - name: Build IPA (Release)
         script: xcode-project build-ipa --workspace "ios/Runner.xcworkspace" --scheme "Runner"
