@@ -4,7 +4,7 @@ workflows:
     instance_type: mac_mini_m2
 
     integrations:
-      app_store_connect: "ASC-Sky"  # <- exact name from Teams → Integrations
+      app_store_connect: "ASC-Sky"   # exact name from Teams → Integrations
 
     environment:
       flutter: stable
@@ -15,23 +15,26 @@ workflows:
       - name: Flutter packages
         script: flutter pub get
 
-      - name: Fetch provisioning profile & certificate
+      - name: Install cert & provisioning profile from env vars
         script: |
           set -euo pipefail
-          app-store-connect fetch-signing-files "com.skyengineering.sky-engineering-app" --type IOS_APP_STORE --create
-          echo "== Files fetched =="
-          ls -la ~/Library/MobileDevice/Provisioning\ Profiles || true
-          ls -la ~/Library/MobileDevice/Certificates || true
+          # Write files from base64 variables
+          echo "$IOS_DIST_CERT_P12_BASE64" | base64 --decode > /tmp/dist.p12
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          echo "$IOS_PROFILE_BASE64" | base64 --decode > "$HOME/Library/MobileDevice/Provisioning Profiles/appstore.mobileprovision"
 
-      - name: Add certs to keychain & apply profiles
-        script: |
-          set -euo pipefail
-          keychain add-certificates
+          # Import .p12 into login keychain
+          security import /tmp/dist.p12 -P "${IOS_DIST_CERT_PASSWORD:-}" -A -t cert -f pkcs12 -k "$HOME/Library/Keychains/login.keychain-db"
+          # Allow codesign tools to use the key
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" "$HOME/Library/Keychains/login.keychain-db"
+
+          # Apply provisioning profile to the Xcode project
           xcode-project use-profiles
+
           echo "== Signing settings =="
           xcode-project show-build-settings --workspace "ios/Runner.xcworkspace" --scheme "Runner" | egrep "PRODUCT_BUNDLE_IDENTIFIER|DEVELOPMENT_TEAM|PROVISIONING_PROFILE|CODE_SIGN_STYLE"
 
-      - name: Build IPA for App Store (Release)
+      - name: Build IPA (Release)
         script: xcode-project build-ipa --workspace "ios/Runner.xcworkspace" --scheme "Runner"
 
     artifacts:
