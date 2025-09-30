@@ -4,7 +4,7 @@ workflows:
     instance_type: mac_mini_m2
 
     integrations:
-      app_store_connect: "ASC-Sky"
+      app_store_connect: "ASC-Sky"  # <- exact name from Teams → Integrations
 
     environment:
       flutter: stable
@@ -15,17 +15,20 @@ workflows:
       - name: Flutter packages
         script: flutter pub get
 
-      - name: Set up code signing (fetch & apply)
+      - name: Fetch provisioning profile & certificate
+        script: |
+          set -euo pipefail
+          app-store-connect fetch-signing-files "com.skyengineering.sky-engineering-app" --type IOS_APP_STORE --create
+          echo "== Files fetched =="
+          ls -la ~/Library/MobileDevice/Provisioning\ Profiles || true
+          ls -la ~/Library/MobileDevice/Certificates || true
+
+      - name: Add certs to keychain & apply profiles
         script: |
           set -euo pipefail
           keychain add-certificates
-          # Fetch (or create) App Store provisioning profile & distribution cert
-          app-store-connect fetch-signing-files "com.skyengineering.sky-engineering-app" --type IOS_APP_STORE --create
-          echo "== Provisioning profiles installed =="
-          ls -la ~/Library/MobileDevice/Provisioning\ Profiles || true
-          # Apply profiles to Xcode project
           xcode-project use-profiles
-          echo "== Signing settings after applying profiles =="
+          echo "== Signing settings =="
           xcode-project show-build-settings --workspace "ios/Runner.xcworkspace" --scheme "Runner" | egrep "PRODUCT_BUNDLE_IDENTIFIER|DEVELOPMENT_TEAM|PROVISIONING_PROFILE|CODE_SIGN_STYLE"
 
       - name: Build IPA for App Store (Release)
