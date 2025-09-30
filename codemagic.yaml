@@ -10,6 +10,8 @@ workflows:
       flutter: stable
       xcode: latest
       cocoapods: default
+      groups:
+        - ios_signing               # <— IMPORT your app-level group
 
     scripts:
       - name: Flutter packages
@@ -17,7 +19,13 @@ workflows:
 
       - name: Install cert & provisioning profile from env vars
         script: |
-          set -euo pipefail
+          set -eo pipefail
+          # sanity check (helpful message if group/vars not loaded)
+          if [ -z "${IOS_DIST_CERT_P12_BASE64:-}" ] || [ -z "${IOS_PROFILE_BASE64:-}" ]; then
+            echo "✗ Missing env vars. Make sure the 'ios_signing' group contains IOS_DIST_CERT_P12_BASE64 and IOS_PROFILE_BASE64 and that this workflow imports that group."
+            exit 1
+          fi
+
           # Write files from base64 variables
           echo "$IOS_DIST_CERT_P12_BASE64" | base64 --decode > /tmp/dist.p12
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
