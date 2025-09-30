@@ -4,14 +4,14 @@ workflows:
     instance_type: mac_mini_m2
 
     integrations:
-      app_store_connect: "ASC-Sky"   # exact name from Teams → Integrations
+      app_store_connect: "ASC-Sky"   # EXACT name from Teams → Integrations
 
     environment:
       flutter: stable
       xcode: latest
       cocoapods: default
       groups:
-        - ios_signing               # <— IMPORT your app-level group
+        - ios_signing               # imports your env vars from Step 3
 
     scripts:
       - name: Flutter packages
@@ -20,9 +20,9 @@ workflows:
       - name: Install cert & provisioning profile from env vars
         script: |
           set -eo pipefail
-          # sanity check (helpful message if group/vars not loaded)
+          # Verify vars loaded
           if [ -z "${IOS_DIST_CERT_P12_BASE64:-}" ] || [ -z "${IOS_PROFILE_BASE64:-}" ]; then
-            echo "✗ Missing env vars. Make sure the 'ios_signing' group contains IOS_DIST_CERT_P12_BASE64 and IOS_PROFILE_BASE64 and that this workflow imports that group."
+            echo "✗ Missing env vars. Ensure ios_signing group has IOS_DIST_CERT_P12_BASE64 and IOS_PROFILE_BASE64."
             exit 1
           fi
 
@@ -31,9 +31,14 @@ workflows:
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
           echo "$IOS_PROFILE_BASE64" | base64 --decode > "$HOME/Library/MobileDevice/Provisioning Profiles/appstore.mobileprovision"
 
-          # Import .p12 into login keychain
-          security import /tmp/dist.p12 -P "${IOS_DIST_CERT_PASSWORD:-}" -A -t cert -f pkcs12 -k "$HOME/Library/Keychains/login.keychain-db"
-          # Allow codesign tools to use the key
+          # Import .p12 into keychain (handles with/without password)
+          if [ -n "${IOS_DIST_CERT_PASSWORD:-}" ]; then
+            security import /tmp/dist.p12 -P "$IOS_DIST_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$HOME/Library/Keychains/login.keychain-db"
+          else
+            security import /tmp/dist.p12 -A -t cert -f pkcs12 -k "$HOME/Library/Keychains/login.keychain-db"
+          fi
+
+          # Allow codesign to use the private key
           security set-key-partition-list -S apple-tool:,apple: -s -k "" "$HOME/Library/Keychains/login.keychain-db"
 
           # Apply provisioning profile to the Xcode project
