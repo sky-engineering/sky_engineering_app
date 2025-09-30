@@ -10,7 +10,7 @@ workflows:
       flutter: stable
       xcode: latest
       cocoapods: default
-      # If you put the 3 vars inside a group named ios_signing, keep this:
+      # If your three env vars live inside a group named ios_signing, keep this:
       groups:
         - ios_signing
 
@@ -18,13 +18,13 @@ workflows:
       - name: Flutter packages
         script: flutter pub get
 
-      - name: Install cert & provisioning profile (own keychain)
+      - name: Install cert & provisioning profile (dedicated keychain)
         script: |
           set -eo pipefail
 
-          # Sanity check env vars
+          # Sanity check env vars are present
           if [ -z "${IOS_DIST_CERT_P12_BASE64:-}" ] || [ -z "${IOS_PROFILE_BASE64:-}" ]; then
-            echo "✗ Missing env vars. Ensure IOS_DIST_CERT_P12_BASE64 and IOS_PROFILE_BASE64 are set."
+            echo "✗ Missing env vars. Ensure IOS_DIST_CERT_P12_BASE64 and IOS_PROFILE_BASE64 are set (in app Settings → Environment variables, optionally inside ios_signing group)."
             exit 1
           fi
 
@@ -33,31 +33,36 @@ workflows:
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
           echo "$IOS_PROFILE_BASE64" | base64 --decode > "$HOME/Library/MobileDevice/Provisioning Profiles/appstore.mobileprovision"
 
-          # Create our own keychain and make it default/searchable
-          KEYCHAIN=build.keychain
-          security create-keychain -p "" "$KEYCHAIN"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN"
-          security unlock-keychain -p "" "$KEYCHAIN"
-          # Add to search list (keeping existing keychains too)
-          CURRENT_LIST=$(security list-keychains -d user | tr -d '"')
-          security list-keychains -d user -s $KEYCHAIN $CURRENT_LIST
-          security default-keychain -s $KEYCHAIN
+          # Create and use our own keychain (with a non-empty password)
+          KEYCHAIN_NAME="build"
+          KEYCHAIN_PASSWORD="ci_password_123"
+          KEYCHAIN_PATH="$HOME/Library/Keychains/${KEYCHAIN_NAME}.keychain-db"
 
-          # Import the .p12 into our keychain (with or without password)
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          # Make our keychain the only one in the search list to avoid confusion
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          security default-keychain -s "$KEYCHAIN_PATH"
+
+          # Import the .p12 (handles both with/without password)
           if [ -n "${IOS_DIST_CERT_PASSWORD:-}" ]; then
-            security import /tmp/dist.p12 -k "$KEYCHAIN" -P "$IOS_DIST_CERT_PASSWORD" -A -t cert -f pkcs12
+            security import /tmp/dist.p12 -k "$KEYCHAIN_PATH" -P "$IOS_DIST_CERT_PASSWORD" -A -t cert -f pkcs12
           else
-            security import /tmp/dist.p12 -k "$KEYCHAIN" -A -t cert -f pkcs12
+            security import /tmp/dist.p12 -k "$KEYCHAIN_PATH" -A -t cert -f pkcs12
           fi
 
-          # Allow codesign tools to use the key in our keychain
-          security set-key-partition-list -S apple-tool:,apple: -s -k "" "$KEYCHAIN"
+          # Allow codesign tools to use the private key in our keychain
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" || true
+
+          echo "== Available code signing identities in our keychain =="
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH" || true
 
           # Apply provisioning profile to the Xcode project
           xcode-project use-profiles
 
           echo "== Signing settings =="
-          xcode-project show-build-settings --workspace "ios/Runner.xcworkspace" --scheme "Runner" | grep -E "PRODUCT_BUNDLE_IDENTIFIER|DEVELOPMENT_TEAM|PROVISIONING_PROFILE|CODE_SIGN_STYLE"
+          xcode-project show-build-settings --workspace "ios/Runner.xcworkspace" --scheme "Runner" | egrep "PRODUCT_BUNDLE_IDENTIFIER|DEVELOPMENT_TEAM|PROVISIONING_PROFILE|CODE_SIGN_STYLE"
 
       - name: Build IPA (Release)
         script: xcode-project build-ipa --workspace "ios/Runner.xcworkspace" --scheme "Runner"
