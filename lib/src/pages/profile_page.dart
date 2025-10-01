@@ -67,7 +67,9 @@ class _ProfilePageState extends State<ProfilePage> {
       stream: _repo.streamByUid(u.uid),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
 
         final profile = snap.data;
@@ -101,11 +103,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        _kvReadOnlyRow(
-                          context,
-                          label: 'Email',
-                          value: email,
-                        ),
+                        _kvReadOnlyRow(context, label: 'Email', value: email),
                         const SizedBox(height: 8),
                         _kvInputRow(
                           context,
@@ -164,11 +162,17 @@ class _ProfilePageState extends State<ProfilePage> {
                           context,
                           label: 'User Type',
                           child: DropdownButtonFormField<String>(
-                            value: UserProfile.allowedUserTypes.contains(_userType)
+                            value:
+                                UserProfile.allowedUserTypes.contains(_userType)
                                 ? _userType
                                 : null,
                             items: UserProfile.allowedUserTypes
-                                .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                                .map(
+                                  (t) => DropdownMenuItem(
+                                    value: t,
+                                    child: Text(t),
+                                  ),
+                                )
                                 .toList(),
                             onChanged: (v) => setState(() => _userType = v),
                             decoration: const InputDecoration(
@@ -197,6 +201,38 @@ class _ProfilePageState extends State<ProfilePage> {
                     'UID ${u.uid}',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
+
+                  const SizedBox(height: 32),
+
+                  const Divider(),
+                  const SizedBox(height: 16),
+
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: _signOut,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Theme.of(
+                          context,
+                        ).colorScheme.onSurfaceVariant,
+                      ),
+                      icon: const Icon(Icons.logout_outlined, size: 18),
+                      label: const Text('Sign Out'),
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed: _confirmDeleteAccount,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Theme.of(context).colorScheme.error,
+                      ),
+                      child: const Text('Delete Account'),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -214,18 +250,26 @@ class _ProfilePageState extends State<ProfilePage> {
     final profile = UserProfile(
       uid: u.uid,
       userType: _userType ?? 'Other',
-      clientNumber: _clientNumberCtl.text.trim().isNotEmpty ? _clientNumberCtl.text.trim() : null,
-      userName: _userNameCtl.text.trim().isNotEmpty ? _userNameCtl.text.trim() : null,
-      userPhone: _userPhoneCtl.text.trim().isNotEmpty ? _userPhoneCtl.text.trim() : null,
-      userAddress: _userAddressCtl.text.trim().isNotEmpty ? _userAddressCtl.text.trim() : null,
+      clientNumber: _clientNumberCtl.text.trim().isNotEmpty
+          ? _clientNumberCtl.text.trim()
+          : null,
+      userName: _userNameCtl.text.trim().isNotEmpty
+          ? _userNameCtl.text.trim()
+          : null,
+      userPhone: _userPhoneCtl.text.trim().isNotEmpty
+          ? _userPhoneCtl.text.trim()
+          : null,
+      userAddress: _userAddressCtl.text.trim().isNotEmpty
+          ? _userAddressCtl.text.trim()
+          : null,
     );
 
     try {
       await _repo.save(profile);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile saved')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Profile saved')));
       }
     } on FirebaseException catch (e) {
       if (mounted) {
@@ -236,6 +280,73 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  Future<void> _signOut() async {
+    await FirebaseAuth.instance.signOut();
+  }
+
+  Future<void> _confirmDeleteAccount() async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete account?'),
+        content: const Text(
+          'This will remove your profile and delete your account. This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (shouldDelete == true) {
+      await _deleteAccount();
+    }
+  }
+
+  Future<void> _deleteAccount() async {
+    final user = _me;
+    if (user == null) return;
+    final uid = user.uid;
+
+    try {
+      await user.delete();
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message ?? 'Delete failed: ${e.code}')),
+        );
+      }
+      return;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+      }
+      return;
+    }
+
+    try {
+      await _repo.delete(uid);
+    } catch (_) {
+      // Best-effort cleanup; ignore if the document is already gone.
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Account deleted')));
+    await FirebaseAuth.instance.signOut();
+  }
   // ---------------- Helpers ----------------
 
   // Make the label column nice and tight so the value column has more space.
@@ -243,7 +354,11 @@ class _ProfilePageState extends State<ProfilePage> {
     return 92; // ~6 chars narrower than before
   }
 
-  Widget _sectionCard(BuildContext context, {required String title, required Widget child}) {
+  Widget _sectionCard(
+    BuildContext context, {
+    required String title,
+    required Widget child,
+  }) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -261,14 +376,16 @@ class _ProfilePageState extends State<ProfilePage> {
 
   /// A single “Label  [widget]” row. If [alignTop] is true, label aligns to top.
   Widget _kvInputRow(
-      BuildContext context, {
-        required String label,
-        required Widget child,
-        bool alignTop = false,
-      }) {
+    BuildContext context, {
+    required String label,
+    required Widget child,
+    bool alignTop = false,
+  }) {
     final labelWidth = _labelWidthFor(context);
     return Row(
-      crossAxisAlignment: alignTop ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+      crossAxisAlignment: alignTop
+          ? CrossAxisAlignment.start
+          : CrossAxisAlignment.center,
       children: [
         SizedBox(
           width: labelWidth,
@@ -276,7 +393,9 @@ class _ProfilePageState extends State<ProfilePage> {
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
         ),
         const SizedBox(width: 8),
@@ -288,10 +407,10 @@ class _ProfilePageState extends State<ProfilePage> {
   /// A single read-only “Label  value” row.
   /// A single read-only “Label  value” row that visually aligns with TextFormField rows.
   Widget _kvReadOnlyRow(
-      BuildContext context, {
-        required String label,
-        required String value,
-      }) {
+    BuildContext context, {
+    required String label,
+    required String value,
+  }) {
     final labelWidth = _labelWidthFor(context);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -302,9 +421,9 @@ class _ProfilePageState extends State<ProfilePage> {
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
         ),
         const SizedBox(width: 8),

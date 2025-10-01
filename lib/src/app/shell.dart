@@ -22,6 +22,8 @@ class _ShellState extends State<Shell> {
 
   final _pages = <Widget>[];
 
+  Widget _logoTitle() => SizedBox(height: 32, child: Image.asset('assets/logo_white.png'));
+
   @override
   void initState() {
     super.initState();
@@ -47,7 +49,7 @@ class _ShellState extends State<Shell> {
   Widget build(BuildContext context) {
     if (_error != null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Sky Engineering')),
+        appBar: AppBar(title: _logoTitle()),
         body: Center(child: Text('Error: $_error')),
       );
     }
@@ -57,14 +59,7 @@ class _ShellState extends State<Shell> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sky Engineering'),
-        actions: [
-          IconButton(
-            tooltip: 'Sign out',
-            onPressed: () async => FirebaseAuth.instance.signOut(),
-            icon: const Icon(Icons.logout),
-          )
-        ],
+        title: _logoTitle(),
       ),
       body: IndexedStack(index: _index, children: _pages),
       bottomNavigationBar: NavigationBar(

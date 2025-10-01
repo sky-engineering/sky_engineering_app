@@ -1,125 +1,98 @@
 // lib/src/dialogs/city_inspect_links_dialog.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-/// Firestore collection for links:
-///   /city_inspect/{id} : { name: string, url: string, ownerUid: string, createdAt: Timestamp, updatedAt: Timestamp }
-///
-/// Make sure your firestore.rules include the match for /city_inspect (see note at bottom).
+class CityInspectLink {
+  final String id;
+  final String name;
+  final String url;
+  final String ownerUid;
+  CityInspectLink({required this.id, required this.name, required this.url, required this.ownerUid});
+  static CityInspectLink fromDoc(QueryDocumentSnapshot<Map<String, dynamic>> d) {
+    final m = d.data();
+    return CityInspectLink(
+      id: d.id,
+      name: (m['name'] ?? '').toString(),
+      url: (m['url'] ?? '').toString(),
+      ownerUid: (m['ownerUid'] ?? '').toString(),
+    );
+  }
+}
+
 Future<void> showCityInspectLinksDialog(BuildContext context) async {
   await showDialog<void>(
     context: context,
-    builder: (context) => const _CityInspectDialog(),
+    builder: (_) => const _CityInspectLinksDialog(),
   );
 }
 
-class _CityInspectDialog extends StatefulWidget {
-  const _CityInspectDialog();
-
-  @override
-  State<_CityInspectDialog> createState() => _CityInspectDialogState();
-}
-
-class _CityInspectDialogState extends State<_CityInspectDialog> {
-  static const _coll = 'city_inspect';
+class _CityInspectLinksDialog extends StatelessWidget {
+  const _CityInspectLinksDialog();
 
   @override
   Widget build(BuildContext context) {
-    final me = FirebaseAuth.instance.currentUser;
-    final colRef = FirebaseFirestore.instance.collection(_coll).orderBy('name');
-
+    final col = FirebaseFirestore.instance.collection('city_inspect');
     return AlertDialog(
       title: const Text('City Inspect Links'),
       content: SizedBox(
-        width: 520,
-        height: 460,
-        child: Column(
-          children: [
-            // Small permission hint
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                me == null
-                    ? 'Viewing as guest — sign in to add or edit.'
-                    : 'Signed in as ${me.email ?? me.uid}. You can edit links you created.',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: colRef.snapshots(),
-                builder: (context, snap) {
-                  if (snap.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  final docs = snap.data?.docs ?? const [];
-                  if (docs.isEmpty) {
-                    return _EmptyState(onSeed: _seedStGeorge);
-                  }
-                  return ListView.separated(
-                    itemCount: docs.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 6),
-                    itemBuilder: (context, i) {
-                      final d = docs[i];
-                      final data = d.data();
-                      final name = (data['name'] as String?)?.trim() ?? '';
-                      final url = (data['url'] as String?)?.trim() ?? '';
-                      final ownerUid = (data['ownerUid'] as String?) ?? '';
+        width: 420,
+        child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: col.snapshots(),
+          builder: (context, snap) {
+            if (snap.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final me = FirebaseAuth.instance.currentUser;
+            final items = (snap.data?.docs ?? const [])
+                .map(CityInspectLink.fromDoc)
+                .toList()
+              ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
-                      final canSuggestEdit = me != null; // UI-level; server enforces exact owner
+            if (items.isEmpty) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.link, size: 72),
+                      const SizedBox(height: 12),
+                      const Text('No links yet'),
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: me == null ? null : () => _showEdit(context),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Add Link'),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
 
-                      return Card(
-                        margin: EdgeInsets.zero,
-                        child: ListTile(
-                          dense: true,
-                          contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          title: Text(
-                            name.isEmpty ? '(unnamed)' : name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          subtitle: Text(
-                            url.isEmpty ? '—' : url,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          trailing: Wrap(
-                            spacing: 6,
-                            children: [
-                              IconButton(
-                                tooltip: 'Open',
-                                icon: const Icon(Icons.launch),
-                                onPressed: url.isEmpty ? null : () => _open(url),
-                                visualDensity: VisualDensity.compact,
-                              ),
-                              IconButton(
-                                tooltip: ownerUid == me?.uid
-                                    ? 'Edit'
-                                    : 'Request edit (you may lack permission)',
-                                icon: const Icon(Icons.edit),
-                                onPressed: canSuggestEdit
-                                    ? () => _editCity(d.id, name, url)
-                                    : null,
-                                visualDensity: VisualDensity.compact,
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
+            return ListView.separated(
+              shrinkWrap: true,
+              itemCount: items.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (_, i) {
+                final it = items[i];
+                final canEdit = me != null && me.uid == it.ownerUid;
+                return ListTile(
+                  dense: true,
+                  title: Text(it.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(it.url, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  onTap: () => _open(it.url),
+                  trailing: IconButton(
+                    tooltip: 'Edit',
+                    icon: const Icon(Icons.edit),
+                    onPressed: canEdit ? () => _showEdit(context, link: it) : null,
+                  ),
+                );
+              },
+            );
+          },
         ),
       ),
       actions: [
@@ -127,191 +100,93 @@ class _CityInspectDialogState extends State<_CityInspectDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('Close'),
         ),
-        if (me != null)
-          FilledButton.icon(
-            onPressed: _addCity,
-            icon: const Icon(Icons.add),
-            label: const Text('Add City'),
-          ),
+        TextButton.icon(
+          onPressed: FirebaseAuth.instance.currentUser == null ? null : () => _showEdit(context),
+          icon: const Icon(Icons.add),
+          label: const Text('Add Link'),
+        ),
       ],
     );
   }
-
-  Future<void> _open(String urlStr) async {
-    final uri = Uri.tryParse(urlStr);
-    if (uri == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Invalid URL')));
-      return;
-    }
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Could not open link')));
-    }
-  }
-
-  Future<void> _addCity() async {
-    await _showEditDialog();
-  }
-
-  Future<void> _editCity(String id, String name, String url) async {
-    await _showEditDialog(id: id, initialName: name, initialUrl: url);
-  }
-
-  Future<void> _showEditDialog({
-    String? id,
-    String initialName = '',
-    String initialUrl = '',
-  }) async {
-    final me = FirebaseAuth.instance.currentUser;
-    final nameCtl = TextEditingController(text: initialName);
-    final urlCtl = TextEditingController(text: initialUrl);
-    final formKey = GlobalKey<FormState>();
-
-    await showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(id == null ? 'Add City' : 'Edit City'),
-          content: Form(
-            key: formKey,
-            child: SizedBox(
-              width: 420,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: nameCtl,
-                    decoration: const InputDecoration(
-                      labelText: 'City Name',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: urlCtl,
-                    decoration: const InputDecoration(
-                      labelText: 'City Inspect URL',
-                      hintText: 'https://...',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Required' : null,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                if (!(formKey.currentState?.validate() ?? false)) return;
-                final user = FirebaseAuth.instance.currentUser;
-                if (user == null) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please sign in to save.')),
-                  );
-                  return;
-                }
-
-                final payload = <String, dynamic>{
-                  'name': nameCtl.text.trim(),
-                  'url': urlCtl.text.trim(),
-                  'ownerUid': user.uid,
-                  'updatedAt': FieldValue.serverTimestamp(),
-                  if (id == null) 'createdAt': FieldValue.serverTimestamp(),
-                };
-
-                try {
-                  final col = FirebaseFirestore.instance.collection('city_inspect');
-                  if (id == null) {
-                    await col.add(payload);
-                  } else {
-                    await col.doc(id).update(payload);
-                  }
-                  if (!mounted) return;
-                  Navigator.pop(context);
-                } on FirebaseException catch (e) {
-                  if (!mounted) return;
-                  final msg = (e.code == 'permission-denied')
-                      ? 'You don’t have permission to modify this item.'
-                      : 'Failed to save: ${e.message ?? e.code}';
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-                } catch (e) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context)
-                      .showSnackBar(SnackBar(content: Text('Failed to save: $e')));
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _seedStGeorge() async {
-    final me = FirebaseAuth.instance.currentUser;
-    if (me == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please sign in to seed a starter city.')),
-      );
-      return;
-    }
-    try {
-      await FirebaseFirestore.instance.collection('city_inspect').add({
-        'name': 'St George',
-        'url': 'https://stg.cityinspect.com/builder',
-        'ownerUid': me.uid,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    } on FirebaseException catch (e) {
-      if (!mounted) return;
-      final msg = (e.code == 'permission-denied')
-          ? 'You don’t have permission to add cities.'
-          : 'Failed to seed: ${e.message ?? e.code}';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Failed to seed: $e')));
-    }
-  }
 }
 
-class _EmptyState extends StatelessWidget {
-  final Future<void> Function() onSeed;
-  const _EmptyState({required this.onSeed});
+Future<void> _open(String url) async {
+  final uri = Uri.tryParse(url);
+  if (uri == null) return;
+  await launchUrl(uri, mode: LaunchMode.externalApplication);
+}
 
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+Future<void> _showEdit(BuildContext context, {CityInspectLink? link}) async {
+  final me = FirebaseAuth.instance.currentUser;
+  if (me == null) return;
+
+  final nameCtl = TextEditingController(text: link?.name ?? '');
+  final urlCtl = TextEditingController(text: link?.url ?? '');
+  final formKey = GlobalKey<FormState>();
+  final col = FirebaseFirestore.instance.collection('city_inspect');
+
+  String? vName(String s) => s.isEmpty ? 'Enter a name' : null;
+  String? vUrl(String s) {
+    final u = Uri.tryParse(s);
+    if (u == null || (!u.isScheme('http') && !u.isScheme('https'))) return 'Enter a valid http(s) URL';
+    return null;
+  }
+
+  await showDialog<void>(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: Text(link == null ? 'Add Link' : 'Edit Link'),
+      content: Form(
+        key: formKey,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('No cities yet'),
+            TextFormField(
+              controller: nameCtl,
+              decoration: const InputDecoration(labelText: 'Name'),
+              validator: (v) => vName((v ?? '').trim()),
+            ),
             const SizedBox(height: 8),
-            FilledButton(
-              onPressed: onSeed,
-              child: const Text('Add "St George" to start'),
+            TextFormField(
+              controller: urlCtl,
+              decoration: const InputDecoration(labelText: 'URL'),
+              validator: (v) => vUrl((v ?? '').trim()),
             ),
           ],
         ),
       ),
-    );
-  }
+      actions: [
+        if (link != null && link.ownerUid == me.uid)
+          TextButton(
+            onPressed: () async {
+              await col.doc(link.id).delete();
+              if (Navigator.of(context).canPop()) Navigator.pop(context);
+              if (Navigator.of(context).canPop()) Navigator.pop(context);
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.redAccent)),
+          ),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        FilledButton(
+          onPressed: () async {
+            if (!(formKey.currentState?.validate() ?? false)) return;
+            final data = {
+              'name': nameCtl.text.trim(),
+              'url': urlCtl.text.trim(),
+              'ownerUid': me.uid,
+              'updatedAt': FieldValue.serverTimestamp(),
+              if (link == null) 'createdAt': FieldValue.serverTimestamp(),
+            };
+            if (link == null) {
+              await col.add(data);
+            } else {
+              await col.doc(link.id).update(data);
+            }
+            if (Navigator.of(context).canPop()) Navigator.pop(context);
+            if (Navigator.of(context).canPop()) Navigator.pop(context);
+          },
+          child: const Text('Save'),
+        ),
+      ],
+    ),
+  );
 }

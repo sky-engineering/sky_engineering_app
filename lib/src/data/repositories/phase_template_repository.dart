@@ -8,15 +8,21 @@ class PhaseTemplateRepository {
 
   /// Fetch all phases for a user, ordered by sortOrder then phaseCode.
   Future<List<PhaseTemplate>> getAllForUser(String ownerUid) async {
-    // Try to use Firestore ordering if sortOrder exists; otherwise we'll also sort client-side.
-    final qs = await _col
-        .where('ownerUid', isEqualTo: ownerUid)
-        .orderBy('sortOrder', descending: false)
-        .get();
+    final baseQuery = _col.where('ownerUid', isEqualTo: ownerUid);
+    QuerySnapshot<Map<String, dynamic>> qs;
+    try {
+      qs = await baseQuery.orderBy('sortOrder').get();
+    } on FirebaseException catch (e) {
+      if (e.code == 'failed-precondition') {
+        qs = await baseQuery.get();
+      } else {
+        rethrow;
+      }
+    }
 
     final list = qs.docs.map(PhaseTemplate.fromDoc).toList();
 
-    // Secondary stable sort by phaseCode in case sortOrder ties/missing.
+    // Stable sort ensures predictable order even when Firestore fallback is used.
     list.sort((a, b) {
       final c = a.sortOrder.compareTo(b.sortOrder);
       if (c != 0) return c;

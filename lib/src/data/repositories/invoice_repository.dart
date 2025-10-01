@@ -76,6 +76,7 @@ class InvoiceRepository {
     if (!snap.exists) return;
 
     final data = snap.data() as Map<String, dynamic>? ?? {};
+    final mutable = Map<String, dynamic>.from(partial);
 
     double _toDouble(dynamic v, [double fallback = 0.0]) {
       if (v == null) return fallback;
@@ -83,10 +84,16 @@ class InvoiceRepository {
       return double.tryParse('$v') ?? fallback;
     }
 
-    DateTime? _toDate(dynamic v) {
-      if (v is Timestamp) return v.toDate();
-      if (v is DateTime) return v;
-      return null;
+    if (mutable.containsKey('projectNumber')) {
+      final raw = mutable['projectNumber'];
+      if (raw is FieldValue) {
+        // keep as-is
+      } else if (raw == null) {
+        mutable['projectNumber'] = null;
+      } else {
+        final cleaned = raw.toString().trim();
+        mutable['projectNumber'] = cleaned.isEmpty ? null : cleaned;
+      }
     }
 
     // Current stored values (support legacy keys)
@@ -96,20 +103,21 @@ class InvoiceRepository {
     final currentPaid = data.containsKey('amountPaid')
         ? _toDouble(data['amountPaid'])
         : (data.containsKey('balanceDue')
-        ? (currentAmount - _toDouble(data['balanceDue']))
-        : 0.0);
+            ? (currentAmount - _toDouble(data['balanceDue']))
+            : 0.0);
 
     // Incoming candidates
-    final incomingAmount = partial.containsKey('invoiceAmount')
-        ? _toDouble(partial['invoiceAmount'], currentAmount)
+    final incomingAmount = mutable.containsKey('invoiceAmount')
+        ? _toDouble(mutable['invoiceAmount'], currentAmount)
         : currentAmount;
 
     // amountPaid can be provided directly OR inferred from incoming balanceDue
     double nextPaid;
-    if (partial.containsKey('amountPaid')) {
-      nextPaid = _toDouble(partial['amountPaid'], currentPaid);
-    } else if (partial.containsKey('balanceDue')) {
-      final incomingBalance = _toDouble(partial['balanceDue'], (incomingAmount - currentPaid));
+    if (mutable.containsKey('amountPaid')) {
+      nextPaid = _toDouble(mutable['amountPaid'], currentPaid);
+    } else if (mutable.containsKey('balanceDue')) {
+      final incomingBalance =
+          _toDouble(mutable['balanceDue'], (incomingAmount - currentPaid));
       nextPaid = incomingAmount - incomingBalance;
     } else {
       nextPaid = currentPaid;
@@ -120,17 +128,20 @@ class InvoiceRepository {
     if (incomingAmount <= 0) nextPaid = 0.0;
     if (nextPaid > incomingAmount) nextPaid = incomingAmount;
 
-    final computedBalance = (incomingAmount - nextPaid).clamp(0, double.infinity).toDouble();
+    final computedBalance =
+        (incomingAmount - nextPaid).clamp(0, double.infinity).toDouble();
 
     // Mirror legacy status if not explicitly set by caller
-    String? status = partial['status'] as String?;
-    status ??= (computedBalance <= 0 || partial['paidDate'] != null || data['paidDate'] != null)
+    String? status = mutable['status'] as String?;
+    status ??= (computedBalance <= 0 ||
+            mutable['paidDate'] != null ||
+            data['paidDate'] != null)
         ? 'Paid'
         : 'Unpaid';
 
     // Compose final update map
     final merged = {
-      ...partial,
+      ...mutable,
       // Always keep canonical + mirror in sync:
       'invoiceAmount': incomingAmount,
       'amountPaid': nextPaid,

@@ -1,5 +1,6 @@
 // lib/src/pages/subphases_page.dart
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../data/models/subphase_template.dart';
@@ -29,9 +30,10 @@ class SubphasesPage extends StatelessWidget {
         future: _phaseRepo.getAllForUser(me.uid),
         builder: (context, phaseSnap) {
           final phases = (phaseSnap.data ?? const <PhaseTemplate>[]);
-          // Fast lookup: phaseCode -> label (e.g., "02 — Preliminary Design")
+          // Fast lookup: phaseCode -> label (e.g., "02 - Preliminary Design")
           final phaseLabelByCode = {
-            for (final p in phases) p.phaseCode: '${p.phaseCode} — ${p.phaseName}'
+            for (final p in phases)
+              p.phaseCode: '${p.phaseCode} - ${p.phaseName}',
           };
 
           return StreamBuilder<List<SubphaseTemplate>>(
@@ -48,7 +50,9 @@ class SubphasesPage extends StatelessWidget {
               for (final t in items) {
                 final key = (t.phaseCode.isNotEmpty)
                     ? t.phaseCode
-                    : (t.subphaseCode.length >= 2 ? t.subphaseCode.substring(0, 2) : '??');
+                    : (t.subphaseCode.length >= 2
+                          ? t.subphaseCode.substring(0, 2)
+                          : '??');
                 (grouped[key] ??= <SubphaseTemplate>[]).add(t);
               }
               final phaseKeys = grouped.keys.toList()
@@ -78,7 +82,8 @@ class SubphasesPage extends StatelessWidget {
                             label: const Text('Add Subphase'),
                           ),
                           FilledButton.icon(
-                            onPressed: () => _showManagePhasesDialog(context, me.uid),
+                            onPressed: () =>
+                                _showManagePhasesDialog(context, me.uid),
                             icon: const Icon(Icons.tune),
                             label: const Text('Manage Phases'),
                           ),
@@ -88,8 +93,10 @@ class SubphasesPage extends StatelessWidget {
                   }
 
                   final phase = phaseKeys[idx];
-                  final list = grouped[phase]!..sort((a, b) => a.subphaseCode.compareTo(b.subphaseCode));
-                  final header = phaseLabelByCode[phase] ?? '$phase — (Unnamed Phase)';
+                  final list = grouped[phase]!
+                    ..sort((a, b) => a.subphaseCode.compareTo(b.subphaseCode));
+                  final header =
+                      phaseLabelByCode[phase] ?? '$phase - (Unnamed Phase)';
 
                   return Card(
                     margin: const EdgeInsets.only(bottom: 10),
@@ -98,9 +105,15 @@ class SubphasesPage extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(header, style: Theme.of(context).textTheme.titleSmall),
+                          Text(
+                            header,
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
                           const SizedBox(height: 6),
-                          ...list.map((t) => _RowTile(t: t, repo: _subRepo, meUid: me.uid)),
+                          ...list.map(
+                            (t) =>
+                                _RowTile(t: t, repo: _subRepo, meUid: me.uid),
+                          ),
                         ],
                       ),
                     ),
@@ -142,7 +155,7 @@ class _RowTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontWeight: FontWeight.w500),
       ),
-      // No subtitle — keep compact
+      // No subtitle - keep compact
       trailing: IconButton(
         tooltip: 'Edit subphase',
         icon: const Icon(Icons.chevron_right),
@@ -184,7 +197,8 @@ Future<void> _showAddDialog(BuildContext context, String ownerUid) async {
 
   String? _validateCode(String? v) {
     final s = (v ?? '').trim();
-    if (s.length != 4 || int.tryParse(s) == null) return 'Enter a 4-digit code (e.g., 0201)';
+    if (s.length != 4 || int.tryParse(s) == null)
+      return 'Enter a 4-digit code (e.g., 0201)';
     return null;
   }
 
@@ -230,14 +244,16 @@ Future<void> _showAddDialog(BuildContext context, String ownerUid) async {
                           hintText: 'e.g., Concept Site Plan',
                           border: OutlineInputBorder(),
                         ),
-                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                        validator: (v) =>
+                            (v == null || v.trim().isEmpty) ? 'Required' : null,
                       ),
                       const SizedBox(height: 10),
                       TextFormField(
                         controller: defaultsCtl,
                         decoration: const InputDecoration(
                           labelText: 'Default tasks (one per line)',
-                          hintText: 'e.g.\nKickoff meeting\nCollect survey\nPrelim grading',
+                          hintText:
+                              'e.g.\nKickoff meeting\nCollect survey\nPrelim grading',
                           border: OutlineInputBorder(),
                         ),
                         maxLines: 6,
@@ -248,13 +264,18 @@ Future<void> _showAddDialog(BuildContext context, String ownerUid) async {
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
               FilledButton(
                 onPressed: () async {
                   if (!(formKey.currentState?.validate() ?? false)) return;
 
                   final code = codeCtl.text.trim();
-                  final phaseCode = (code.length >= 2) ? code.substring(0, 2) : '';
+                  final phaseCode = (code.length >= 2)
+                      ? code.substring(0, 2)
+                      : '';
                   final defaults = _parseDefaults(defaultsCtl.text);
 
                   final t = SubphaseTemplate(
@@ -279,7 +300,11 @@ Future<void> _showAddDialog(BuildContext context, String ownerUid) async {
   );
 }
 
-Future<void> _showEditDialog(BuildContext context, SubphaseTemplate t, String ownerUid) async {
+Future<void> _showEditDialog(
+  BuildContext context,
+  SubphaseTemplate t,
+  String ownerUid,
+) async {
   final codeCtl = TextEditingController(text: t.subphaseCode);
   final nameCtl = TextEditingController(text: t.subphaseName);
   final defaultsCtl = TextEditingController(text: t.defaultTasks.join('\n'));
@@ -289,7 +314,8 @@ Future<void> _showEditDialog(BuildContext context, SubphaseTemplate t, String ow
 
   String? _validateCode(String? v) {
     final s = (v ?? '').trim();
-    if (s.length != 4 || int.tryParse(s) == null) return 'Enter a 4-digit code (e.g., 0201)';
+    if (s.length != 4 || int.tryParse(s) == null)
+      return 'Enter a 4-digit code (e.g., 0201)';
     return null;
   }
 
@@ -334,7 +360,8 @@ Future<void> _showEditDialog(BuildContext context, SubphaseTemplate t, String ow
                           labelText: 'Name',
                           border: OutlineInputBorder(),
                         ),
-                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                        validator: (v) =>
+                            (v == null || v.trim().isEmpty) ? 'Required' : null,
                       ),
                       const SizedBox(height: 10),
                       TextFormField(
@@ -357,10 +384,18 @@ Future<void> _showEditDialog(BuildContext context, SubphaseTemplate t, String ow
                     context: context,
                     builder: (ctx) => AlertDialog(
                       title: const Text('Delete subphase?'),
-                      content: const Text('This removes it from your template list.'),
+                      content: const Text(
+                        'This removes it from your template list.',
+                      ),
                       actions: [
-                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancel'),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Delete'),
+                        ),
                       ],
                     ),
                   );
@@ -372,20 +407,25 @@ Future<void> _showEditDialog(BuildContext context, SubphaseTemplate t, String ow
                 },
                 child: const Text('Delete'),
               ),
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
               FilledButton(
                 onPressed: () async {
                   if (!(formKey.currentState?.validate() ?? false)) return;
 
                   final newCode = codeCtl.text.trim();
-                  final newPhaseCode = (newCode.length >= 2) ? newCode.substring(0, 2) : '';
+                  final newPhaseCode = (newCode.length >= 2)
+                      ? newCode.substring(0, 2)
+                      : '';
                   final defaults = _parseDefaults(defaultsCtl.text);
 
                   await repo.update(t.id, {
                     'subphaseCode': newCode,
                     'taskCode': newCode, // legacy mirror
                     'subphaseName': nameCtl.text.trim(),
-                    'taskName': nameCtl.text.trim(),  // legacy mirror
+                    'taskName': nameCtl.text.trim(), // legacy mirror
                     'phaseCode': newPhaseCode,
                     'defaultTasks': defaults,
                   });
@@ -402,9 +442,31 @@ Future<void> _showEditDialog(BuildContext context, SubphaseTemplate t, String ow
   );
 }
 
-Future<void> _showManagePhasesDialog(BuildContext context, String ownerUid) async {
+Future<void> _showManagePhasesDialog(
+  BuildContext context,
+  String ownerUid,
+) async {
   final repo = PhaseTemplateRepository();
-  final list = await repo.getAllForUser(ownerUid);
+  List<PhaseTemplate> list;
+  try {
+    list = await repo.getAllForUser(ownerUid);
+  } on FirebaseException catch (e) {
+    if (!context.mounted) return;
+    final message = (e.message != null && e.message!.trim().isNotEmpty)
+        ? e.message!.trim()
+        : e.code;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Could not load phases: $message')));
+    return;
+  } catch (_) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Could not load phases')));
+    return;
+  }
+  if (!context.mounted) return;
   final phases = [...list]; // mutable
 
   await showDialog<void>(
@@ -419,7 +481,8 @@ Future<void> _showManagePhasesDialog(BuildContext context, String ownerUid) asyn
 
             String? _validateCode(String? v) {
               final s = (v ?? '').trim();
-              if (s.length != 2 || int.tryParse(s) == null) return 'Enter 2-digit code, e.g., 02';
+              if (s.length != 2 || int.tryParse(s) == null)
+                return 'Enter 2-digit code, e.g., 02';
               return null;
             }
 
@@ -452,14 +515,19 @@ Future<void> _showManagePhasesDialog(BuildContext context, String ownerUid) asyn
                             hintText: 'e.g., Preliminary Design',
                             border: OutlineInputBorder(),
                           ),
-                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                          validator: (v) => (v == null || v.trim().isEmpty)
+                              ? 'Required'
+                              : null,
                         ),
                       ],
                     ),
                   ),
                 ),
                 actions: [
-                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel'),
+                  ),
                   FilledButton(
                     onPressed: () async {
                       if (!(formKey.currentState?.validate() ?? false)) return;
@@ -487,10 +555,16 @@ Future<void> _showManagePhasesDialog(BuildContext context, String ownerUid) asyn
               context: context,
               builder: (ctx) => AlertDialog(
                 title: const Text('Delete phase?'),
-                content: Text('Remove "${p.phaseCode} — ${p.phaseName}"?'),
+                content: Text('Remove "${p.phaseCode} - ${p.phaseName}"?'),
                 actions: [
-                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                  FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Delete'),
+                  ),
                 ],
               ),
             );
@@ -526,7 +600,7 @@ Future<void> _showManagePhasesDialog(BuildContext context, String ownerUid) asyn
                     key: ValueKey(p.id),
                     dense: true,
                     leading: const Icon(Icons.drag_indicator),
-                    title: Text('${p.phaseCode} — ${p.phaseName}'),
+                    title: Text('${p.phaseCode} - ${p.phaseName}'),
                     trailing: IconButton(
                       tooltip: 'Delete phase',
                       icon: const Icon(Icons.delete_outline),

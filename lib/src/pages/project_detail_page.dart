@@ -51,7 +51,9 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
       stream: repo.streamById(widget.projectId),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
         final p = snap.data;
         if (p == null) {
@@ -85,22 +87,32 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
             controller: _scrollCtrl,
             padding: const EdgeInsets.all(16),
             children: [
-              _kv('Client', p.clientName),
+              _kv(context, 'Client', p.clientName),
 
               if ((p.contactName ?? '').isNotEmpty ||
                   (p.contactEmail ?? '').isNotEmpty ||
                   (p.contactPhone ?? '').isNotEmpty)
                 Card(
+                  color: _subtleSurfaceTint(context),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Contact', style: TextStyle(fontWeight: FontWeight.w600)),
+                        const Text(
+                          'Contact',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
                         const SizedBox(height: 6),
-                        if ((p.contactName ?? '').isNotEmpty) Text(p.contactName!),
-                        if ((p.contactEmail ?? '').isNotEmpty) Text(p.contactEmail!),
-                        if ((p.contactPhone ?? '').isNotEmpty) Text(p.contactPhone!),
+                        if ((p.contactName ?? '').isNotEmpty)
+                          Text(p.contactName!),
+                        if ((p.contactEmail ?? '').isNotEmpty)
+                          Text(p.contactEmail!),
+                        if ((p.contactPhone ?? '').isNotEmpty)
+                          Text(p.contactPhone!),
                       ],
                     ),
                   ),
@@ -134,10 +146,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                         children: [
                           Text(
                             'Invoices',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w600),
+                            style: Theme.of(context).textTheme.titleLarge,
                           ),
                           const Spacer(),
                           TextButton(
@@ -149,11 +158,14 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                               foregroundColor: _accentYellow,
                             ),
                             child: Text(
-                              _unpaidOnly ? 'Show Paid Invoices' : 'Hide Paid Invoices',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: _accentYellow,
-                                fontWeight: FontWeight.w600,
-                              ),
+                              _unpaidOnly
+                                  ? 'Show Paid Invoices'
+                                  : 'Hide Paid Invoices',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: _accentYellow,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                             ),
                           ),
                         ],
@@ -161,10 +173,16 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
 
                       const SizedBox(height: 10),
 
-                      Padding(
-                        padding: const EdgeInsets.only(left: 4, bottom: 6),
-                        child: Text('Client Invoices',
-                            style: Theme.of(context).textTheme.labelLarge),
+                      const Padding(
+                        padding: EdgeInsets.only(left: 4, bottom: 6),
+                        child: Text(
+                          'Client Invoices',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                            color: _accentYellow,
+                          ),
+                        ),
                       ),
                       inv.InvoicesSection(
                         projectId: p.id,
@@ -179,10 +197,16 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
 
                       const SizedBox(height: 10),
 
-                      Padding(
-                        padding: const EdgeInsets.only(left: 4, bottom: 6),
-                        child: Text('Vendor Invoices',
-                            style: Theme.of(context).textTheme.labelLarge),
+                      const Padding(
+                        padding: EdgeInsets.only(left: 4, bottom: 6),
+                        child: Text(
+                          'Vendor Invoices',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                            color: _accentYellow,
+                          ),
+                        ),
                       ),
                       inv.InvoicesSection(
                         projectId: p.id,
@@ -233,7 +257,9 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                     onPressed: () async {
                       await repo.update(p.id, {'isArchived': !p.isArchived});
                     },
-                    child: Text(p.isArchived ? 'Unarchive Project' : 'Archive Project'),
+                    child: Text(
+                      p.isArchived ? 'Unarchive Project' : 'Archive Project',
+                    ),
                   ),
                 ),
 
@@ -253,11 +279,19 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                   ),
                   if (isOwner)
                     TextButton.icon(
-                      icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
-                      label: const Text('Delete Project',
-                          style: TextStyle(color: Colors.redAccent)),
+                      icon: const Icon(
+                        Icons.delete_forever,
+                        color: Colors.redAccent,
+                      ),
+                      label: const Text(
+                        'Delete Project',
+                        style: TextStyle(color: Colors.redAccent),
+                      ),
                       onPressed: () async {
-                        final ok = await confirmDialog(context, 'Delete this project?');
+                        final ok = await confirmDialog(
+                          context,
+                          'Delete this project?',
+                        );
                         if (ok) {
                           await repo.delete(p.id);
                           // ignore: use_build_context_synchronously
@@ -274,8 +308,14 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
     );
   }
 
-  Widget _kv(String k, String v) {
+  Color _subtleSurfaceTint(BuildContext context) {
+    final surface = Theme.of(context).colorScheme.surface;
+    return Color.alphaBlend(const Color(0x14FFFFFF), surface);
+  }
+
+  Widget _kv(BuildContext context, String k, String v) {
     return Card(
+      color: _subtleSurfaceTint(context),
       child: ListTile(
         title: Text(k, style: const TextStyle(fontWeight: FontWeight.w600)),
         subtitle: Text(v),
@@ -296,7 +336,9 @@ class _FinancialSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currency = NumberFormat.simpleCurrency();
-    final currency0 = NumberFormat.simpleCurrency(decimalDigits: 0); // no cents for contract
+    final currency0 = NumberFormat.simpleCurrency(
+      decimalDigits: 0,
+    ); // no cents for contract
 
     return StreamBuilder<List<Invoice>>(
       stream: InvoiceRepository().streamByProject(projectId),
@@ -319,9 +361,15 @@ class _FinancialSummaryCard extends StatelessWidget {
         }
 
         final contract = contractAmount ?? 0.0;
-        final pctInvoiced = (contract > 0) ? (clientInvoiced / contract) * 100 : 0.0;
+        final pctInvoiced = (contract > 0)
+            ? (clientInvoiced / contract) * 100
+            : 0.0;
+        final theme = Theme.of(context);
+        final surface = theme.colorScheme.surface;
+        final cardColor = Color.alphaBlend(const Color(0x14FFFFFF), surface);
 
         return Card(
+          color: cardColor,
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -331,7 +379,14 @@ class _FinancialSummaryCard extends StatelessWidget {
                   'Contract Amount: ${contractAmount != null ? currency0.format(contractAmount) : '—'}',
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 6),
+                Text(
+                  (contract > 0)
+                      ? 'Contract Progress: ${pctInvoiced.toStringAsFixed(0)}%'
+                      : 'Contract Progress: —',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
@@ -351,14 +406,7 @@ class _FinancialSummaryCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  (contract > 0)
-                      ? 'Contract Progress: ${pctInvoiced.toStringAsFixed(0)}%'
-                      : 'Contract Progress: —',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
@@ -386,8 +434,14 @@ class _FinancialSummaryCard extends StatelessWidget {
     );
   }
 
-  Widget _metricBox(BuildContext context, {required String label, required String value}) {
-    final outline = Theme.of(context).colorScheme.outlineVariant.withOpacity(0.6);
+  Widget _metricBox(
+    BuildContext context, {
+    required String label,
+    required String value,
+  }) {
+    final outline = Theme.of(
+      context,
+    ).colorScheme.outlineVariant.withOpacity(0.6);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -397,11 +451,12 @@ class _FinancialSummaryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: Theme.of(context)
-                  .textTheme
-                  .labelMedium
-                  ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
           const SizedBox(height: 4),
           Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
         ],

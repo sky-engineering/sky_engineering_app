@@ -11,7 +11,7 @@ class TaskRepository {
   /// We also apply a client-side stable sort to ensure:
   /// - earlier due dates first
   /// - null due dates last
-  /// - then title A→Z
+  /// - then title A???Z
   Stream<List<TaskItem>> streamByProject(String projectId) {
     final qs = _col
         .where('projectId', isEqualTo: projectId)
@@ -29,6 +29,16 @@ class TaskRepository {
     return _col
         .where('ownerUid', isEqualTo: ownerUid)
         .where('isStarred', isEqualTo: true)
+        .snapshots()
+        .map((snap) => snap.docs.map(TaskItem.fromDoc).toList());
+  }
+
+  /// Stream tasks for a user filtered by status.
+  Stream<List<TaskItem>> streamByStatuses(String ownerUid, List<String> statuses) {
+    assert(statuses.isNotEmpty, 'statuses cannot be empty');
+    return _col
+        .where('ownerUid', isEqualTo: ownerUid)
+        .where('taskStatus', whereIn: statuses)
         .snapshots()
         .map((snap) => snap.docs.map(TaskItem.fromDoc).toList());
   }
@@ -91,3 +101,5 @@ class TaskRepository {
     return a.title.toLowerCase().compareTo(b.title.toLowerCase());
   }
 }
+
+

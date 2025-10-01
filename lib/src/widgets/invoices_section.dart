@@ -446,11 +446,9 @@ Future<void> _showAddInvoiceDialog(
                       ? 0.0
                       : (double.tryParse(amountPaidCtl.text.trim()) ?? 0.0);
 
-                  // Keep storing the numeric digits in the int field, but show the formatted
-                  // string in the UI dialogs (per your request).
-                  int? projNum;
-                  final digits = _digitsOnly(pnText);
-                  if (digits.isNotEmpty) projNum = int.tryParse(digits);
+                  // Store the project number exactly as entered so formatting is preserved.
+                  final projectNumberValue =
+                      pnText.isNotEmpty ? pnText : null;
 
                   final me = FirebaseAuth.instance.currentUser;
                   final inv = Invoice(
@@ -458,7 +456,7 @@ Future<void> _showAddInvoiceDialog(
                     projectId: projectId,
                     ownerUid: me?.uid,
                     invoiceNumber: invoiceNumberCtl.text.trim(),
-                    projectNumber: projNum,
+                    projectNumber: projectNumberValue,
                     invoiceAmount: amt,
                     amountPaid: paid,
                     invoiceDate: invoiceDate,
@@ -493,7 +491,7 @@ Future<void> _showAddInvoiceDialog(
 Future<void> _showEditInvoiceDialog(BuildContext context, Invoice inv,
     {required bool canEdit}) async {
   // Prefill the formatted project number string from the actual project doc.
-  String initialProjectNumberText = inv.projectNumber?.toString() ?? '';
+  String initialProjectNumberText = inv.projectNumber ?? '';
   try {
     final projSnap = await FirebaseFirestore.instance
         .collection('projects')
@@ -686,15 +684,14 @@ Future<void> _showEditInvoiceDialog(BuildContext context, Invoice inv,
                         : (double.tryParse(amountPaidCtl.text.trim()) ??
                         inv.amountPaid);
 
-                    // Keep storing digits in int field; show formatted string in UI.
-                    int? projNum;
-                    final digits = _digitsOnly(pnText);
-                    if (digits.isNotEmpty) projNum = int.tryParse(digits);
+                    // Store the project number exactly as entered so formatting is preserved.
+                    final projectNumberValue =
+                        pnText.isNotEmpty ? pnText : null;
 
                     try {
                       await repo.update(inv.id, {
                         'invoiceNumber': invoiceNumberCtl.text.trim(),
-                        'projectNumber': projNum,
+                        'projectNumber': projectNumberValue,
                         'invoiceAmount': amt,
                         'amountPaid': paid,
                         'invoiceDate':

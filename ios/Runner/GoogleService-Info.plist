@@ -9,7 +9,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.skyengineering.sky-engineering-app</string>
+	<string>com.skyengineering.skyengineeringapp</string>
 	<key>PROJECT_ID</key>
 	<string>sky-eng-app-18242</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:701989214865:ios:9e3e59bce2e0ae35687d30</string>
+	<string>1:701989214865:ios:096ca8cf335fb288687d30</string>
 </dict>
 </plist>

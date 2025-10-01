@@ -1,12 +1,9 @@
 // lib/src/pages/projects_page.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:intl/intl.dart';
 
 import '../data/models/project.dart';
-import '../data/models/invoice.dart';
 import '../data/repositories/project_repository.dart';
-import '../data/repositories/invoice_repository.dart';
 import 'project_detail_page.dart';
 import '../dialogs/select_subphases_dialog.dart';
 
@@ -42,7 +39,9 @@ class _ProjectsPageState extends State<ProjectsPage> {
                   foregroundColor: _accentYellow,
                 ),
                 child: Text(
-                  _showArchived ? 'Hide Archived Tasks' : 'Show Archived Projects',
+                  _showArchived
+                      ? 'Hide Archived Tasks'
+                      : 'Show Archived Projects',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: _accentYellow,
                     fontWeight: FontWeight.w600,
@@ -54,7 +53,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
         ],
       ),
       body: StreamBuilder<List<Project>>(
-        // Show all projects; we'll filter and sort client-side.
+        // Show all projects; we'll filter by isArchived and sort client-side.
         stream: repo.streamAll(),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
@@ -63,8 +62,9 @@ class _ProjectsPageState extends State<ProjectsPage> {
           var items = snap.data ?? const <Project>[];
 
           // Filter by archived state unless toggle is ON
-          // If your Project model doesn't yet have `isArchived`, default to false.
-          items = items.where((p) => _showArchived ? true : (!(p.isArchived ?? false))).toList();
+          if (!_showArchived) {
+            items = items.where((p) => !(p.isArchived)).toList();
+          }
 
           if (items.isEmpty) {
             return _Empty(onAdd: () => _showAddDialog(context));
@@ -73,8 +73,6 @@ class _ProjectsPageState extends State<ProjectsPage> {
           // Natural sort by project number ascending, nulls last; tie-break by name
           final sorted = [...items]..sort(_byProjectNumberNaturalAscThenName);
 
-          final currency0 = NumberFormat.simpleCurrency(decimalDigits: 0);
-
           return ListView.separated(
             padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
             itemCount: sorted.length,
@@ -82,81 +80,51 @@ class _ProjectsPageState extends State<ProjectsPage> {
             itemBuilder: (context, i) {
               final p = sorted[i];
 
-              final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                fontSize:
-                (Theme.of(context).textTheme.titleMedium?.fontSize ?? 16) + 1,
-              );
-              final smallStyle = Theme.of(context).textTheme.bodySmall;
+              final titleStyle = Theme.of(context).textTheme.titleMedium
+                  ?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize:
+                        (Theme.of(context).textTheme.titleMedium?.fontSize ??
+                            16) +
+                        1,
+                  );
 
               return Card(
                 margin: EdgeInsets.zero, // tighter vertical rhythm
                 child: ListTile(
                   dense: true,
                   visualDensity: const VisualDensity(vertical: -2),
-                  contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
                   // No leading avatar
                   title: Text(
-                    (p.projectNumber != null && p.projectNumber!.trim().isNotEmpty)
+                    (p.projectNumber != null &&
+                            p.projectNumber!.trim().isNotEmpty)
                         ? '${p.projectNumber} ${p.name}'
                         : p.name,
                     style: titleStyle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // line 2 (existing)
-                      Text(
-                        [p.clientName]
-                            .where((s) => s.toString().trim().isNotEmpty)
-                            .join(' • '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      // line 3 (NEW): Contract + % complete (client invoices only)
-                      StreamBuilder<List<Invoice>>(
-                        stream: InvoiceRepository().streamByProject(p.id),
-                        builder: (context, invSnap) {
-                          final invoices = invSnap.data ?? const <Invoice>[];
-
-                          // Sum client invoices only
-                          double clientInvoiced = 0;
-                          for (final inv in invoices) {
-                            if (inv.invoiceType == 'Client') {
-                              clientInvoiced += inv.invoiceAmount;
-                            }
-                          }
-
-                          final hasContract = p.contractAmount != null && p.contractAmount! > 0;
-                          final contractText = hasContract
-                              ? currency0.format(p.contractAmount)
-                              : '—';
-
-                          final pct = hasContract
-                              ? (clientInvoiced / p.contractAmount! * 100)
-                              : 0.0;
-                          final pctText = hasContract
-                              ? '${pct.isFinite ? pct.clamp(0, 999).toStringAsFixed(0) : '0'}% Complete'
-                              : '0% Complete';
-
-                          return Text(
-                            'Contract: $contractText — $pctText',
-                            style: smallStyle,
-                          );
-                        },
-                      ),
-                    ],
+                  subtitle: Text(
+                    [
+                      p.clientName,
+                    ].where((s) => s.toString().trim().isNotEmpty).join(' • '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  trailing: (p.isArchived ?? false)
+                  trailing: p.isArchived
                       ? Padding(
-                    padding: const EdgeInsets.only(left: 6),
-                    child: Icon(Icons.archive,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant),
-                  )
+                          padding: const EdgeInsets.only(left: 6),
+                          child: Icon(
+                            Icons.archive,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
+                          ),
+                        )
                       : null,
                   onTap: () {
                     Navigator.of(context).push(
@@ -175,8 +143,8 @@ class _ProjectsPageState extends State<ProjectsPage> {
         onPressed: () => _showAddDialog(context),
         icon: const Icon(Icons.add),
         label: const Text('New Project'),
-        backgroundColor: _accentYellow, // make FAB yellow
-        foregroundColor: Colors.black,  // readable on yellow
+        backgroundColor: _accentYellow,
+        foregroundColor: Colors.black87,
       ),
     );
   }
@@ -324,7 +292,8 @@ Future<void> _showAddDialog(BuildContext context) async {
                     labelText: 'Project name',
                     border: OutlineInputBorder(),
                   ),
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? 'Required' : null,
                 ),
                 const SizedBox(height: 10),
                 TextFormField(
@@ -333,7 +302,8 @@ Future<void> _showAddDialog(BuildContext context) async {
                     labelText: 'Client name',
                     border: OutlineInputBorder(),
                   ),
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? 'Required' : null,
                 ),
                 const SizedBox(height: 10),
                 TextFormField(
@@ -359,7 +329,10 @@ Future<void> _showAddDialog(BuildContext context) async {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () async {
               if (!(formKey.currentState?.validate() ?? false)) return;
@@ -376,10 +349,11 @@ Future<void> _showAddDialog(BuildContext context) async {
                 status: 'Active',
                 contractAmount: amt,
                 ownerUid: me?.uid,
-                projectNumber:
-                projectNumCtl.text.trim().isEmpty ? null : projectNumCtl.text.trim(),
+                projectNumber: projectNumCtl.text.trim().isEmpty
+                    ? null
+                    : projectNumCtl.text.trim(),
                 createdAt: null,
-                // Explicit default
+                // Explicit default: not archived
                 isArchived: false,
               );
 
@@ -389,11 +363,17 @@ Future<void> _showAddDialog(BuildContext context) async {
 
               // Follow-up: Select subphases for the new project
               if (me != null) {
-                await showSelectSubphasesDialog(context, projectId: id, ownerUid: me.uid);
+                await showSelectSubphasesDialog(
+                  context,
+                  projectId: id,
+                  ownerUid: me.uid,
+                );
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Project created. Sign in to select subphases.'),
+                    content: Text(
+                      'Project created. Sign in to select subphases.',
+                    ),
                   ),
                 );
               }

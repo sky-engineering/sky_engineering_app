@@ -2,16 +2,25 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
-
 import 'subphases_page.dart';
+import 'in_progress_tasks_page.dart';
 import 'starred_tasks_page.dart';
-import 'active_tasks_page.dart';
 import '../dialogs/city_inspect_links_dialog.dart';
 
 class DashboardPage extends StatelessWidget {
   DashboardPage({super.key});
 
   final _user = FirebaseAuth.instance.currentUser;
+
+  Future<void> _launchExternal(BuildContext context, String url) async {
+    final uri = Uri.parse(url);
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open link')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,95 +35,153 @@ class DashboardPage extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Center(child: Icon(Icons.engineering, size: 80)),
-              const SizedBox(height: 12),
               Center(
-                child: Text(
-                  'Welcome to Sky Engineering',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                  textAlign: TextAlign.center,
+                child: Image.asset(
+                  'assets/SkyEngineering-Horizontal-Light.png',
+                  height: 128,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               Center(child: Text(_user?.email ?? '(no email)')),
-              const SizedBox(height: 24),
-              const Center(
-                child:
-                Text('Use the tabs below to navigate. Projects will appear here soon.'),
-              ),
               const SizedBox(height: 32),
 
               Text('Helpful Links', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
 
-              // Project Tasking (Subphases)
-              _linkButton(
-                context: context,
-                color: linkColor,
-                label: 'Project Tasking',
-                onTap: () {
-                  Navigator.of(context)
-                      .push(MaterialPageRoute(builder: (_) => SubphasesPage()));
-                },
-              ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 16),
 
-              // Starred Tasks
-              _linkButton(
-                context: context,
-                color: linkColor,
-                label: 'Starred Tasks',
-                onTap: () {
-                  Navigator.of(context)
-                      .push(MaterialPageRoute(builder: (_) => StarredTasksPage()));
+              // In Progress Tasks
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => InProgressTasksPage()));
                 },
-              ),
-              const SizedBox(height: 6),
-
-              // In Progress Tasks (Pending + In Progress)
-              _linkButton(
-                context: context,
-                color: linkColor,
-                label: 'In Progress Tasks',
-                onTap: () {
-                  Navigator.of(context)
-                      .push(MaterialPageRoute(builder: (_) => ActiveTasksPage()));
-                },
-              ),
-              const SizedBox(height: 6),
-
-              // Sky Engineering Website
-              _linkButton(
-                context: context,
-                color: linkColor,
-                label: 'Sky Engineering Website',
-                onTap: () => _openExternal(
-                  context,
-                  Uri.parse('https://www.skyengineering.co'),
+                style: TextButton.styleFrom(
+                  foregroundColor: linkColor,
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 0),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  alignment: Alignment.centerLeft,
                 ),
-              ),
-              const SizedBox(height: 6),
-
-              // Sky Engineering Dropbox
-              _linkButton(
-                context: context,
-                color: linkColor,
-                label: 'Sky Engineering Dropbox',
-                onTap: () => _openExternal(
-                  context,
-                  Uri.parse(
-                    'https://www.dropbox.com/scl/fo/qb19djm48m3ko65x8ua1n/ADxAvonvBPlx5uVypAWlQ6A?rlkey=z1y61ir805qvgk3k0r9j3ky2g&st=6ub8qjcc&dl=0',
+                child: const Text(
+                  'In Progress Tasks',
+                  style: TextStyle(
+                    decoration: TextDecoration.underline,
+                    decorationThickness: 1.5,
                   ),
                 ),
               ),
-              const SizedBox(height: 6),
 
-              // City Inspect Links (dialog)
-              _linkButton(
-                context: context,
-                color: linkColor,
-                label: 'City Inspect Links',
-                onTap: () => showCityInspectLinksDialog(context),
+              const SizedBox(height: 16),
+
+              // Starred Tasks
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => StarredTasksPage()));
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: linkColor,
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 0),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  alignment: Alignment.centerLeft,
+                ),
+                child: const Text(
+                  'Starred Tasks',
+                  style: TextStyle(
+                    decoration: TextDecoration.underline,
+                    decorationThickness: 1.5,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Project Tasking
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => SubphasesPage()));
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: linkColor,
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 0),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  alignment: Alignment.centerLeft,
+                ),
+                child: const Text(
+                  'Project Tasking',
+                  style: TextStyle(
+                    decoration: TextDecoration.underline,
+                    decorationThickness: 1.5,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Sky Engineering Website
+              TextButton(
+                onPressed: () {
+                  _launchExternal(context, 'https://www.skyengineering.co');
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: linkColor,
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 0),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  alignment: Alignment.centerLeft,
+                ),
+                child: const Text(
+                  'Sky Engineering Website',
+                  style: TextStyle(
+                    decoration: TextDecoration.underline,
+                    decorationThickness: 1.5,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Sky Engineering Dropbox
+              TextButton(
+                onPressed: () {
+                  _launchExternal(context, 'https://www.dropbox.com/scl/fo/qb19djm48m3ko65x8ua1n/ADxAvonvBPlx5uVypAWlQ6A?rlkey=e9brozwr2qpq9k1b0t256kt56&dl=0');
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: linkColor,
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 0),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  alignment: Alignment.centerLeft,
+                ),
+                child: const Text(
+                  'Sky Engineering Dropbox',
+                  style: TextStyle(
+                    decoration: TextDecoration.underline,
+                    decorationThickness: 1.5,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // City Inspects
+              TextButton(
+                onPressed: () => showCityInspectLinksDialog(context),
+                style: TextButton.styleFrom(
+                  foregroundColor: linkColor,
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 0),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  alignment: Alignment.centerLeft,
+                ),
+                child: const Text(
+                  'City Inspects',
+                  style: TextStyle(
+                    decoration: TextDecoration.underline,
+                    decorationThickness: 1.5,
+                  ),
+                ),
               ),
             ],
           ),
@@ -122,38 +189,10 @@ class DashboardPage extends StatelessWidget {
       ),
     );
   }
-
-  Widget _linkButton({
-    required BuildContext context,
-    required Color color,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return TextButton(
-      onPressed: onTap,
-      style: TextButton.styleFrom(
-        foregroundColor: color,
-        padding: EdgeInsets.zero,
-        minimumSize: const Size(0, 0),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        alignment: Alignment.centerLeft,
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          decoration: TextDecoration.underline,
-          decorationThickness: 1.5,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _openExternal(BuildContext context, Uri uri) async {
-    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!ok && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open link')),
-      );
-    }
-  }
 }
+
+
+
+
+
+

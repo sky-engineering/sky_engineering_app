@@ -92,6 +92,32 @@ class _InvoicesPageState extends State<InvoicesPage> {
           ),
           const SizedBox(height: 6),
 
+          if (_selectedProjectIds.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(
+                  spacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Chip(
+                      label: Text(
+                        _selectedProjectIds.length == 1
+                            ? '1 project selected'
+                            : '${_selectedProjectIds.length} projects selected',
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () =>
+                          setState(() => _selectedProjectIds.clear()),
+                      child: const Text('Clear project filter'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
           // Everything below (summary + list) reacts to projects and invoices.
           Expanded(
             child: StreamBuilder<List<Project>>(
@@ -101,9 +127,11 @@ class _InvoicesPageState extends State<InvoicesPage> {
                 // Refresh project number cache
                 _projectNumById
                   ..clear()
-                  ..addEntries(projects.map(
-                        (p) => MapEntry(p.id, (p.projectNumber ?? '').trim()),
-                  ));
+                  ..addEntries(
+                    projects.map(
+                      (p) => MapEntry(p.id, (p.projectNumber ?? '').trim()),
+                    ),
+                  );
 
                 return StreamBuilder<List<Invoice>>(
                   stream: _invoiceRepo.streamAll(),
@@ -116,19 +144,23 @@ class _InvoicesPageState extends State<InvoicesPage> {
                     var invoices = invSnap.data ?? const <Invoice>[];
 
                     // Apply invoice type filter (required)
-                    invoices =
-                        invoices.where((i) => i.invoiceType == _typeFilter).toList();
+                    invoices = invoices
+                        .where((i) => i.invoiceType == _typeFilter)
+                        .toList();
 
                     // Apply unpaid filter
                     if (_unpaidOnly) {
-                      invoices =
-                          invoices.where((i) => i.balance > 0.0001).toList();
+                      invoices = invoices
+                          .where((i) => i.balance > 0.0001)
+                          .toList();
                     }
 
                     // Apply project filter
                     if (_selectedProjectIds.isNotEmpty) {
                       invoices = invoices
-                          .where((i) => _selectedProjectIds.contains(i.projectId))
+                          .where(
+                            (i) => _selectedProjectIds.contains(i.projectId),
+                          )
                           .toList();
                     }
 
@@ -145,7 +177,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
                     // ---- NEW summary of total unpaid for currently listed invoices
                     final totalUnpaid = invoices.fold<double>(
                       0.0,
-                          (sum, inv) => sum + (inv.balance > 0 ? inv.balance : 0.0),
+                      (sum, inv) => sum + (inv.balance > 0 ? inv.balance : 0.0),
                     );
                     final summaryLabel = (_typeFilter == 'Client')
                         ? 'Total Unpaid (Clients)'
@@ -157,13 +189,12 @@ class _InvoicesPageState extends State<InvoicesPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Padding(
-                            padding:
-                            const EdgeInsets.symmetric(horizontal: 12.0),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12.0,
+                            ),
                             child: Text(
                               '$summaryLabel: ${currency.format(totalUnpaid)}',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
+                              style: Theme.of(context).textTheme.bodyMedium
                                   ?.copyWith(fontWeight: FontWeight.w600),
                             ),
                           ),
@@ -189,29 +220,25 @@ class _InvoicesPageState extends State<InvoicesPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Padding(
-                          padding:
-                          const EdgeInsets.symmetric(horizontal: 12.0),
+                          padding: const EdgeInsets.symmetric(horizontal: 12.0),
                           child: Text(
                             '$summaryLabel: ${currency.format(totalUnpaid)}',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
+                            style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(fontWeight: FontWeight.w600),
                           ),
                         ),
                         const SizedBox(height: 6),
                         Expanded(
                           child: ListView.separated(
-                            padding:
-                            const EdgeInsets.fromLTRB(10, 6, 10, 10),
+                            padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
                             itemCount: invoices.length,
                             separatorBuilder: (_, __) =>
-                            const SizedBox(height: 6),
+                                const SizedBox(height: 6),
                             itemBuilder: (context, i) {
                               final inv = invoices[i];
                               final projNum = _projectNumById[inv.projectId];
                               final displayProj =
-                              (projNum != null && projNum.isNotEmpty)
+                                  (projNum != null && projNum.isNotEmpty)
                                   ? projNum
                                   : (inv.projectNumber?.toString() ?? '—');
 
@@ -221,11 +248,13 @@ class _InvoicesPageState extends State<InvoicesPage> {
                                 margin: EdgeInsets.zero,
                                 child: ListTile(
                                   dense: true,
-                                  visualDensity:
-                                  const VisualDensity(vertical: -2),
-                                  contentPadding:
-                                  const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 6),
+                                  visualDensity: const VisualDensity(
+                                    vertical: -2,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
                                   title: Row(
                                     children: [
                                       Expanded(
@@ -247,15 +276,16 @@ class _InvoicesPageState extends State<InvoicesPage> {
                                           tooltip: 'Open document link',
                                           icon: const Icon(Icons.link),
                                           onPressed: () => _openLink(
-                                              inv.documentLink!.trim()),
-                                          visualDensity:
-                                          VisualDensity.compact,
+                                            inv.documentLink!.trim(),
+                                          ),
+                                          visualDensity: VisualDensity.compact,
                                         ),
                                       const SizedBox(width: 4),
                                       Text(
                                         'Balance: ${currency.format(inv.balance)}',
                                         style: const TextStyle(
-                                            fontWeight: FontWeight.w600),
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -264,8 +294,10 @@ class _InvoicesPageState extends State<InvoicesPage> {
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                  onTap: () =>
-                                      _showEditInvoiceDialogInline(context, inv),
+                                  onTap: () => _showEditInvoiceDialogInline(
+                                    context,
+                                    inv,
+                                  ),
                                 ),
                               );
                             },
@@ -286,94 +318,132 @@ class _InvoicesPageState extends State<InvoicesPage> {
   // -------- actions / helpers --------
 
   Future<void> _openProjectFilter() async {
-    // One-shot list of projects using the stream's first value
-    final projects = await _projectRepo.streamAll().first;
-    final localSel = {..._selectedProjectIds};
+    final allProjects = await _projectRepo.streamAll().first;
+    final projects = allProjects.where((p) => !p.isArchived).toList()
+      ..sort((a, b) {
+        final an = a.projectNumber ?? '';
+        final bn = b.projectNumber ?? '';
+        final cmp = an.compareTo(bn);
+        if (cmp != 0) return cmp;
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
+
+    if (projects.isEmpty) {
+      if (mounted && _selectedProjectIds.isNotEmpty) {
+        setState(() => _selectedProjectIds.clear());
+      }
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('Filter by Projects'),
+            content: const Text('No active projects available to filter.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          );
+        },
+      );
+      return;
+    }
+
+    final activeIds = projects.map((p) => p.id).toSet();
+    final localSel = {..._selectedProjectIds}
+      ..removeWhere((id) => !activeIds.contains(id));
 
     await showDialog<void>(
       context: context,
       builder: (context) {
-        return StatefulBuilder(builder: (context, setStateDialog) {
-          return AlertDialog(
-            title: const Text('Filter by Projects'),
-            content: SizedBox(
-              width: 420,
-              height: 420,
-              child: Column(
-                children: [
-                  // Quick chips
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      FilterChip(
-                        label: const Text('All projects'),
-                        selected: localSel.isEmpty,
-                        onSelected: (_) => setStateDialog(() => localSel.clear()),
-                      ),
-                      if (localSel.isNotEmpty)
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text('Filter by Projects'),
+              content: SizedBox(
+                width: 420,
+                height: 420,
+                child: Column(
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
                         FilterChip(
-                          label: const Text('Clear'),
-                          selected: false,
-                          onSelected: (_) => setStateDialog(() => localSel.clear()),
+                          label: const Text('All projects'),
+                          selected: localSel.isEmpty,
+                          onSelected: (_) =>
+                              setStateDialog(() => localSel.clear()),
                         ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: projects.length,
-                      itemBuilder: (context, i) {
-                        final p = projects[i];
-                        final selected = localSel.contains(p.id);
-                        final label = (p.projectNumber != null &&
-                            p.projectNumber!.trim().isNotEmpty)
-                            ? '${p.projectNumber} ${p.name}'
-                            : p.name;
-                        return CheckboxListTile(
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          value: selected,
-                          onChanged: (v) {
-                            setStateDialog(() {
-                              if (v == true) {
-                                localSel.add(p.id);
-                              } else {
-                                localSel.remove(p.id);
-                              }
-                            });
-                          },
-                          title: Text(
-                            label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                        if (localSel.isNotEmpty)
+                          FilterChip(
+                            label: const Text('Clear'),
+                            selected: false,
+                            onSelected: (_) =>
+                                setStateDialog(() => localSel.clear()),
                           ),
-                        );
-                      },
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: projects.length,
+                        itemBuilder: (context, i) {
+                          final p = projects[i];
+                          final selected = localSel.contains(p.id);
+                          final hasNumber =
+                              p.projectNumber != null &&
+                              p.projectNumber!.trim().isNotEmpty;
+                          final label = hasNumber
+                              ? '${p.projectNumber} ${p.name}'
+                              : p.name;
+                          return CheckboxListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            value: selected,
+                            onChanged: (v) {
+                              setStateDialog(() {
+                                if (v == true) {
+                                  localSel.add(p.id);
+                                } else {
+                                  localSel.remove(p.id);
+                                }
+                              });
+                            },
+                            title: Text(
+                              label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  setState(() {
-                    _selectedProjectIds
-                      ..clear()
-                      ..addAll(localSel);
-                  });
-                  Navigator.pop(context);
-                },
-                child: const Text('Apply'),
-              ),
-            ],
-          );
-        });
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    setState(() {
+                      _selectedProjectIds
+                        ..clear()
+                        ..addAll(localSel);
+                    });
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Apply'),
+                ),
+              ],
+            );
+          },
+        );
       },
     );
   }
@@ -382,30 +452,37 @@ class _InvoicesPageState extends State<InvoicesPage> {
     final uri = Uri.tryParse(urlStr);
     if (uri == null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Invalid document link')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Invalid document link')));
       return;
     }
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open link')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Could not open link')));
     }
   }
 
   // -------- Inline Edit Dialog (matches your amountPaid flow) --------
-  Future<void> _showEditInvoiceDialogInline(BuildContext context, Invoice inv) async {
+  Future<void> _showEditInvoiceDialogInline(
+    BuildContext context,
+    Invoice inv,
+  ) async {
     final invoiceNumberCtl = TextEditingController(text: inv.invoiceNumber);
     // Keep original string (with dashes etc.) if Project.projectNumber is empty; else display Project.projectNumber
-    final projectNumberCtl =
-    TextEditingController(text: _projectNumById[inv.projectId]?.trim().isNotEmpty == true
-        ? _projectNumById[inv.projectId]!
-        : (inv.projectNumber?.toString() ?? ''));
-    final invoiceAmountCtl =
-    TextEditingController(text: inv.invoiceAmount.toStringAsFixed(2));
-    final amountPaidCtl =
-    TextEditingController(text: inv.amountPaid.toStringAsFixed(2));
+    final projectNumberCtl = TextEditingController(
+      text: _projectNumById[inv.projectId]?.trim().isNotEmpty == true
+          ? _projectNumById[inv.projectId]!
+          : (inv.projectNumber?.toString() ?? ''),
+    );
+    final invoiceAmountCtl = TextEditingController(
+      text: inv.invoiceAmount.toStringAsFixed(2),
+    );
+    final amountPaidCtl = TextEditingController(
+      text: inv.amountPaid.toStringAsFixed(2),
+    );
     final documentLinkCtl = TextEditingController(text: inv.documentLink ?? '');
 
     String invoiceType = inv.invoiceType; // keep existing
@@ -449,7 +526,9 @@ class _InvoicesPageState extends State<InvoicesPage> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: Text('Invoice ${inv.invoiceNumber.isNotEmpty ? inv.invoiceNumber : inv.id.substring(0, 6)}'),
+              title: Text(
+                'Invoice ${inv.invoiceNumber.isNotEmpty ? inv.invoiceNumber : inv.id.substring(0, 6)}',
+              ),
               content: Form(
                 key: formKey,
                 child: SizedBox(
@@ -474,8 +553,9 @@ class _InvoicesPageState extends State<InvoicesPage> {
                             labelText: 'Invoice Number',
                             border: OutlineInputBorder(),
                           ),
-                          validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? 'Required' : null,
+                          validator: (v) => (v == null || v.trim().isEmpty)
+                              ? 'Required'
+                              : null,
                         ),
                         const SizedBox(height: 10),
                         TextFormField(
@@ -485,8 +565,9 @@ class _InvoicesPageState extends State<InvoicesPage> {
                             border: OutlineInputBorder(),
                           ),
                           keyboardType: TextInputType.number,
-                          validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? 'Required' : null,
+                          validator: (v) => (v == null || v.trim().isEmpty)
+                              ? 'Required'
+                              : null,
                         ),
                         const SizedBox(height: 10),
                         TextFormField(
@@ -539,10 +620,17 @@ class _InvoicesPageState extends State<InvoicesPage> {
                         DropdownButtonFormField<String>(
                           value: invoiceType,
                           items: const [
-                            DropdownMenuItem(value: 'Client', child: Text('Client')),
-                            DropdownMenuItem(value: 'Vendor', child: Text('Vendor')),
+                            DropdownMenuItem(
+                              value: 'Client',
+                              child: Text('Client'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'Vendor',
+                              child: Text('Vendor'),
+                            ),
                           ],
-                          onChanged: (v) => setState(() => invoiceType = v ?? invoiceType),
+                          onChanged: (v) =>
+                              setState(() => invoiceType = v ?? invoiceType),
                           decoration: const InputDecoration(
                             labelText: 'Invoice Type',
                             border: OutlineInputBorder(),
@@ -565,7 +653,10 @@ class _InvoicesPageState extends State<InvoicesPage> {
               actions: [
                 TextButton(
                   onPressed: () async {
-                    final ok = await _confirmDialog(context, 'Delete this invoice?');
+                    final ok = await _confirmDialog(
+                      context,
+                      'Delete this invoice?',
+                    );
                     if (!ok) return;
                     try {
                       await repo.delete(inv.id);
@@ -580,18 +671,20 @@ class _InvoicesPageState extends State<InvoicesPage> {
                   child: const Text('Delete'),
                 ),
                 TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel')),
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
                 FilledButton(
                   onPressed: () async {
                     if (!(formKey.currentState?.validate() ?? false)) return;
 
-                    final amt = double.tryParse(invoiceAmountCtl.text.trim()) ??
+                    final amt =
+                        double.tryParse(invoiceAmountCtl.text.trim()) ??
                         inv.invoiceAmount;
                     final paid = amountPaidCtl.text.trim().isEmpty
                         ? inv.amountPaid
                         : (double.tryParse(amountPaidCtl.text.trim()) ??
-                        inv.amountPaid);
+                              inv.amountPaid);
 
                     // We keep the existing projectId; editing the human-readable
                     // "Project Number" string here does not move the invoice.
@@ -601,7 +694,9 @@ class _InvoicesPageState extends State<InvoicesPage> {
                     if (pnText.isNotEmpty) {
                       // do NOT strip non-digits; preserve formatting by not parsing if you store as string.
                       // If your Invoice.projectNumber is an int mirror, this remains optional:
-                      projNumMirror = int.tryParse(pnText.replaceAll(RegExp(r'[^0-9]'), ''));
+                      projNumMirror = int.tryParse(
+                        pnText.replaceAll(RegExp(r'[^0-9]'), ''),
+                      );
                     }
 
                     try {
@@ -652,7 +747,10 @@ class _InvoicesPageState extends State<InvoicesPage> {
         return AlertDialog(
           content: Text(msg),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('No')),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('No'),
+            ),
             FilledButton(
               onPressed: () {
                 ok = true;

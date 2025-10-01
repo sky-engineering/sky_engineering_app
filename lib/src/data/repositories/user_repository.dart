@@ -50,4 +50,6 @@ class UserRepository {
 
     await ref.set(data, SetOptions(merge: true));
   }
+
+  Future<void> delete(String uid) => _col.doc(uid).delete();
 }

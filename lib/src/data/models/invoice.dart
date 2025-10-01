@@ -35,7 +35,7 @@ class Invoice {
 
   // New schema
   final String invoiceNumber;
-  final int? projectNumber;
+  final String? projectNumber;
   final double invoiceAmount;
   /// Canonical paid amount. Defaults to 0.0 when absent.
   final double amountPaid;
@@ -92,7 +92,7 @@ class Invoice {
     this.notes,
 
     this.invoiceType = 'Client', // default
-    this.projectNumber,
+    String? projectNumber,
     double? balanceDue,
     this.dueDate,
     this.paidDate,
@@ -100,7 +100,8 @@ class Invoice {
     this.ownerUid,
     this.createdAt,
     this.updatedAt,
-  })  : invoiceNumber = invoiceNumber ?? number ?? '',
+  })  : projectNumber = _normalizeProjectNumber(projectNumber),
+        invoiceNumber = invoiceNumber ?? number ?? '',
         invoiceAmount = (invoiceAmount ?? amount ?? 0.0),
         invoiceDate = invoiceDate ?? issueDate,
         _statusStored = status,
@@ -124,6 +125,20 @@ class Invoice {
       if (v == null) return null;
       if (v is num) return v.toDouble();
       return double.tryParse('$v');
+    }
+
+    String? _toProjectNumber(dynamic v) {
+      if (v == null) return null;
+      if (v is String) {
+        final trimmed = v.trim();
+        return trimmed.isEmpty ? null : trimmed;
+      }
+      if (v is num) {
+        final text = v.toString();
+        return text.isEmpty ? null : text;
+      }
+      final text = v.toString().trim();
+      return text.isEmpty ? null : text;
     }
 
     DateTime? _toDate(dynamic v) {
@@ -161,11 +176,7 @@ class Invoice {
     return Invoice(
       id: doc.id,
       projectId: (data['projectId'] as String?) ?? '',
-      projectNumber: (data['projectNumber'] is int)
-          ? data['projectNumber'] as int
-          : (data['projectNumber'] is num
-          ? (data['projectNumber'] as num).toInt()
-          : null),
+      projectNumber: _toProjectNumber(data['projectNumber']),
       invoiceNumber: invNum,
       invoiceAmount: invAmt,
       amountPaid: normalizedPaid,
@@ -200,7 +211,7 @@ class Invoice {
     return <String, dynamic>{
       // New schema
       'projectId': projectId,
-      'projectNumber': projectNumber,
+      if (projectNumber != null) 'projectNumber': projectNumber,
       'invoiceNumber': invoiceNumber,
       'invoiceAmount': invoiceAmount,
       'amountPaid': amountPaid,              // <-- canonical
@@ -224,7 +235,7 @@ class Invoice {
   Invoice copyWith({
     String? id,
     String? projectId,
-    int? projectNumber,
+    String? projectNumber,
     String? invoiceNumber,
     double? invoiceAmount,
     double? amountPaid,
@@ -242,11 +253,14 @@ class Invoice {
   }) {
     final newInvoiceAmount = invoiceAmount ?? this.invoiceAmount;
     final newPaid = amountPaid ?? this.amountPaid;
+    final newProjectNumber = projectNumber == null
+        ? this.projectNumber
+        : _normalizeProjectNumber(projectNumber);
 
     return Invoice(
       id: id ?? this.id,
       projectId: projectId ?? this.projectId,
-      projectNumber: projectNumber ?? this.projectNumber,
+      projectNumber: newProjectNumber,
       invoiceNumber: invoiceNumber ?? this.invoiceNumber,
       invoiceAmount: newInvoiceAmount,
       amountPaid: _normalizePaid(newPaid, newInvoiceAmount),
@@ -262,6 +276,12 @@ class Invoice {
       status: status ?? _statusStored,
       notes: notes ?? this.notes,
     );
+  }
+
+  static String? _normalizeProjectNumber(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    return trimmed;
   }
 
   // ---- helpers ----

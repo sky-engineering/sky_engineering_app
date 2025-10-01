@@ -1,19 +1,16 @@
-// lib/src/pages/active_tasks_page.dart
+// lib/src/pages/in_progress_tasks_page.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../data/models/task.dart';
-import '../data/models/project.dart';
-import '../data/repositories/project_repository.dart';
 import '../data/repositories/task_repository.dart';
 import 'project_detail_page.dart';
 
-class ActiveTasksPage extends StatelessWidget {
-  ActiveTasksPage({super.key});
+class InProgressTasksPage extends StatelessWidget {
+  InProgressTasksPage({super.key});
 
-  final _projectRepo = ProjectRepository();
-  final _taskRepo = TaskRepository();
+  final _repo = TaskRepository();
+  static const _statuses = <String>['In Progress', 'Pending'];
 
   @override
   Widget build(BuildContext context) {
@@ -24,71 +21,37 @@ class ActiveTasksPage extends StatelessWidget {
       );
     }
 
-    final tasksQuery = FirebaseFirestore.instance
-        .collection('tasks')
-        .where('ownerUid', isEqualTo: me.uid)
-        .where('taskStatus', whereIn: const ['In Progress', 'Pending']);
-
     return Scaffold(
       appBar: AppBar(title: const Text('In Progress Tasks')),
-      body: StreamBuilder<List<Project>>(
-        stream: _projectRepo.streamAll(),
-        builder: (context, projSnap) {
-          final projects = projSnap.data ?? const <Project>[];
-          final projectNumById = <String, String>{
-            for (final p in projects) p.id: (p.projectNumber ?? '').trim(),
-          };
+      body: StreamBuilder<List<TaskItem>>(
+        stream: _repo.streamByStatuses(me.uid, _statuses),
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-          return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: tasksQuery.snapshots(),
-            builder: (context, snap) {
-              if (snap.connectionState == ConnectionState.waiting ||
-                  projSnap.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
+          final list = (snap.data ?? const <TaskItem>[])..sort(_taskComparator);
+          if (list.isEmpty) {
+            return const _Empty();
+          }
 
-              final list = (snap.data?.docs ??
-                  const <QueryDocumentSnapshot<Map<String, dynamic>>>[])
-                  .map((d) => TaskItem.fromDoc(d))
-                  .toList()
-                ..sort(_taskComparator);
-
-              if (list.isEmpty) {
-                return const _Empty();
-              }
-
-              return ListView.separated(
-                padding: const EdgeInsets.all(12),
-                itemCount: list.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (context, i) {
-                  final t = list[i];
-                  final projNum = projectNumById[t.projectId];
-                  return _ActiveTile(
-                    task: t,
-                    projectNumber:
-                    (projNum != null && projNum.isNotEmpty) ? projNum : '—',
-                    onOpenProject: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              ProjectDetailPage(projectId: t.projectId),
-                        ),
-                      );
-                    },
-                    onToggleStar: () async {
-                      try {
-                        await _taskRepo.update(
-                            t.id, {'isStarred': !t.isStarred});
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Could not update star: $e')),
-                          );
-                        }
-                      }
-                    },
+          return ListView.separated(
+            padding: const EdgeInsets.all(12),
+            itemCount: list.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (context, i) {
+              final t = list[i];
+              return _TaskTile(
+                task: t,
+                onOpenProject: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ProjectDetailPage(projectId: t.projectId),
+                    ),
                   );
+                },
+                onToggleStar: () async {
+                  await _repo.update(t.id, {'isStarred': !t.isStarred});
                 },
               );
             },
@@ -122,7 +85,7 @@ class ActiveTasksPage extends StatelessWidget {
       final cmp = ad.compareTo(bd);
       if (cmp != 0) return cmp;
     } else if (ad == null && bd != null) {
-      return 1;
+      return 1; // nulls last
     } else if (ad != null && bd == null) {
       return -1;
     }
@@ -130,15 +93,13 @@ class ActiveTasksPage extends StatelessWidget {
   }
 }
 
-class _ActiveTile extends StatelessWidget {
+class _TaskTile extends StatelessWidget {
   final TaskItem task;
-  final String projectNumber;
   final VoidCallback onOpenProject;
   final VoidCallback onToggleStar;
 
-  const _ActiveTile({
+  const _TaskTile({
     required this.task,
-    required this.projectNumber,
     required this.onOpenProject,
     required this.onToggleStar,
   });
@@ -157,14 +118,13 @@ class _ActiveTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: Row(
             crossAxisAlignment:
-            hasDesc ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+                hasDesc ? CrossAxisAlignment.start : CrossAxisAlignment.center,
             children: [
               Padding(
                 padding: EdgeInsets.only(top: hasDesc ? 2 : 0),
                 child: IconButton(
                   padding: EdgeInsets.zero,
-                  constraints:
-                  const BoxConstraints(minWidth: 32, minHeight: 32),
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                   iconSize: 20,
                   splashRadius: 18,
                   onPressed: onToggleStar,
@@ -175,7 +135,9 @@ class _ActiveTile extends StatelessWidget {
                   tooltip: task.isStarred ? 'Unstar' : 'Star',
                 ),
               ),
+
               const SizedBox(width: 6),
+
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -185,13 +147,6 @@ class _ActiveTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Project: $projectNumber',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: small,
                     ),
                     if (hasDesc)
                       Padding(
@@ -206,7 +161,9 @@ class _ActiveTile extends StatelessWidget {
                   ],
                 ),
               ),
+
               const SizedBox(width: 4),
+
               IconButton(
                 tooltip: 'Open project',
                 onPressed: onOpenProject,
@@ -231,9 +188,9 @@ class _Empty extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: const [
-            Icon(Icons.check_circle_outline, size: 80),
+            Icon(Icons.pending_actions, size: 80),
             SizedBox(height: 12),
-            Text('No active tasks'),
+            Text('No in-progress or pending tasks'),
           ],
         ),
       ),

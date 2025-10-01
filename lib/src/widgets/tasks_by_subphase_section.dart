@@ -12,7 +12,12 @@ import '../dialogs/select_subphases_dialog.dart';
 import 'form_helpers.dart';
 import '../ui/loading_overlay.dart';
 
-const _kTaskStatuses = <String>['In Progress', 'On Hold', 'Pending', 'Completed'];
+const _kTaskStatuses = <String>[
+  'In Progress',
+  'On Hold',
+  'Pending',
+  'Completed',
+];
 const _kSubphaseStatuses = <String>['In Progress', 'On Hold', 'Completed'];
 const _accentYellow = Color(0xFFF1C400);
 
@@ -38,10 +43,11 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
   @override
   Widget build(BuildContext context) {
     final repo = TaskRepository();
-    final sel = (widget.selectedSubphases ?? <SelectedSubphase>[])
-        .where((s) => _isValidCode(s.code))
-        .toList()
-      ..sort((a, b) => a.code.compareTo(b.code));
+    final sel =
+        (widget.selectedSubphases ?? <SelectedSubphase>[])
+            .where((s) => _isValidCode(s.code))
+            .toList()
+          ..sort((a, b) => a.code.compareTo(b.code));
 
     final statusByCode = {for (final s in sel) s.code: s.status};
 
@@ -88,6 +94,7 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
               }
               return a.title.toLowerCase().compareTo(b.title.toLowerCase());
             }
+
             for (final list in byCode.values) list.sort(_cmp);
             other.sort(_cmp);
 
@@ -101,7 +108,10 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                     spacing: 8,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Text('Tasks', style: Theme.of(context).textTheme.titleLarge),
+                      Text(
+                        'Tasks',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
                       if (widget.isOwner)
                         IconButton(
                           tooltip: 'Select Subphases',
@@ -112,11 +122,14 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                                 .collection('projects')
                                 .doc(widget.projectId)
                                 .get();
-                            final owner = (snap.data()?['ownerUid'] as String?) ?? '';
+                            final owner =
+                                (snap.data()?['ownerUid'] as String?) ?? '';
                             if (owner.isEmpty) {
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Project has no ownerUid.')),
+                                  const SnackBar(
+                                    content: Text('Project has no ownerUid.'),
+                                  ),
                                 );
                               }
                               return;
@@ -175,29 +188,43 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                   ),
                 ),
 
-              ...sel.map((s) => _SubphaseBox(
-                projectId: widget.projectId,
-                label: '${s.code}  ${s.name}',
-                tasks: _maybeFilter(byCode[s.code] ?? const <TaskItem>[]),
-                isOwner: widget.isOwner,
-                subphase: s,
-                currentStatus: statusByCode[s.code] ?? 'In Progress',
-                onChangeStatus: (newStatus) async {
-                  if (!widget.isOwner) return _SubphaseBox._viewOnlySnack(context);
-                  await _updateSubphaseStatus(
-                    context,
-                    projectId: widget.projectId,
-                    selected: widget.selectedSubphases ?? const <SelectedSubphase>[],
-                    code: s.code,
-                    newStatus: newStatus,
-                  );
-                },
-              )),
+              ...sel.map((s) {
+                final rawStatus = statusByCode[s.code]?.trim();
+                final status = (rawStatus != null && rawStatus.isNotEmpty)
+                    ? rawStatus
+                    : 'In Progress';
+                final suffix = status == 'In Progress' ? '' : ' - $status';
+                final displayLabel = '${s.code}  ${s.name}$suffix';
+                return _SubphaseBox(
+                  projectId: widget.projectId,
+                  label: displayLabel,
+                  tasks: _maybeFilter(byCode[s.code] ?? const <TaskItem>[]),
+                  allSubphases: sel,
+                  isOwner: widget.isOwner,
+                  subphase: s,
+                  currentStatus: status,
+                  onChangeStatus: (newStatus) async {
+                    if (!widget.isOwner) {
+                      return _SubphaseBox._viewOnlySnack(context);
+                    }
+                    await _updateSubphaseStatus(
+                      context,
+                      projectId: widget.projectId,
+                      selected:
+                          widget.selectedSubphases ??
+                          const <SelectedSubphase>[],
+                      code: s.code,
+                      newStatus: newStatus,
+                    );
+                  },
+                );
+              }),
 
               _SubphaseBox(
                 projectId: widget.projectId,
                 label: 'Other',
                 tasks: _maybeFilter(other),
+                allSubphases: sel,
                 isOwner: widget.isOwner,
                 subphase: null,
                 currentStatus: null,
@@ -210,7 +237,8 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: FilledButton.icon(
-                    onPressed: () => _showAddTaskDialog(context, widget.projectId, sel),
+                    onPressed: () =>
+                        _showAddTaskDialog(context, widget.projectId, sel),
                     icon: const Icon(Icons.add),
                     label: const Text('New Task'),
                   ),
@@ -245,6 +273,7 @@ class _SubphaseBox extends StatelessWidget {
   final String projectId;
   final String label; // "0201  Concept Site Plan" or "Other"
   final List<TaskItem> tasks;
+  final List<SelectedSubphase> allSubphases;
   final bool isOwner;
 
   final SelectedSubphase? subphase; // null for Other
@@ -255,6 +284,7 @@ class _SubphaseBox extends StatelessWidget {
     required this.projectId,
     required this.label,
     required this.tasks,
+    required this.allSubphases,
     required this.isOwner,
     required this.subphase,
     required this.currentStatus,
@@ -263,114 +293,148 @@ class _SubphaseBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final outline = Theme.of(context).colorScheme.outlineVariant.withOpacity(0.4);
-    final headerStyle = const TextStyle(fontWeight: FontWeight.w600, fontSize: 15);
-    final statusStyle = Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 12);
+    final outline = Theme.of(
+      context,
+    ).colorScheme.outlineVariant.withOpacity(0.4);
+    final statusLabel =
+        (currentStatus != null && currentStatus!.trim().isNotEmpty)
+        ? currentStatus!.trim()
+        : 'In Progress';
+    final hasSubphase = subphase != null;
 
     return Container(
       decoration: BoxDecoration(
         border: Border.all(color: outline),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Header: subphase label (wrap) + actions (insert defaults / change status)
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // label (wrap to 2 lines)
-              Expanded(
-                child: Text(
-                  // If current status isn't "In Progress", show "name - Status"
-                  (subphase != null && currentStatus != null && currentStatus != 'In Progress')
-                      ? '$label - $currentStatus'
-                      : label,
-                  style: headerStyle,
-                  maxLines: 2,
-                  softWrap: true,
-                  overflow: TextOverflow.visible,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: hasSubphase
+                  ? () {
+                      if (!isOwner) {
+                        _viewOnlySnack(context);
+                        return;
+                      }
+                      final dialogStatus =
+                          _kSubphaseStatuses.contains(statusLabel)
+                          ? statusLabel
+                          : 'In Progress';
+                      _showSubphaseStatusDialog(
+                        context,
+                        code: subphase!.code,
+                        current: dialogStatus,
+                        onPicked: (s) => onChangeStatus?.call(s),
+                      );
+                    }
+                  : null,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(12),
+              ),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.transparent,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(12),
+                  ),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            label,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                              color: _accentYellow,
+                            ),
+                            maxLines: 2,
+                            softWrap: true,
+                            overflow: TextOverflow.visible,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (hasSubphase)
+                      IconButton(
+                        tooltip: 'Insert default tasks',
+                        visualDensity: VisualDensity.compact,
+                        iconSize: 20,
+                        onPressed: isOwner
+                            ? () => _insertDefaultsForSubphase(
+                                context,
+                                projectId,
+                                subphase!.code,
+                              )
+                            : () => _viewOnlySnack(context),
+                        icon: const Icon(
+                          Icons.playlist_add,
+                          color: Colors.black87,
+                        ),
+                      ),
+                  ],
                 ),
               ),
-
-              if (subphase != null) ...[
-                IconButton(
-                  tooltip: 'Insert default tasks',
-                  visualDensity: VisualDensity.compact,
-                  iconSize: 20,
-                  onPressed: isOwner
-                      ? () => _insertDefaultsForSubphase(context, projectId, subphase!.code)
-                      : () => _viewOnlySnack(context),
-                  icon: const Icon(Icons.playlist_add),
-                ),
-                TextButton(
-                  style: TextButton.styleFrom(
-                    visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
-                  ),
-                  onPressed: () {
-                    if (!isOwner) return _viewOnlySnack(context);
-                    _showSubphaseStatusDialog(
-                      context,
-                      code: subphase!.code,
-                      current: _kSubphaseStatuses.contains(currentStatus)
-                          ? currentStatus!
-                          : 'In Progress',
-                      onPicked: (s) => onChangeStatus?.call(s),
-                    );
-                  },
-                  child: Text(
-                    // Action label
-                    (currentStatus != null && currentStatus != 'In Progress')
-                        ? 'Change Status'
-                        : 'Status',
-                    style: statusStyle,
-                  ),
-                ),
-              ],
-            ],
-          ),
-
-          const SizedBox(height: 6),
-
-          if (tasks.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Text('No tasks', style: Theme.of(context).textTheme.bodySmall),
-            )
-          else
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: tasks.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 4),
-              itemBuilder: (context, i) {
-                final t = tasks[i];
-                return _CompactTaskTile(
-                  task: t,
-                  isOwner: isOwner,
-                  onToggleStar: () async {
-                    if (!isOwner) return _viewOnlySnack(context);
-                    await TaskRepository().update(t.id, {'isStarred': !t.isStarred});
-                  },
-                  onChangeStatus: (newStatus) async {
-                    if (!isOwner) return _viewOnlySnack(context);
-                    await TaskRepository().update(t.id, {
-                      'taskStatus': newStatus,
-                      'status': _legacyFromNew(newStatus), // mirror
-                    });
-                  },
-                  onTap: () => _showEditTaskDialog(context, t, canEdit: isOwner),
-                );
-              },
             ),
-        ]),
+          ),
+          const SizedBox(height: 8),
+          if (tasks.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
+              child: ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: tasks.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 4),
+                itemBuilder: (context, i) {
+                  final t = tasks[i];
+                  return _CompactTaskTile(
+                    task: t,
+                    isOwner: isOwner,
+                    onToggleStar: () async {
+                      if (!isOwner) return _viewOnlySnack(context);
+                      await TaskRepository().update(t.id, {
+                        'isStarred': !t.isStarred,
+                      });
+                    },
+                    onChangeStatus: (newStatus) async {
+                      if (!isOwner) return _viewOnlySnack(context);
+                      await TaskRepository().update(t.id, {
+                        'taskStatus': newStatus,
+                        'status': _legacyFromNew(newStatus), // mirror
+                      });
+                    },
+                    onTap: () => _showEditTaskDialog(
+                      context,
+                      t,
+                      canEdit: isOwner,
+                      subphases: allSubphases,
+                    ),
+                  );
+                },
+              ),
+            ),
+        ],
       ),
     );
   }
 
   static void _viewOnlySnack(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('View-only: only the project owner can modify tasks.')),
+      const SnackBar(
+        content: Text('View-only: only the project owner can modify tasks.'),
+      ),
     );
   }
 
@@ -389,41 +453,46 @@ class _SubphaseBox extends StatelessWidget {
   }
 
   static Future<void> _showSubphaseStatusDialog(
-      BuildContext context, {
-        required String code,
-        required String current,
-        required ValueChanged<String> onPicked,
-      }) async {
+    BuildContext context, {
+    required String code,
+    required String current,
+    required ValueChanged<String> onPicked,
+  }) async {
     var selected = current;
     await showDialog<void>(
       context: context,
       builder: (context) {
-        return StatefulBuilder(builder: (context, setState) {
-          return AlertDialog(
-            title: Text('Subphase $code Status'),
-            content: DropdownButtonFormField<String>(
-              value: selected,
-              items: _kSubphaseStatuses
-                  .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                  .toList(),
-              onChanged: (v) => setState(() => selected = v ?? selected),
-              decoration: const InputDecoration(
-                labelText: 'Status',
-                border: OutlineInputBorder(),
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text('Subphase $code Status'),
+              content: DropdownButtonFormField<String>(
+                value: selected,
+                items: _kSubphaseStatuses
+                    .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                    .toList(),
+                onChanged: (v) => setState(() => selected = v ?? selected),
+                decoration: const InputDecoration(
+                  labelText: 'Status',
+                  border: OutlineInputBorder(),
+                ),
               ),
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-              FilledButton(
-                onPressed: () {
-                  onPicked(selected);
-                  Navigator.pop(context);
-                },
-                child: const Text('Save'),
-              ),
-            ],
-          );
-        });
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    onPicked(selected);
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
       },
     );
   }
@@ -458,7 +527,9 @@ class _CompactTaskTile extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
         child: Row(
-          crossAxisAlignment: hasDesc ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+          crossAxisAlignment: hasDesc
+              ? CrossAxisAlignment.start
+              : CrossAxisAlignment.center,
           children: [
             Padding(
               padding: EdgeInsets.only(top: hasDesc ? 2 : 0),
@@ -488,7 +559,10 @@ class _CompactTaskTile extends StatelessWidget {
                           task.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -498,9 +572,14 @@ class _CompactTaskTile extends StatelessWidget {
                               ? task.taskStatus
                               : 'In Progress', // default to In Progress
                           items: _kTaskStatuses
-                              .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                              .map(
+                                (s) =>
+                                    DropdownMenuItem(value: s, child: Text(s)),
+                              )
                               .toList(),
-                          onChanged: isOwner ? (v) => v != null ? onChangeStatus(v) : null : null,
+                          onChanged: isOwner
+                              ? (v) => v != null ? onChangeStatus(v) : null
+                              : null,
                           isDense: true,
                           icon: const SizedBox.shrink(), // hide arrow
                           style: small,
@@ -531,10 +610,10 @@ class _CompactTaskTile extends StatelessWidget {
 // ------------------- Add/Edit task dialogs (simplified) -------------------
 
 Future<void> _showAddTaskDialog(
-    BuildContext context,
-    String projectId,
-    List<SelectedSubphase> subphases,
-    ) async {
+  BuildContext context,
+  String projectId,
+  List<SelectedSubphase> subphases,
+) async {
   final titleCtl = TextEditingController();
   final notesCtl = TextEditingController();
   String? selectedCode;
@@ -545,9 +624,9 @@ Future<void> _showAddTaskDialog(
   final formKey = GlobalKey<FormState>();
 
   if (me == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('You must be signed in.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('You must be signed in.')));
     return;
   }
 
@@ -560,48 +639,76 @@ Future<void> _showAddTaskDialog(
             title: const Text('New Task'),
             content: Form(
               key: formKey,
-              child: SizedBox(
-                width: 520,
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  appTextField('Title', titleCtl, required: true, hint: 'e.g., Site visit'),
-                  const SizedBox(height: 10),
-                  appTextField('Notes', notesCtl),
-                  const SizedBox(height: 10),
+              child: SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      appTextField(
+                        'Title',
+                        titleCtl,
+                        required: true,
+                        hint: 'e.g., Site visit',
+                      ),
+                      const SizedBox(height: 10),
+                      appTextField('Notes', notesCtl),
+                      const SizedBox(height: 10),
 
-                  // Task Code (dropdown of selected subphases)
-                  DropdownButtonFormField<String>(
-                    value: selectedCode,
-                    items: subphases
-                        .map((s) => DropdownMenuItem(
-                      value: s.code,
-                      child: Text('${s.code}  ${s.name}', overflow: TextOverflow.visible),
-                    ))
-                        .toList(),
-                    onChanged: (v) => setState(() => selectedCode = v),
-                    decoration: const InputDecoration(
-                      labelText: 'Task Code (optional)',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
+                      // Task Code (dropdown of selected subphases)
+                      DropdownButtonFormField<String?>(
+                        value: selectedCode,
+                        isExpanded: true,
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('No Task Code'),
+                          ),
+                          ...subphases.map(
+                            (s) => DropdownMenuItem<String?>(
+                              value: s.code,
+                              child: Text(
+                                '${s.code}  ${s.name}',
+                                overflow: TextOverflow.visible,
+                              ),
+                            ),
+                          ),
+                        ],
+                        onChanged: (v) => setState(() => selectedCode = v),
+                        decoration: const InputDecoration(
+                          labelText: 'Task Code (optional)',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
 
-                  // Task Status
-                  DropdownButtonFormField<String>(
-                    value: taskStatus,
-                    items: _kTaskStatuses
-                        .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                        .toList(),
-                    onChanged: (v) => setState(() => taskStatus = v ?? taskStatus),
-                    decoration: const InputDecoration(
-                      labelText: 'Task Status',
-                      border: OutlineInputBorder(),
-                    ),
+                      // Task Status
+                      DropdownButtonFormField<String>(
+                        value: taskStatus,
+                        isExpanded: true,
+                        items: _kTaskStatuses
+                            .map(
+                              (s) => DropdownMenuItem(value: s, child: Text(s)),
+                            )
+                            .toList(),
+                        onChanged: (v) =>
+                            setState(() => taskStatus = v ?? taskStatus),
+                        decoration: const InputDecoration(
+                          labelText: 'Task Status',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ],
                   ),
-                ]),
+                ),
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
               FilledButton(
                 onPressed: () async {
                   if (!(formKey.currentState?.validate() ?? false)) return;
@@ -611,7 +718,9 @@ Future<void> _showAddTaskDialog(
                     projectId: projectId,
                     ownerUid: me.uid,
                     title: titleCtl.text.trim(),
-                    description: notesCtl.text.trim().isEmpty ? null : notesCtl.text.trim(),
+                    description: notesCtl.text.trim().isEmpty
+                        ? null
+                        : notesCtl.text.trim(),
                     taskStatus: taskStatus,
                     isStarred: false,
                     taskCode: selectedCode,
@@ -634,11 +743,20 @@ Future<void> _showAddTaskDialog(
   );
 }
 
-Future<void> _showEditTaskDialog(BuildContext context, TaskItem t,
-    {required bool canEdit}) async {
+Future<void> _showEditTaskDialog(
+  BuildContext context,
+  TaskItem t, {
+  required bool canEdit,
+  required List<SelectedSubphase> subphases,
+}) async {
   final titleCtl = TextEditingController(text: t.title);
   final notesCtl = TextEditingController(text: t.description ?? '');
-  String taskStatus = _kTaskStatuses.contains(t.taskStatus) ? t.taskStatus : 'In Progress';
+  String? selectedCode = (t.taskCode != null && t.taskCode!.trim().isNotEmpty)
+      ? t.taskCode!.trim()
+      : null;
+  String taskStatus = _kTaskStatuses.contains(t.taskStatus)
+      ? t.taskStatus
+      : 'In Progress';
 
   final repo = TaskRepository();
   final formKey = GlobalKey<FormState>();
@@ -652,33 +770,96 @@ Future<void> _showEditTaskDialog(BuildContext context, TaskItem t,
             title: Text('Task: ${t.title}'),
             content: Form(
               key: formKey,
-              child: SizedBox(
-                width: 520,
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  appTextField('Title', titleCtl, required: true),
-                  const SizedBox(height: 10),
-                  appTextField('Notes', notesCtl),
-                  const SizedBox(height: 10),
+              child: SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      appTextField('Title', titleCtl, required: true),
+                      const SizedBox(height: 10),
+                      appTextField('Notes', notesCtl),
+                      const SizedBox(height: 10),
 
-                  DropdownButtonFormField<String>(
-                    value: taskStatus,
-                    items: _kTaskStatuses
-                        .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                        .toList(),
-                    onChanged: canEdit ? (v) => setState(() => taskStatus = v ?? taskStatus) : null,
-                    decoration: const InputDecoration(
-                      labelText: 'Task Status',
-                      border: OutlineInputBorder(),
-                    ),
+                      DropdownButtonFormField<String?>(
+                        value: selectedCode,
+                        isExpanded: true,
+                        items: () {
+                          final seen = <String>{};
+                          final items = <DropdownMenuItem<String?>>[
+                            const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text('No Task Code'),
+                            ),
+                          ];
+                          for (final s in subphases) {
+                            if (!seen.add(s.code)) continue;
+                            items.add(
+                              DropdownMenuItem<String?>(
+                                value: s.code,
+                                child: Text(
+                                  '${s.code}  ${s.name}',
+                                  overflow: TextOverflow.visible,
+                                ),
+                              ),
+                            );
+                          }
+                          if (selectedCode != null &&
+                              !seen.contains(selectedCode!)) {
+                            items.insert(
+                              1,
+                              DropdownMenuItem<String?>(
+                                value: selectedCode,
+                                child: Text(
+                                  '$selectedCode (inactive)',
+                                  overflow: TextOverflow.visible,
+                                ),
+                              ),
+                            );
+                          }
+                          return items;
+                        }(),
+                        onChanged: canEdit
+                            ? (v) => setState(() => selectedCode = v)
+                            : null,
+                        decoration: const InputDecoration(
+                          labelText: 'Task Code (optional)',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      DropdownButtonFormField<String>(
+                        value: taskStatus,
+                        isExpanded: true,
+                        items: _kTaskStatuses
+                            .map(
+                              (s) => DropdownMenuItem(value: s, child: Text(s)),
+                            )
+                            .toList(),
+                        onChanged: canEdit
+                            ? (v) =>
+                                  setState(() => taskStatus = v ?? taskStatus)
+                            : null,
+                        decoration: const InputDecoration(
+                          labelText: 'Task Status',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ],
                   ),
-                ]),
+                ),
               ),
             ),
             actions: [
               if (canEdit)
                 TextButton(
                   onPressed: () async {
-                    final ok = await confirmDialog(context, 'Delete this task?');
+                    final ok = await confirmDialog(
+                      context,
+                      'Delete this task?',
+                    );
                     if (!ok) return;
                     await repo.delete(t.id);
                     // ignore: use_build_context_synchronously
@@ -687,8 +868,9 @@ Future<void> _showEditTaskDialog(BuildContext context, TaskItem t,
                   child: const Text('Delete'),
                 ),
               TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text(canEdit ? 'Cancel' : 'Close')),
+                onPressed: () => Navigator.pop(context),
+                child: Text(canEdit ? 'Cancel' : 'Close'),
+              ),
               if (canEdit)
                 FilledButton(
                   onPressed: () async {
@@ -696,9 +878,14 @@ Future<void> _showEditTaskDialog(BuildContext context, TaskItem t,
 
                     await repo.update(t.id, {
                       'title': titleCtl.text.trim(),
-                      'description': notesCtl.text.trim().isEmpty ? null : notesCtl.text.trim(),
+                      'description': notesCtl.text.trim().isEmpty
+                          ? null
+                          : notesCtl.text.trim(),
+                      'taskCode': selectedCode,
                       'taskStatus': taskStatus,
-                      'status': _SubphaseBox._legacyFromNew(taskStatus), // mirror
+                      'status': _SubphaseBox._legacyFromNew(
+                        taskStatus,
+                      ), // mirror
                     });
                     // ignore: use_build_context_synchronously
                     Navigator.pop(context);
@@ -717,15 +904,15 @@ Future<void> _showEditTaskDialog(BuildContext context, TaskItem t,
 /// De-duplicates by title (case-insensitive) among tasks that already
 /// exist for the same `projectId` + `taskCode`.
 Future<void> _insertDefaultsForSubphase(
-    BuildContext context,
-    String projectId,
-    String subphaseCode,
-    ) async {
+  BuildContext context,
+  String projectId,
+  String subphaseCode,
+) async {
   final me = FirebaseAuth.instance.currentUser;
   if (me == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('You must be signed in.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('You must be signed in.')));
     return;
   }
 
@@ -739,7 +926,9 @@ Future<void> _insertDefaultsForSubphase(
     if (tpl == null || tpl.defaultTasks.isEmpty) {
       LoadingOverlay.hide(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No default tasks defined for this subphase.')),
+        const SnackBar(
+          content: Text('No default tasks defined for this subphase.'),
+        ),
       );
       return;
     }
@@ -755,11 +944,14 @@ Future<void> _insertDefaultsForSubphase(
         .where((s) => s.isNotEmpty)
         .toSet();
 
-    final cleanedDefaults =
-    tpl.defaultTasks.map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
+    final cleanedDefaults = tpl.defaultTasks
+        .map((t) => t.trim())
+        .where((t) => t.isNotEmpty)
+        .toList();
 
-    final toInsert =
-    cleanedDefaults.where((t) => !existingTitleSet.contains(t.toLowerCase())).toList();
+    final toInsert = cleanedDefaults
+        .where((t) => !existingTitleSet.contains(t.toLowerCase()))
+        .toList();
 
     LoadingOverlay.hide(context);
 
@@ -796,22 +988,25 @@ Future<void> _insertDefaultsForSubphase(
     );
   } catch (e) {
     LoadingOverlay.hide(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Failed to insert defaults: $e')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Failed to insert defaults: $e')));
   }
 }
 
 Future<void> _updateSubphaseStatus(
-    BuildContext context, {
-      required String projectId,
-      required List<SelectedSubphase> selected,
-      required String code,
-      required String newStatus,
-    }) async {
+  BuildContext context, {
+  required String projectId,
+  required List<SelectedSubphase> selected,
+  required String code,
+  required String newStatus,
+}) async {
   final repo = ProjectRepository();
   final updated = selected
-      .map((s) => s.code == code ? s.copyWith(status: newStatus).toMap() : s.toMap())
+      .map(
+        (s) =>
+            s.code == code ? s.copyWith(status: newStatus).toMap() : s.toMap(),
+      )
       .toList();
   await repo.update(projectId, {'selectedSubphases': updated});
 }

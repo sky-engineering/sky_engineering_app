@@ -2,18 +2,14 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
 import '../data/models/task.dart';
-import '../data/models/project.dart';
 import '../data/repositories/task_repository.dart';
-import '../data/repositories/project_repository.dart';
 import 'project_detail_page.dart';
 
 class StarredTasksPage extends StatelessWidget {
   StarredTasksPage({super.key});
 
-  final _taskRepo = TaskRepository();
-  final _projectRepo = ProjectRepository();
+  final _repo = TaskRepository();
 
   @override
   Widget build(BuildContext context) {
@@ -24,51 +20,35 @@ class StarredTasksPage extends StatelessWidget {
       );
     }
 
-    // We stream all projects to get a live map of projectId -> projectNumber
     return Scaffold(
       appBar: AppBar(title: const Text('Starred Tasks')),
-      body: StreamBuilder<List<Project>>(
-        stream: _projectRepo.streamAll(),
-        builder: (context, projSnap) {
-          final projects = projSnap.data ?? const <Project>[];
-          final projectNumById = <String, String>{
-            for (final p in projects) p.id: (p.projectNumber ?? '').trim(),
-          };
+      body: StreamBuilder<List<TaskItem>>(
+        stream: _repo.streamStarredForUser(me.uid),
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final list = (snap.data ?? const <TaskItem>[])..sort(_taskComparator);
 
-          return StreamBuilder<List<TaskItem>>(
-            stream: _taskRepo.streamStarredForUser(me.uid),
-            builder: (context, snap) {
-              if (snap.connectionState == ConnectionState.waiting ||
-                  projSnap.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              final list = (snap.data ?? const <TaskItem>[])..sort(_taskComparator);
+          if (list.isEmpty) {
+            return const _Empty();
+          }
 
-              if (list.isEmpty) {
-                return const _Empty();
-              }
-
-              return ListView.separated(
-                padding: const EdgeInsets.all(12),
-                itemCount: list.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (context, i) {
-                  final t = list[i];
-                  final projNum = projectNumById[t.projectId];
-                  return _StarredTile(
-                    task: t,
-                    projectNumber: (projNum != null && projNum.isNotEmpty) ? projNum : '—',
-                    onOpenProject: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => ProjectDetailPage(projectId: t.projectId),
-                        ),
-                      );
-                    },
-                    onToggleStar: () async {
-                      await _taskRepo.update(t.id, {'isStarred': !t.isStarred});
-                    },
+          return ListView.separated(
+            padding: const EdgeInsets.all(12),
+            itemCount: list.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (context, i) {
+              final t = list[i];
+              return _StarredTile(
+                task: t,
+                onOpenProject: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => ProjectDetailPage(projectId: t.projectId)),
                   );
+                },
+                onToggleStar: () async {
+                  await _repo.update(t.id, {'isStarred': !t.isStarred});
                 },
               );
             },
@@ -113,13 +93,11 @@ class StarredTasksPage extends StatelessWidget {
 
 class _StarredTile extends StatelessWidget {
   final TaskItem task;
-  final String projectNumber;
   final VoidCallback onOpenProject;
   final VoidCallback onToggleStar;
 
   const _StarredTile({
     required this.task,
-    required this.projectNumber,
     required this.onOpenProject,
     required this.onToggleStar,
   });
@@ -164,20 +142,12 @@ class _StarredTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Title
+                    // Title only (no status shown)
                     Text(
                       task.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 2),
-                    // Project number (small, under title)
-                    Text(
-                      'Project: $projectNumber',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: small,
                     ),
                     if (hasDesc)
                       Padding(
