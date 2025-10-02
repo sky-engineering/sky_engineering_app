@@ -91,6 +91,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
 
               return Card(
                 margin: EdgeInsets.zero, // tighter vertical rhythm
+                color: _subtleSurfaceTint(context),
                 child: ListTile(
                   dense: true,
                   visualDensity: const VisualDensity(vertical: -2),
@@ -147,6 +148,11 @@ class _ProjectsPageState extends State<ProjectsPage> {
         foregroundColor: Colors.black87,
       ),
     );
+  }
+
+  Color _subtleSurfaceTint(BuildContext context) {
+    final surface = Theme.of(context).colorScheme.surface;
+    return Color.alphaBlend(const Color(0x14FFFFFF), surface);
   }
 
   // --- natural sorting helpers ---
@@ -270,6 +276,7 @@ Future<void> _showAddDialog(BuildContext context) async {
   final clientCtl = TextEditingController();
   final amountCtl = TextEditingController();
   final projectNumCtl = TextEditingController();
+  final folderCtl = TextEditingController();
   final formKey = GlobalKey<FormState>();
   final repo = ProjectRepository();
   final me = FirebaseAuth.instance.currentUser;
@@ -316,6 +323,15 @@ Future<void> _showAddDialog(BuildContext context) async {
                 ),
                 const SizedBox(height: 10),
                 TextFormField(
+                  controller: folderCtl,
+                  decoration: const InputDecoration(
+                    labelText: 'Dropbox folder (optional)',
+                    hintText: 'e.g., /2024/Project123',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
                   controller: amountCtl,
                   decoration: const InputDecoration(
                     labelText: 'Contract amount (optional)',
@@ -352,6 +368,9 @@ Future<void> _showAddDialog(BuildContext context) async {
                 projectNumber: projectNumCtl.text.trim().isEmpty
                     ? null
                     : projectNumCtl.text.trim(),
+                folderName: folderCtl.text.trim().isEmpty
+                    ? null
+                    : folderCtl.text.trim(),
                 createdAt: null,
                 // Explicit default: not archived
                 isArchived: false,

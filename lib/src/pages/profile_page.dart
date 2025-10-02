@@ -87,7 +87,6 @@ class _ProfilePageState extends State<ProfilePage> {
                   // ---------------- Your Info ----------------
                   _sectionCard(
                     context,
-                    title: 'Your Info',
                     child: Column(
                       children: [
                         _kvInputRow(
@@ -142,7 +141,6 @@ class _ProfilePageState extends State<ProfilePage> {
                   // ---------------- Admin ----------------
                   _sectionCard(
                     context,
-                    title: 'Admin',
                     child: Column(
                       children: [
                         _kvInputRow(
@@ -354,24 +352,16 @@ class _ProfilePageState extends State<ProfilePage> {
     return 92; // ~6 chars narrower than before
   }
 
-  Widget _sectionCard(
-    BuildContext context, {
-    required String title,
-    required Widget child,
-  }) {
+  Widget _sectionCard(BuildContext context, {required Widget child}) {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 12),
-            child,
-          ],
-        ),
-      ),
+      color: _subtleSurfaceTint(context),
+      child: Padding(padding: const EdgeInsets.all(16), child: child),
     );
+  }
+
+  Color _subtleSurfaceTint(BuildContext context) {
+    final surface = Theme.of(context).colorScheme.surface;
+    return Color.alphaBlend(const Color(0x14FFFFFF), surface);
   }
 
   /// A single “Label  [widget]” row. If [alignTop] is true, label aligns to top.

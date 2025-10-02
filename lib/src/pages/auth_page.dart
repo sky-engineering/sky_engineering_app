@@ -40,8 +40,8 @@ class _AuthPageState extends State<AuthPage> {
     } catch (_) {
       _showError('Sign-in failed');
     } finally {
+      LoadingOverlay.hide();
       if (mounted) {
-        LoadingOverlay.hide(context);
         setState(() => _loading = false);
       }
     }
@@ -64,98 +64,130 @@ class _AuthPageState extends State<AuthPage> {
     } catch (_) {
       _showError('Registration failed');
     } finally {
+      LoadingOverlay.hide();
       if (mounted) {
-        LoadingOverlay.hide(context);
         setState(() => _loading = false);
       }
     }
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg)),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final buttonShape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+    );
+    final outlinedTextColor = colorScheme.onSurface;
+    final outlinedBorderColor = colorScheme.outline;
+    const buttonPadding = EdgeInsets.symmetric(vertical: 14);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Sky Engineering — Sign In')),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Form(
-              key: _formKey,
-              child: AutofillGroup(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextFormField(
-                      controller: _emailCtl,
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
-                        hintText: 'you@company.com',
-                        border: OutlineInputBorder(),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Form(
+                key: _formKey,
+                child: AutofillGroup(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Image.asset(
+                        'assets/SkyEngineering-Horizontal-Light.png',
+                        height: 128,
                       ),
-                      keyboardType: TextInputType.emailAddress,
-                      autofillHints: const [AutofillHints.username],
-                      textInputAction: TextInputAction.next,
-                      validator: (v) {
-                        v = v?.trim();
-                        if (v == null || v.isEmpty) return 'Email required';
-                        if (!v.contains('@') || !v.contains('.')) {
-                          return 'Enter a valid email';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _passwordCtl,
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        border: const OutlineInputBorder(),
-                        suffixIcon: IconButton(
-                          onPressed: () => setState(() => _obscure = !_obscure),
-                          icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
+                      const SizedBox(height: 24),
+                      TextFormField(
+                        controller: _emailCtl,
+                        decoration: const InputDecoration(
+                          labelText: 'Email',
+                          hintText: 'you@company.com',
+                          border: OutlineInputBorder(),
                         ),
+                        keyboardType: TextInputType.emailAddress,
+                        autofillHints: const [AutofillHints.username],
+                        textInputAction: TextInputAction.next,
+                        validator: (v) {
+                          v = v?.trim();
+                          if (v == null || v.isEmpty) return 'Email required';
+                          if (!v.contains('@') || !v.contains('.')) {
+                            return 'Enter a valid email';
+                          }
+                          return null;
+                        },
                       ),
-                      obscureText: _obscure,
-                      autofillHints: const [AutofillHints.password],
-                      textInputAction: TextInputAction.done,
-                      onFieldSubmitted: (_) => _loading ? null : _signIn(),
-                      validator: (v) {
-                        if (v == null || v.isEmpty) return 'Password required';
-                        if (v.length < 6) return 'Min 6 characters';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: FilledButton(
-                            onPressed: _loading ? null : _signIn,
-                            child: _loading
-                                ? const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 6),
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                                : const Text('Sign In'),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _passwordCtl,
+                        decoration: InputDecoration(
+                          labelText: 'Password',
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            onPressed: () =>
+                                setState(() => _obscure = !_obscure),
+                            icon: Icon(
+                              _obscure
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: _loading ? null : _register,
-                            child: const Text('Create Account'),
+                        obscureText: _obscure,
+                        autofillHints: const [AutofillHints.password],
+                        textInputAction: TextInputAction.done,
+                        onFieldSubmitted: (_) => _loading ? null : _signIn(),
+                        validator: (v) {
+                          if (v == null || v.isEmpty)
+                            return 'Password required';
+                          if (v.length < 6) return 'Min 6 characters';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: FilledButton(
+                              onPressed: _loading ? null : _signIn,
+                              style: FilledButton.styleFrom(
+                                shape: buttonShape,
+                                padding: buttonPadding,
+                              ),
+                              child: _loading
+                                  ? const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Text('Sign In'),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: _loading ? null : _register,
+                              style: OutlinedButton.styleFrom(
+                                shape: buttonShape,
+                                padding: buttonPadding,
+                                foregroundColor: outlinedTextColor,
+                                side: BorderSide(color: outlinedBorderColor),
+                              ),
+                              child: const Text('Create Account'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

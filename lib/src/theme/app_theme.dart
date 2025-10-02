@@ -47,8 +47,13 @@ class AppTheme {
       listTileTheme: ListTileThemeData(
         textColor: cs.onSurface,
         iconColor: cs.onSurface,
-        subtitleTextStyle: TextStyle(
-          color: cs.onSurface.withOpacity(0.85),
+        subtitleTextStyle: TextStyle(color: cs.onSurface.withOpacity(0.85)),
+      ),
+
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: cs.onSurface,
+          textStyle: const TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
 
@@ -70,7 +75,9 @@ class AppTheme {
           backgroundColor: cs.primary,
           foregroundColor: cs.onPrimary,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       ),
 
@@ -79,7 +86,9 @@ class AppTheme {
           backgroundColor: cs.secondary, // accent
           foregroundColor: cs.onSecondary,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       ),
 

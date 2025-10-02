@@ -5,11 +5,11 @@ const kSubphaseStatuses = <String>['In Progress', 'On Hold', 'Completed'];
 
 /// Each project stores the selected subphases + per-project status.
 class SelectedSubphase {
-  final String code;             // 4-digit, e.g. "0201"
-  final String name;             // snapshot name
-  final String? responsibility;  // snapshot (optional)
-  final bool isDeliverable;      // snapshot
-  final String status;           // 'In Progress' | 'On Hold' | 'Completed'
+  final String code; // 4-digit, e.g. "0201"
+  final String name; // snapshot name
+  final String? responsibility; // snapshot (optional)
+  final bool isDeliverable; // snapshot
+  final String status; // 'In Progress' | 'On Hold' | 'Completed'
 
   const SelectedSubphase({
     required this.code,
@@ -82,6 +82,7 @@ class Project {
 
   final String? ownerUid;
   final String? projectNumber;
+  final String? folderName;
 
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -103,6 +104,7 @@ class Project {
     this.contactPhone,
     this.ownerUid,
     this.projectNumber,
+    this.folderName,
     this.createdAt,
     this.updatedAt,
     this.selectedSubphases,
@@ -163,6 +165,7 @@ class Project {
       contactPhone: _str(data['contactPhone']),
       ownerUid: _str(data['ownerUid']),
       projectNumber: _str(data['projectNumber']),
+      folderName: _str(data['folderName']),
       createdAt: _toDate(data['createdAt']),
       updatedAt: _toDate(data['updatedAt']),
       selectedSubphases: _readSelected(data['selectedSubphases']),
@@ -179,11 +182,17 @@ class Project {
       'clientName': clientName,
       'status': status,
       if (contractAmount != null) 'contractAmount': contractAmount,
-      if (contactName != null && contactName!.isNotEmpty) 'contactName': contactName,
-      if (contactEmail != null && contactEmail!.isNotEmpty) 'contactEmail': contactEmail,
-      if (contactPhone != null && contactPhone!.isNotEmpty) 'contactPhone': contactPhone,
+      if (contactName != null && contactName!.isNotEmpty)
+        'contactName': contactName,
+      if (contactEmail != null && contactEmail!.isNotEmpty)
+        'contactEmail': contactEmail,
+      if (contactPhone != null && contactPhone!.isNotEmpty)
+        'contactPhone': contactPhone,
       if (ownerUid != null) 'ownerUid': ownerUid,
-      if (projectNumber != null && projectNumber!.isNotEmpty) 'projectNumber': projectNumber,
+      if (projectNumber != null && projectNumber!.isNotEmpty)
+        'projectNumber': projectNumber,
+      if (folderName != null && folderName!.isNotEmpty)
+        'folderName': folderName,
 
       if (selectedSubphases != null)
         'selectedSubphases': selectedSubphases!.map((s) => s.toMap()).toList(),
@@ -207,6 +216,7 @@ class Project {
     String? contactPhone,
     String? ownerUid,
     String? projectNumber,
+    String? folderName,
     DateTime? createdAt,
     DateTime? updatedAt,
     List<SelectedSubphase>? selectedSubphases,
@@ -223,6 +233,7 @@ class Project {
       contactPhone: contactPhone ?? this.contactPhone,
       ownerUid: ownerUid ?? this.ownerUid,
       projectNumber: projectNumber ?? this.projectNumber,
+      folderName: folderName ?? this.folderName,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       selectedSubphases: selectedSubphases ?? this.selectedSubphases,
