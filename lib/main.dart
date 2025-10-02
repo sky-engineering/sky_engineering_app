@@ -5,14 +5,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'firebase_options.dart';
 import 'src/app/shell.dart';
+import 'src/integrations/dropbox/dropbox_page.dart';
 import 'src/pages/auth_page.dart';
 import 'src/theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const SkyApp());
 }
 
@@ -25,6 +24,7 @@ class SkyApp extends StatelessWidget {
       title: 'Sky Engineering',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark(),
+      routes: {'/dropbox': (context) => DropboxPage()},
       home: const _AuthGate(),
     );
   }
