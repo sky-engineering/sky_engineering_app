@@ -6,6 +6,8 @@ import 'subphases_page.dart';
 import 'in_progress_tasks_page.dart';
 import 'starred_tasks_page.dart';
 import '../dialogs/city_inspect_links_dialog.dart';
+import '../integrations/dropbox/dropbox_folder_list_page.dart';
+import '../pages/clients_page.dart';
 
 class DashboardPage extends StatelessWidget {
   DashboardPage({super.key});
@@ -16,9 +18,9 @@ class DashboardPage extends StatelessWidget {
     final uri = Uri.parse(url);
     final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!launched) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open link')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Could not open link')));
     }
   }
 
@@ -45,7 +47,10 @@ class DashboardPage extends StatelessWidget {
               Center(child: Text(_user?.email ?? '(no email)')),
               const SizedBox(height: 32),
 
-              Text('Helpful Links', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'Helpful Links',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 8),
 
               const SizedBox(height: 16),
@@ -53,7 +58,9 @@ class DashboardPage extends StatelessWidget {
               // In Progress Tasks
               TextButton(
                 onPressed: () {
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => InProgressTasksPage()));
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => InProgressTasksPage()),
+                  );
                 },
                 style: TextButton.styleFrom(
                   foregroundColor: linkColor,
@@ -76,7 +83,9 @@ class DashboardPage extends StatelessWidget {
               // Starred Tasks
               TextButton(
                 onPressed: () {
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => StarredTasksPage()));
+                  Navigator.of(
+                    context,
+                  ).push(MaterialPageRoute(builder: (_) => StarredTasksPage()));
                 },
                 style: TextButton.styleFrom(
                   foregroundColor: linkColor,
@@ -99,7 +108,9 @@ class DashboardPage extends StatelessWidget {
               // Project Tasking
               TextButton(
                 onPressed: () {
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => SubphasesPage()));
+                  Navigator.of(
+                    context,
+                  ).push(MaterialPageRoute(builder: (_) => SubphasesPage()));
                 },
                 style: TextButton.styleFrom(
                   foregroundColor: linkColor,
@@ -145,7 +156,10 @@ class DashboardPage extends StatelessWidget {
               // Sky Engineering Dropbox
               TextButton(
                 onPressed: () {
-                  _launchExternal(context, 'https://www.dropbox.com/scl/fo/qb19djm48m3ko65x8ua1n/ADxAvonvBPlx5uVypAWlQ6A?rlkey=e9brozwr2qpq9k1b0t256kt56&dl=0');
+                  _launchExternal(
+                    context,
+                    'https://www.dropbox.com/scl/fo/qb19djm48m3ko65x8ua1n/ADxAvonvBPlx5uVypAWlQ6A?rlkey=e9brozwr2qpq9k1b0t256kt56&dl=0',
+                  );
                 },
                 style: TextButton.styleFrom(
                   foregroundColor: linkColor,
@@ -156,6 +170,88 @@ class DashboardPage extends StatelessWidget {
                 ),
                 child: const Text(
                   'Sky Engineering Dropbox',
+                  style: TextStyle(
+                    decoration: TextDecoration.underline,
+                    decorationThickness: 1.5,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const DropboxFolderListPage(
+                        title: 'Project Dropbox Folders',
+                        path: 'SKY/01 PRJT',
+                      ),
+                    ),
+                  );
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: linkColor,
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 0),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  alignment: Alignment.centerLeft,
+                ),
+                child: const Text(
+                  'Project Dropbox Folders',
+                  style: TextStyle(
+                    decoration: TextDecoration.underline,
+                    decorationThickness: 1.5,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const DropboxFolderListPage(
+                        title: 'Proposal Dropbox Folders',
+                        path: 'SKY/02 PROP',
+                      ),
+                    ),
+                  );
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: linkColor,
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 0),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  alignment: Alignment.centerLeft,
+                ),
+                child: const Text(
+                  'Proposal Dropbox Folders',
+                  style: TextStyle(
+                    decoration: TextDecoration.underline,
+                    decorationThickness: 1.5,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              TextButton(
+                onPressed: () {
+                  Navigator.of(
+                    context,
+                  ).push(MaterialPageRoute(builder: (_) => ClientsPage()));
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: linkColor,
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 0),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  alignment: Alignment.centerLeft,
+                ),
+                child: const Text(
+                  'Clients',
                   style: TextStyle(
                     decoration: TextDecoration.underline,
                     decorationThickness: 1.5,
@@ -190,9 +286,3 @@ class DashboardPage extends StatelessWidget {
     );
   }
 }
-
-
-
-
-
-

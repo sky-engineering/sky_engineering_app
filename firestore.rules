@@ -14,6 +14,24 @@ service cloud.firestore {
       allow update, delete: if signedIn() && uid == request.auth.uid;
     }
 
+    // CLIENTS — any signed-in user can read; only owner can write
+    // Top-level client docs MUST include: { ownerUid: string, ... }
+    match /clients/{clientId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if signedIn()
+        && resource.data.ownerUid == request.auth.uid;
+    }
+
+    // CLIENT SUBCOLLECTIONS — attach writes to the PARENT client's owner
+    // Subcollection docs do NOT need their own ownerUid.
+    match /clients/{clientId}/{document=**} {
+      allow read: if signedIn();
+      allow create, update, delete: if signedIn()
+        && get(/databases/$(database)/documents/clients/$(clientId)).data.ownerUid == request.auth.uid;
+    }
+
     // PROJECTS — any signed-in user can read; only owner can write
     match /projects/{projectId} {
       allow read: if signedIn();
@@ -51,15 +69,6 @@ service cloud.firestore {
     }
 
     // PHASES — owner-only writes; everyone signed-in can read
-    // Documents look like:
-    // {
-    //   ownerUid: string,
-    //   phaseCode: string,   // e.g. "01"
-    //   phaseName: string,   // e.g. "Land Use"
-    //   order?: number,
-    //   createdAt?: timestamp (server),
-    //   updatedAt?: timestamp (server)
-    // }
     match /phases/{phaseId} {
       allow read: if signedIn();
       allow create: if signedIn()
