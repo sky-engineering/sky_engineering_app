@@ -22,7 +22,8 @@ class _ShellState extends State<Shell> {
 
   final _pages = <Widget>[];
 
-  Widget _logoTitle() => SizedBox(height: 32, child: Image.asset('assets/logo_white.png'));
+  Widget _logoTitle() =>
+      SizedBox(height: 32, child: Image.asset('assets/logo_white.png'));
 
   @override
   void initState() {
@@ -60,16 +61,39 @@ class _ShellState extends State<Shell> {
     return Scaffold(
       appBar: AppBar(
         title: _logoTitle(),
+        actions: [
+          IconButton(
+            tooltip: 'Dropbox',
+            icon: const Icon(Icons.folder),
+            onPressed: () => Navigator.of(context).pushNamed('/dropbox'),
+          ),
+        ],
       ),
       body: IndexedStack(index: _index, children: _pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
-          NavigationDestination(icon: Icon(Icons.work_outline), selectedIcon: Icon(Icons.work), label: 'Projects'),
-          NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: 'Invoices'),
-          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.work_outline),
+            selectedIcon: Icon(Icons.work),
+            label: 'Projects',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined),
+            selectedIcon: Icon(Icons.receipt_long),
+            label: 'Invoices',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person),
+            label: 'Profile',
+          ),
         ],
       ),
     );
