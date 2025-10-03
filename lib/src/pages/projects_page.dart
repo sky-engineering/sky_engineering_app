@@ -469,184 +469,162 @@ Future<void> _showAddDialog(BuildContext context) async {
             title: const Text('New Project'),
             content: ConstrainedBox(
               constraints: BoxConstraints(maxWidth: 560, maxHeight: maxHeight),
-              child: AnimatedPadding(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOut,
-                padding: EdgeInsets.only(bottom: bottomInset),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Flexible(
-                      child: SingleChildScrollView(
-                        child: Form(
-                          key: formKey,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              TextFormField(
-                                controller: nameCtl,
-                                decoration: const InputDecoration(
-                                  labelText: 'Project name',
-                                  border: OutlineInputBorder(),
-                                ),
-                                validator: (v) =>
-                                    (v == null || v.trim().isEmpty)
-                                    ? 'Required'
-                                    : null,
-                              ),
-                              const SizedBox(height: 10),
-                              buildClientField(),
-                              const SizedBox(height: 10),
-                              TextFormField(
-                                controller: projectNumCtl,
-                                decoration: const InputDecoration(
-                                  labelText: 'Project number',
-                                  hintText: 'e.g., 026-01',
-                                  border: OutlineInputBorder(),
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              TextFormField(
-                                controller: folderCtl,
-                                decoration: const InputDecoration(
-                                  labelText: 'Dropbox folder',
-                                  hintText: 'e.g., /2024/Project123',
-                                  border: OutlineInputBorder(),
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  'Client Contact',
-                                  style: Theme.of(
-                                    innerContext,
-                                  ).textTheme.titleMedium,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              TextFormField(
-                                controller: contactNameCtl,
-                                decoration: const InputDecoration(
-                                  labelText: 'Contact name',
-                                  hintText: 'e.g., Jane Smith',
-                                  border: OutlineInputBorder(),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              TextFormField(
-                                controller: contactPhoneCtl,
-                                decoration: const InputDecoration(
-                                  labelText: 'Contact phone',
-                                  hintText: 'e.g., (555) 123-4567',
-                                  border: OutlineInputBorder(),
-                                ),
-                                keyboardType: TextInputType.phone,
-                                inputFormatters: const [
-                                  UsPhoneInputFormatter(),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              TextFormField(
-                                controller: contactEmailCtl,
-                                decoration: const InputDecoration(
-                                  labelText: 'Contact email',
-                                  hintText: 'e.g., jane@example.com',
-                                  border: OutlineInputBorder(),
-                                ),
-                                keyboardType: TextInputType.emailAddress,
-                              ),
-                              const SizedBox(height: 16),
-                              TextFormField(
-                                controller: amountCtl,
-                                decoration: const InputDecoration(
-                                  labelText: 'Contract amount',
-                                  hintText: 'e.g., 75000',
-                                  border: OutlineInputBorder(),
-                                ),
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                      decimal: true,
-                                    ),
-                              ),
-                            ],
+              child: Scrollbar(
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.only(bottom: bottomInset),
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        TextFormField(
+                          controller: nameCtl,
+                          decoration: const InputDecoration(
+                            labelText: 'Project name',
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (v) => (v == null || v.trim().isEmpty)
+                              ? 'Required'
+                              : null,
+                        ),
+                        const SizedBox(height: 10),
+                        buildClientField(),
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: projectNumCtl,
+                          decoration: const InputDecoration(
+                            labelText: 'Project number',
+                            hintText: 'e.g., 026-01',
+                            border: OutlineInputBorder(),
                           ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(dialogContext),
-                          child: const Text('Cancel'),
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: folderCtl,
+                          decoration: const InputDecoration(
+                            labelText: 'Dropbox folder',
+                            hintText: 'e.g., /2024/Project123',
+                            border: OutlineInputBorder(),
+                          ),
                         ),
-                        const SizedBox(width: 12),
-                        FilledButton(
-                          onPressed: () async {
-                            if (!(formKey.currentState?.validate() ?? false)) {
-                              return;
-                            }
-
-                            final clientName =
-                                selectedClient?.name ?? clientCtl.text.trim();
-                            if (clientName.isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Client is required.'),
-                                ),
-                              );
-                              return;
-                            }
-
-                            double? amt;
-                            if (amountCtl.text.trim().isNotEmpty) {
-                              amt = double.tryParse(amountCtl.text.trim());
-                            }
-
-                            String? nullIfEmpty(String value) {
-                              final trimmed = value.trim();
-                              return trimmed.isEmpty ? null : trimmed;
-                            }
-
-                            final project = Project(
-                              id: '_',
-                              name: nameCtl.text.trim(),
-                              clientName: clientName,
-                              status: 'Active',
-                              contractAmount: amt,
-                              contactName: nullIfEmpty(contactNameCtl.text),
-                              contactEmail: nullIfEmpty(contactEmailCtl.text),
-                              contactPhone: normalizePhone(
-                                contactPhoneCtl.text,
-                              ),
-                              ownerUid: me?.uid,
-                              projectNumber: nullIfEmpty(projectNumCtl.text),
-                              folderName: nullIfEmpty(folderCtl.text),
-                              createdAt: null,
-                              isArchived: false,
-                            );
-
-                            await repo.add(project);
-                            if (dialogContext.mounted) {
-                              Navigator.pop(dialogContext);
-                            }
-
-                            if (!context.mounted) return;
-
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Project created.')),
-                            );
-                          },
-                          child: const Text('Create'),
+                        const SizedBox(height: 16),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Client Contact',
+                            style: Theme.of(innerContext).textTheme.titleMedium,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: contactNameCtl,
+                          decoration: const InputDecoration(
+                            labelText: 'Contact name',
+                            hintText: 'e.g., Jane Smith',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: contactPhoneCtl,
+                          decoration: const InputDecoration(
+                            labelText: 'Contact phone',
+                            hintText: 'e.g., (555) 123-4567',
+                            border: OutlineInputBorder(),
+                          ),
+                          keyboardType: TextInputType.phone,
+                          inputFormatters: const [UsPhoneInputFormatter()],
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: contactEmailCtl,
+                          decoration: const InputDecoration(
+                            labelText: 'Contact email',
+                            hintText: 'e.g., jane@example.com',
+                            border: OutlineInputBorder(),
+                          ),
+                          keyboardType: TextInputType.emailAddress,
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: amountCtl,
+                          decoration: const InputDecoration(
+                            labelText: 'Contract amount',
+                            hintText: 'e.g., 75000',
+                            border: OutlineInputBorder(),
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
                         ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  if (!(formKey.currentState?.validate() ?? false)) {
+                    return;
+                  }
+
+                  final clientName =
+                      selectedClient?.name ?? clientCtl.text.trim();
+                  if (clientName.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Client is required.')),
+                    );
+                    return;
+                  }
+
+                  double? amt;
+                  if (amountCtl.text.trim().isNotEmpty) {
+                    amt = double.tryParse(amountCtl.text.trim());
+                  }
+
+                  String? nullIfEmpty(String value) {
+                    final trimmed = value.trim();
+                    return trimmed.isEmpty ? null : trimmed;
+                  }
+
+                  final project = Project(
+                    id: '_',
+                    name: nameCtl.text.trim(),
+                    clientName: clientName,
+                    status: 'Active',
+                    contractAmount: amt,
+                    contactName: nullIfEmpty(contactNameCtl.text),
+                    contactEmail: nullIfEmpty(contactEmailCtl.text),
+                    contactPhone: normalizePhone(contactPhoneCtl.text),
+                    ownerUid: me?.uid,
+                    projectNumber: nullIfEmpty(projectNumCtl.text),
+                    folderName: nullIfEmpty(folderCtl.text),
+                    createdAt: null,
+                    isArchived: false,
+                  );
+
+                  await repo.add(project);
+                  if (dialogContext.mounted) {
+                    Navigator.pop(dialogContext);
+                  }
+
+                  if (!context.mounted) return;
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Project created.')),
+                  );
+                },
+                child: const Text('Create'),
+              ),
+            ],
           );
         },
       );
