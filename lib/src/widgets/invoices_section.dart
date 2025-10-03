@@ -191,29 +191,19 @@ class InvoicesSection extends StatelessWidget {
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    'Balance: ${currency.format(inv.balance)}',
+                                    currency.format(inv.invoiceAmount),
                                     style: Theme.of(
                                       context,
                                     ).textTheme.bodyMedium,
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 2),
-                              // Second line (small): "Original: $..." • date
                               DefaultTextStyle(
                                 style:
                                     Theme.of(context).textTheme.bodySmall ??
                                     const TextStyle(fontSize: 12),
-                                child: Row(
-                                  children: [
-                                    Text(
-                                      'Original: ${currency.format(inv.invoiceAmount)}',
-                                    ),
-                                    if (dateBit != null) ...[
-                                      const SizedBox(width: 10),
-                                      Text('•  $dateBit'),
-                                    ],
-                                  ],
+                                child: Text(
+                                  'Balance: ${currency.format(inv.balance)}',
                                 ),
                               ),
                             ],

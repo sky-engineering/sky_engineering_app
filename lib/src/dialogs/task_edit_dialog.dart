@@ -18,13 +18,10 @@ Future<void> showTaskEditDialog(
 }) async {
   final titleCtl = TextEditingController(text: task.title);
   final descCtl = TextEditingController(text: task.description ?? '');
-  final assigneeCtl = TextEditingController(text: task.assigneeName ?? '');
   final codeCtl = TextEditingController(text: task.taskCode ?? '');
-  DateTime? dueDate = task.dueDate;
   String taskStatus = _kTaskStatuses.contains(task.taskStatus)
       ? task.taskStatus
       : 'In Progress';
-  bool isStarred = task.isStarred;
 
   final repo = TaskRepository();
   final formKey = GlobalKey<FormState>();
@@ -36,17 +33,6 @@ Future<void> showTaskEditDialog(
       return 'Enter a 4-digit code';
     }
     return null;
-  }
-
-  Future<void> pickDue() async {
-    final seed = dueDate ?? DateTime.now();
-    final d = await showDatePicker(
-      context: context,
-      initialDate: seed,
-      firstDate: DateTime(seed.year - 5),
-      lastDate: DateTime(seed.year + 5),
-    );
-    if (d != null) dueDate = d;
   }
 
   void viewOnlySnack() {
@@ -84,43 +70,6 @@ Future<void> showTaskEditDialog(
                         validator: validateCode,
                       ),
                       const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: canEdit
-                                  ? () async {
-                                      await pickDue();
-                                      setState(() {});
-                                    }
-                                  : viewOnlySnack,
-                              child: AbsorbPointer(
-                                absorbing: true,
-                                child: appDateField(
-                                  label: 'Due Date',
-                                  value: dueDate,
-                                  onPick: () async {
-                                    await pickDue();
-                                    setState(() {});
-                                  },
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: TextFormField(
-                              controller: assigneeCtl,
-                              decoration: const InputDecoration(
-                                labelText: 'Assignee (optional)',
-                                border: OutlineInputBorder(),
-                              ),
-                              enabled: canEdit,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
                         value: taskStatus,
                         decoration: const InputDecoration(
@@ -138,14 +87,6 @@ Future<void> showTaskEditDialog(
                             : null,
                       ),
                       const SizedBox(height: 10),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Star this task'),
-                        value: isStarred,
-                        onChanged: canEdit
-                            ? (v) => setState(() => isStarred = v)
-                            : (v) => viewOnlySnack(),
-                      ),
                     ],
                   ),
                 ),
@@ -173,11 +114,6 @@ Future<void> showTaskEditDialog(
                     'taskCode': code.isEmpty ? null : code,
                     'taskStatus': taskStatus,
                     'status': _legacyFromNew(taskStatus),
-                    'dueDate': dueDate,
-                    'assigneeName': assigneeCtl.text.trim().isEmpty
-                        ? null
-                        : assigneeCtl.text.trim(),
-                    'isStarred': isStarred,
                   };
 
                   try {

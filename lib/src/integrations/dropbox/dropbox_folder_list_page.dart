@@ -126,31 +126,34 @@ class _DropboxFolderListPageState extends State<DropboxFolderListPage> {
   }
 
   Future<void> _openFolder(DbxEntry entry) async {
-    final path = entry.pathDisplay.isNotEmpty
-        ? entry.pathDisplay
-        : entry.pathLower;
-    final uri = _dropboxFolderUri(path);
-    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!launched && mounted) {
+    final path = entry.pathLower.isNotEmpty
+        ? entry.pathLower
+        : entry.pathDisplay;
+    if (path.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open Dropbox folder')),
+      );
+      return;
+    }
+
+    try {
+      final sharedLink = await _api.getOrCreateSharedLink(path);
+      final launched = await launchUrl(
+        sharedLink,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open Dropbox folder')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not open Dropbox folder')),
       );
     }
-  }
-
-  Uri _dropboxFolderUri(String path) {
-    final trimmed = path.trim();
-    if (trimmed.isEmpty || trimmed == '/') {
-      return Uri.parse('https://www.dropbox.com/home');
-    }
-    final withoutLeadingSlash = trimmed.startsWith('/')
-        ? trimmed.substring(1)
-        : trimmed;
-    final segments = withoutLeadingSlash
-        .split('/')
-        .where((segment) => segment.isNotEmpty);
-    final encodedPath = segments.map(Uri.encodeComponent).join('/');
-    return Uri.parse('https://www.dropbox.com/home/$encodedPath');
   }
 
   String _folderTitle(DbxEntry entry) {

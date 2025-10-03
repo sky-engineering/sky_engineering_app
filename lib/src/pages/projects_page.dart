@@ -1,6 +1,7 @@
 // lib/src/pages/projects_page.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/models/project.dart';
 import '../data/models/client.dart';
@@ -233,27 +234,105 @@ class _ProjectsPageState extends State<ProjectsPage> {
     if (!_dropboxChecked) {
       return const SizedBox(width: 18, height: 18);
     }
-    if (_dropboxFolderNames == null) {
-      return Padding(
-        padding: const EdgeInsets.only(left: 8),
-        child: Icon(
-          Icons.link_off,
-          size: 18,
-          color: theme.colorScheme.onSurfaceVariant.withOpacity(0.4),
-        ),
-      );
-    }
+
     final normalized = _normalizeDropboxFolderName(project.folderName);
     final hasMatch =
-        normalized != null && _dropboxFolderNames!.contains(normalized);
-    return Padding(
-      padding: const EdgeInsets.only(left: 8),
-      child: Icon(
-        hasMatch ? Icons.link : Icons.link_off,
-        size: 18,
-        color: hasMatch ? Colors.green : theme.colorScheme.error,
-      ),
+        normalized != null &&
+        (_dropboxFolderNames?.contains(normalized) ?? false);
+    final unavailable = _dropboxFolderNames == null;
+    final color = hasMatch
+        ? Colors.green
+        : unavailable
+        ? theme.colorScheme.onSurfaceVariant.withOpacity(0.4)
+        : theme.colorScheme.error;
+    final icon = Icon(
+      hasMatch ? Icons.link : Icons.link_off,
+      size: 18,
+      color: color,
     );
+
+    Widget wrapped;
+    if (hasMatch) {
+      wrapped = IconButton(
+        icon: icon,
+        tooltip: 'Open Dropbox folder',
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+        splashRadius: 20,
+        onPressed: () => _openProjectFolder(project),
+      );
+    } else if (unavailable) {
+      wrapped = Tooltip(
+        message: 'Connect Dropbox to check linked folders',
+        child: icon,
+      );
+    } else {
+      wrapped = Tooltip(message: 'Dropbox folder not linked', child: icon);
+    }
+
+    return Padding(padding: const EdgeInsets.only(left: 8), child: wrapped);
+  }
+
+  Future<void> _openProjectFolder(Project project) async {
+    final folderPath = _resolveProjectDropboxPath(project);
+    if (folderPath == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Project does not have a Dropbox folder configured.'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      var signedIn = await _dropboxAuth.isSignedIn();
+      if (!signedIn) {
+        await _dropboxAuth.signIn();
+        signedIn = await _dropboxAuth.isSignedIn();
+      }
+      if (!signedIn) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Dropbox sign-in is required.')),
+        );
+        return;
+      }
+
+      final api = DropboxApi(_dropboxAuth);
+      final sharedLink = await api.getOrCreateSharedLink(folderPath);
+      final launched = await launchUrl(
+        sharedLink,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open Dropbox folder.')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open Dropbox folder: $e')),
+      );
+    }
+  }
+
+  String? _resolveProjectDropboxPath(Project project) {
+    final raw = project.folderName;
+    if (raw == null) return null;
+    var sanitized = raw.replaceAll('\\', '/').trim();
+    if (sanitized.isEmpty) return null;
+    sanitized = sanitized.replaceAll(RegExp(r'/+'), '/');
+    if (sanitized.startsWith('/')) {
+      sanitized = sanitized.substring(1);
+    }
+    if (!sanitized.toUpperCase().startsWith('SKY/')) {
+      sanitized = 'SKY/01 PRJT/$sanitized';
+    }
+    sanitized = sanitized.replaceAll(RegExp(r'/+'), '/');
+    sanitized = sanitized.replaceAll(RegExp(r'/+$'), '');
+    return '/$sanitized';
   }
 
   Color _subtleSurfaceTint(BuildContext context) {
