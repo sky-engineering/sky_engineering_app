@@ -16,11 +16,12 @@ class DashboardPage extends StatelessWidget {
 
   Future<void> _launchExternal(BuildContext context, String url) async {
     final uri = Uri.parse(url);
+    final messenger = ScaffoldMessenger.maybeOf(context);
     final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!launched) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Could not open link')));
+      messenger?.showSnackBar(
+        const SnackBar(content: Text('Could not open link')),
+      );
     }
   }
 
@@ -170,35 +171,6 @@ class DashboardPage extends StatelessWidget {
                 ),
                 child: const Text(
                   'Sky Engineering Dropbox',
-                  style: TextStyle(
-                    decoration: TextDecoration.underline,
-                    decorationThickness: 1.5,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const DropboxFolderListPage(
-                        title: 'Project Dropbox Folders',
-                        path: 'SKY/01 PRJT',
-                      ),
-                    ),
-                  );
-                },
-                style: TextButton.styleFrom(
-                  foregroundColor: linkColor,
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(0, 0),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  alignment: Alignment.centerLeft,
-                ),
-                child: const Text(
-                  'Project Dropbox Folders',
                   style: TextStyle(
                     decoration: TextDecoration.underline,
                     decorationThickness: 1.5,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'dropbox_api.dart';
 import 'dropbox_auth.dart';
@@ -94,20 +95,27 @@ class _DropboxFolderListPageState extends State<DropboxFolderListPage> {
               return const Center(child: Text('No folders found.'));
             }
             return ListView.separated(
-              padding: const EdgeInsets.symmetric(vertical: 8),
+              padding: const EdgeInsets.symmetric(vertical: 4),
               itemCount: folders.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              separatorBuilder: (_, __) =>
+                  const Divider(height: 0.5, thickness: 0.5),
               itemBuilder: (context, index) {
                 final entry = folders[index];
-                final displayName = entry.name.isNotEmpty
-                    ? entry.name
-                    : entry.pathLower;
+                final displayName = _folderTitle(entry);
                 return ListTile(
-                  leading: const Icon(Icons.folder),
-                  title: Text(displayName),
-                  subtitle: entry.pathLower.isNotEmpty
-                      ? Text(entry.pathLower)
-                      : null,
+                  leading: const Icon(Icons.folder, size: 20),
+                  title: Text(
+                    displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  dense: true,
+                  visualDensity: VisualDensity.compact,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
+                  onTap: () => _openFolder(entry),
                 );
               },
             );
@@ -115,6 +123,49 @@ class _DropboxFolderListPageState extends State<DropboxFolderListPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _openFolder(DbxEntry entry) async {
+    final path = entry.pathDisplay.isNotEmpty
+        ? entry.pathDisplay
+        : entry.pathLower;
+    final uri = _dropboxFolderUri(path);
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open Dropbox folder')),
+      );
+    }
+  }
+
+  Uri _dropboxFolderUri(String path) {
+    final trimmed = path.trim();
+    if (trimmed.isEmpty || trimmed == '/') {
+      return Uri.parse('https://www.dropbox.com/home');
+    }
+    final withoutLeadingSlash = trimmed.startsWith('/')
+        ? trimmed.substring(1)
+        : trimmed;
+    final segments = withoutLeadingSlash
+        .split('/')
+        .where((segment) => segment.isNotEmpty);
+    final encodedPath = segments.map(Uri.encodeComponent).join('/');
+    return Uri.parse('https://www.dropbox.com/home/$encodedPath');
+  }
+
+  String _folderTitle(DbxEntry entry) {
+    if (entry.name.isNotEmpty) return entry.name;
+    final fallbackPath = entry.pathDisplay.isNotEmpty
+        ? entry.pathDisplay
+        : entry.pathLower;
+    final segments = fallbackPath
+        .split('/')
+        .where((segment) => segment.isNotEmpty)
+        .toList();
+    if (segments.isEmpty) {
+      return fallbackPath.isNotEmpty ? fallbackPath : 'Folder';
+    }
+    return segments.last;
   }
 
   Future<void> _connect() async {

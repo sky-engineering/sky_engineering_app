@@ -564,7 +564,9 @@ class _InvoicesPageState extends State<InvoicesPage> {
                             labelText: 'Invoice Amount',
                             border: OutlineInputBorder(),
                           ),
-                          keyboardType: TextInputType.number,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
                           validator: (v) => (v == null || v.trim().isEmpty)
                               ? 'Required'
                               : null,
@@ -576,7 +578,9 @@ class _InvoicesPageState extends State<InvoicesPage> {
                             labelText: 'Amount Paid',
                             border: OutlineInputBorder(),
                           ),
-                          keyboardType: TextInputType.number,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
                         ),
                         const SizedBox(height: 10),
                         Row(

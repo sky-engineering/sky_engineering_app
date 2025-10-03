@@ -3,9 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../data/models/project.dart';
+import '../data/models/client.dart';
 import '../data/repositories/project_repository.dart';
+import '../data/repositories/client_repository.dart';
 import 'project_detail_page.dart';
-import '../dialogs/select_subphases_dialog.dart';
+import '../integrations/dropbox/dropbox_auth.dart';
+import '../integrations/dropbox/dropbox_api.dart';
 
 class ProjectsPage extends StatefulWidget {
   const ProjectsPage({super.key});
@@ -17,6 +20,16 @@ class ProjectsPage extends StatefulWidget {
 class _ProjectsPageState extends State<ProjectsPage> {
   bool _showArchived = false; // default OFF
   static const _accentYellow = Color(0xFFF1C400);
+
+  final DropboxAuth _dropboxAuth = DropboxAuth();
+  Set<String>? _dropboxFolderNames;
+  bool _dropboxChecked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDropboxFolders();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -100,14 +113,21 @@ class _ProjectsPageState extends State<ProjectsPage> {
                     vertical: 4,
                   ),
                   // No leading avatar
-                  title: Text(
-                    (p.projectNumber != null &&
-                            p.projectNumber!.trim().isNotEmpty)
-                        ? '${p.projectNumber} ${p.name}'
-                        : p.name,
-                    style: titleStyle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  title: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          (p.projectNumber != null &&
+                                  p.projectNumber!.trim().isNotEmpty)
+                              ? '${p.projectNumber} ${p.name}'
+                              : p.name,
+                          style: titleStyle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      _buildLinkStatusIcon(p, context),
+                    ],
                   ),
                   subtitle: Text(
                     [
@@ -146,6 +166,88 @@ class _ProjectsPageState extends State<ProjectsPage> {
         label: const Text('New Project'),
         backgroundColor: _accentYellow,
         foregroundColor: Colors.black87,
+      ),
+    );
+  }
+
+  Future<void> _loadDropboxFolders() async {
+    try {
+      final signedIn = await _dropboxAuth.isSignedIn();
+      if (!mounted) return;
+      if (!signedIn) {
+        setState(() {
+          _dropboxFolderNames = null;
+          _dropboxChecked = true;
+        });
+        return;
+      }
+      final api = DropboxApi(_dropboxAuth);
+      final entries = await api.listFolder(path: '/SKY/01 PRJT');
+      if (!mounted) return;
+      final folderNames = <String>{};
+      for (final entry in entries) {
+        if (!entry.isFolder) continue;
+        final nameLower = entry.name.trim().toLowerCase();
+        if (nameLower.isNotEmpty) folderNames.add(nameLower);
+        final display = entry.pathDisplay.trim().toLowerCase();
+        if (display.isNotEmpty) {
+          folderNames.add(display);
+          final segments = display.split('/').where((segment) => segment.isNotEmpty).toList();
+          if (segments.isNotEmpty) {
+            folderNames.add(segments.last);
+          }
+        }
+      }
+      setState(() {
+        _dropboxFolderNames = folderNames;
+        _dropboxChecked = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _dropboxFolderNames = {};
+        _dropboxChecked = true;
+      });
+    }
+  }
+
+  String? _normalizeDropboxFolderName(String? raw) {
+    if (raw == null) return null;
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return null;
+    final sanitized = trimmed.replaceAll('\\', '/');
+    final segments = sanitized
+        .split('/')
+        .where((segment) => segment.isNotEmpty)
+        .toList();
+    final name = segments.isNotEmpty ? segments.last : sanitized;
+    return name.trim().toLowerCase();
+  }
+
+  Widget _buildLinkStatusIcon(Project project, BuildContext context) {
+    final theme = Theme.of(context);
+    if (!_dropboxChecked) {
+      return const SizedBox(width: 18, height: 18);
+    }
+    if (_dropboxFolderNames == null) {
+      return Padding(
+        padding: const EdgeInsets.only(left: 8),
+        child: Icon(
+          Icons.link_off,
+          size: 18,
+          color: theme.colorScheme.onSurfaceVariant.withOpacity(0.4),
+        ),
+      );
+    }
+    final normalized = _normalizeDropboxFolderName(project.folderName);
+    final hasMatch =
+        normalized != null && _dropboxFolderNames!.contains(normalized);
+    return Padding(
+      padding: const EdgeInsets.only(left: 8),
+      child: Icon(
+        hasMatch ? Icons.link : Icons.link_off,
+        size: 18,
+        color: hasMatch ? Colors.green : theme.colorScheme.error,
       ),
     );
   }
@@ -277,129 +379,243 @@ Future<void> _showAddDialog(BuildContext context) async {
   final amountCtl = TextEditingController();
   final projectNumCtl = TextEditingController();
   final folderCtl = TextEditingController();
+  final contactNameCtl = TextEditingController();
+  final contactEmailCtl = TextEditingController();
+  final contactPhoneCtl = TextEditingController();
   final formKey = GlobalKey<FormState>();
   final repo = ProjectRepository();
   final me = FirebaseAuth.instance.currentUser;
 
+  final clientRepo = ClientRepository();
+  List<ClientRecord> clients = <ClientRecord>[];
+  try {
+    clients = await clientRepo.streamAll().first;
+  } catch (_) {
+    clients = <ClientRecord>[];
+  }
+
+  clients.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+  if (!context.mounted) return;
+
+  ClientRecord? selectedClient;
+
   await showDialog<void>(
     context: context,
-    builder: (context) {
-      return AlertDialog(
-        title: const Text('New Project'),
-        content: Form(
-          key: formKey,
-          child: SizedBox(
-            width: 420,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: nameCtl,
-                  decoration: const InputDecoration(
-                    labelText: 'Project name',
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Required' : null,
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: clientCtl,
-                  decoration: const InputDecoration(
-                    labelText: 'Client name',
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Required' : null,
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: projectNumCtl,
-                  decoration: const InputDecoration(
-                    labelText: 'Project number (optional)',
-                    hintText: 'e.g., 026-01',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: folderCtl,
-                  decoration: const InputDecoration(
-                    labelText: 'Dropbox folder (optional)',
-                    hintText: 'e.g., /2024/Project123',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: amountCtl,
-                  decoration: const InputDecoration(
-                    labelText: 'Contract amount (optional)',
-                    hintText: 'e.g., 75000',
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.number,
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              if (!(formKey.currentState?.validate() ?? false)) return;
+    builder: (dialogContext) {
+      return StatefulBuilder(
+        builder: (innerContext, setState) {
+          final bottomInset = MediaQuery.of(innerContext).viewInsets.bottom;
 
-              double? amt;
-              if (amountCtl.text.trim().isNotEmpty) {
-                amt = double.tryParse(amountCtl.text.trim());
-              }
-
-              final p = Project(
-                id: '_',
-                name: nameCtl.text.trim(),
-                clientName: clientCtl.text.trim(),
-                status: 'Active',
-                contractAmount: amt,
-                ownerUid: me?.uid,
-                projectNumber: projectNumCtl.text.trim().isEmpty
-                    ? null
-                    : projectNumCtl.text.trim(),
-                folderName: folderCtl.text.trim().isEmpty
-                    ? null
-                    : folderCtl.text.trim(),
-                createdAt: null,
-                // Explicit default: not archived
-                isArchived: false,
-              );
-
-              final id = await repo.add(p);
-              // ignore: use_build_context_synchronously
-              Navigator.pop(context);
-
-              // Follow-up: Select subphases for the new project
-              if (me != null) {
-                await showSelectSubphasesDialog(
-                  context,
-                  projectId: id,
-                  ownerUid: me.uid,
+          void applyClientSelection(ClientRecord? client) {
+            selectedClient = client;
+            clientCtl.text = client?.name ?? '';
+            contactNameCtl.text = client?.contactName ?? '';
+            contactEmailCtl.text = client?.contactEmail ?? '';
+            contactPhoneCtl.text = client?.contactPhone ?? '';
+            if (client != null) {
+              final prefix = client.code.trim();
+              if (prefix.isNotEmpty) {
+                projectNumCtl.text = '$prefix-';
+                projectNumCtl.selection = TextSelection.fromPosition(
+                  TextPosition(offset: projectNumCtl.text.length),
                 );
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Project created. Sign in to select subphases.',
+              }
+            }
+          }
+
+          Widget buildClientField() {
+            if (clients.isEmpty) {
+              return TextFormField(
+                controller: clientCtl,
+                decoration: const InputDecoration(
+                  labelText: 'Client name',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Required' : null,
+              );
+            }
+
+            return DropdownButtonFormField<ClientRecord>(
+              initialValue: selectedClient,
+              decoration: const InputDecoration(
+                labelText: 'Client',
+                border: OutlineInputBorder(),
+              ),
+              isExpanded: true,
+              items: clients
+                  .map(
+                    (c) => DropdownMenuItem<ClientRecord>(
+                      value: c,
+                      child: Text('${c.code} ${c.name}'),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                setState(() => applyClientSelection(value));
+              },
+              validator: (value) => value == null ? 'Select a client' : null,
+            );
+          }
+
+          return AlertDialog(
+            title: const Text('New Project'),
+            content: Padding(
+              padding: EdgeInsets.only(bottom: bottomInset),
+              child: SizedBox(
+                width: 560,
+                child: SingleChildScrollView(
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextFormField(
+                          controller: nameCtl,
+                          decoration: const InputDecoration(
+                            labelText: 'Project name',
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (v) => (v == null || v.trim().isEmpty)
+                              ? 'Required'
+                              : null,
+                        ),
+                        const SizedBox(height: 10),
+                        buildClientField(),
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: projectNumCtl,
+                          decoration: const InputDecoration(
+                            labelText: 'Project number',
+                            hintText: 'e.g., 026-01',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: folderCtl,
+                          decoration: const InputDecoration(
+                            labelText: 'Dropbox folder',
+                            hintText: 'e.g., /2024/Project123',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Client Contact',
+                            style: Theme.of(innerContext).textTheme.titleMedium,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: contactNameCtl,
+                          decoration: const InputDecoration(
+                            labelText: 'Contact name',
+                            hintText: 'e.g., Jane Smith',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: contactPhoneCtl,
+                          decoration: const InputDecoration(
+                            labelText: 'Contact phone',
+                            hintText: 'e.g., (555) 123-4567',
+                            border: OutlineInputBorder(),
+                          ),
+                          keyboardType: TextInputType.phone,
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: contactEmailCtl,
+                          decoration: const InputDecoration(
+                            labelText: 'Contact email',
+                            hintText: 'e.g., jane@example.com',
+                            border: OutlineInputBorder(),
+                          ),
+                          keyboardType: TextInputType.emailAddress,
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: amountCtl,
+                          decoration: const InputDecoration(
+                            labelText: 'Contract amount',
+                            hintText: 'e.g., 75000',
+                            border: OutlineInputBorder(),
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                );
-              }
-            },
-            child: const Text('Create'),
-          ),
-        ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  if (!(formKey.currentState?.validate() ?? false)) return;
+
+                  final clientName =
+                      selectedClient?.name ?? clientCtl.text.trim();
+                  if (clientName.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Client is required.')),
+                    );
+                    return;
+                  }
+
+                  double? amt;
+                  if (amountCtl.text.trim().isNotEmpty) {
+                    amt = double.tryParse(amountCtl.text.trim());
+                  }
+
+                  String? nullIfEmpty(String value) {
+                    final trimmed = value.trim();
+                    return trimmed.isEmpty ? null : trimmed;
+                  }
+
+                  final project = Project(
+                    id: '_',
+                    name: nameCtl.text.trim(),
+                    clientName: clientName,
+                    status: 'Active',
+                    contractAmount: amt,
+                    contactName: nullIfEmpty(contactNameCtl.text),
+                    contactEmail: nullIfEmpty(contactEmailCtl.text),
+                    contactPhone: nullIfEmpty(contactPhoneCtl.text),
+                    ownerUid: me?.uid,
+                    projectNumber: nullIfEmpty(projectNumCtl.text),
+                    folderName: nullIfEmpty(folderCtl.text),
+                    createdAt: null,
+                    isArchived: false,
+                  );
+
+                  await repo.add(project);
+                  if (dialogContext.mounted) {
+                    Navigator.pop(dialogContext);
+                  }
+
+                  if (!context.mounted) return;
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Project created.')),
+                  );
+                },
+                child: const Text('Create'),
+              ),
+            ],
+          );
+        },
       );
     },
   );

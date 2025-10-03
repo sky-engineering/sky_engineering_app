@@ -17,19 +17,29 @@ class ClientRepository {
         );
   }
 
-  Future<void> add(ClientRecord client) async {
+  Future<void> add(ClientRecord client, {required String ownerUid}) async {
     final ref = _col.doc();
+    final now = FieldValue.serverTimestamp();
     await ref.set({
-      ...client.copyWith(id: ref.id).toMap(),
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
+      ...client.copyWith(id: ref.id, ownerUid: ownerUid).toMap(),
+      'ownerUid': ownerUid,
+      'createdAt': now,
+      'updatedAt': now,
     });
   }
 
   Future<void> update(String id, ClientRecord client) async {
+    String? sanitize(String? value) {
+      final trimmed = value?.trim() ?? '';
+      return trimmed.isEmpty ? null : trimmed;
+    }
+
     await _col.doc(id).update({
-      'code': client.code,
-      'name': client.name,
+      'code': client.code.trim(),
+      'name': client.name.trim(),
+      'contactName': sanitize(client.contactName),
+      'contactEmail': sanitize(client.contactEmail),
+      'contactPhone': sanitize(client.contactPhone),
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }

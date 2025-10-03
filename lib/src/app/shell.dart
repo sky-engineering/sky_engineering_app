@@ -5,6 +5,8 @@ import '../services/user_service.dart';
 import '../pages/dashboard_page.dart';
 import '../pages/projects_page.dart';
 import '../pages/profile_page.dart';
+import '../pages/note_editor_page.dart';
+import '../dialogs/quick_actions.dart';
 import '../pages/invoices_page.dart';
 
 class Shell extends StatefulWidget {
@@ -46,6 +48,50 @@ class _ShellState extends State<Shell> {
     }
   }
 
+  void _showQuickActionSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.checklist_rtl),
+                title: const Text('New Task'),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  if (!mounted) return;
+                  await showQuickAddTaskDialog(context);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.note_alt_outlined),
+                title: const Text('New Note'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  if (!mounted) return;
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const NoteEditorPage()),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.request_quote_outlined),
+                title: const Text('New Invoice'),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  if (!mounted) return;
+                  await showQuickAddInvoiceDialog(context);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_error != null) {
@@ -59,17 +105,18 @@ class _ShellState extends State<Shell> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: _logoTitle(),
-        actions: [
-          IconButton(
-            tooltip: 'Dropbox',
-            icon: const Icon(Icons.folder),
-            onPressed: () => Navigator.of(context).pushNamed('/dropbox'),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: _logoTitle()),
       body: IndexedStack(index: _index, children: _pages),
+      floatingActionButton: _index == 0
+          ? FloatingActionButton(
+              heroTag: 'dashboard-quick',
+              backgroundColor: const Color(0xFFF1C400),
+              foregroundColor: Colors.black,
+              onPressed: _showQuickActionSheet,
+              child: const Icon(Icons.add),
+            )
+          : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),

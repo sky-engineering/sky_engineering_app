@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/models/invoice.dart';
+import '../data/models/project.dart';
 import '../data/repositories/invoice_repository.dart';
 import 'form_helpers.dart';
 
@@ -54,48 +55,172 @@ class InvoicesSection extends StatelessWidget {
 
     Widget content = Padding(
       padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        if (title != null && title!.trim().isNotEmpty)
-          Text(title!, style: Theme.of(context).textTheme.titleLarge),
-        if (title != null && title!.trim().isNotEmpty) const SizedBox(height: 8),
-        StreamBuilder<List<Invoice>>(
-          stream: repo.streamByProject(projectId),
-          builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
-              return const Padding(
-                padding: EdgeInsets.all(12),
-                child: CircularProgressIndicator(),
-              );
-            }
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (title != null && title!.trim().isNotEmpty)
+            Text(title!, style: Theme.of(context).textTheme.titleLarge),
+          if (title != null && title!.trim().isNotEmpty)
+            const SizedBox(height: 8),
+          StreamBuilder<List<Invoice>>(
+            stream: repo.streamByProject(projectId),
+            builder: (context, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: CircularProgressIndicator(),
+                );
+              }
 
-            // start with all invoices
-            var invoices = (snap.data ?? const <Invoice>[]);
+              // start with all invoices
+              var invoices = (snap.data ?? const <Invoice>[]);
 
-            // filter by type
-            if (invoiceTypeFilter != null) {
-              invoices = invoices
-                  .where((inv) => inv.invoiceType == invoiceTypeFilter)
-                  .toList();
-            }
+              // filter by type
+              if (invoiceTypeFilter != null) {
+                invoices = invoices
+                    .where((inv) => inv.invoiceType == invoiceTypeFilter)
+                    .toList();
+              }
 
-            // filter by unpaid
-            if (unpaidOnly) {
-              invoices = invoices.where((inv) => (inv.balance) > 0.0001).toList();
-            }
+              // filter by unpaid
+              if (unpaidOnly) {
+                invoices = invoices
+                    .where((inv) => (inv.balance) > 0.0001)
+                    .toList();
+              }
 
-            if (invoices.isEmpty) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Text(
-                      invoiceTypeFilter == 'Vendor'
-                          ? 'No vendor invoices yet'
-                          : invoiceTypeFilter == 'Client'
-                          ? 'No client invoices yet'
-                          : 'No invoices yet',
+              if (invoices.isEmpty) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Text(
+                        invoiceTypeFilter == 'Vendor'
+                            ? 'No vendor invoices yet'
+                            : invoiceTypeFilter == 'Client'
+                            ? 'No client invoices yet'
+                            : 'No invoices yet',
+                      ),
                     ),
+                    const SizedBox(height: 8),
+                    if (isOwner && showNewButton)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: FilledButton.icon(
+                          onPressed: () => showAddInvoiceDialog(
+                            context,
+                            projectId,
+                            defaultProjectNumber: projectNumberString,
+                            initialInvoiceType: invoiceTypeFilter ?? 'Client',
+                          ),
+                          icon: const Icon(Icons.add),
+                          label: const Text('New Invoice'),
+                        ),
+                      ),
+                  ],
+                );
+              }
+
+              return Column(
+                children: [
+                  ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: invoices.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, i) {
+                      final inv = invoices[i];
+                      final dateBit = inv.invoiceDate != null
+                          ? fmtDate(inv.invoiceDate)
+                          : null;
+
+                      return InkWell(
+                        onTap: () => _showEditInvoiceDialog(
+                          context,
+                          inv,
+                          canEdit: isOwner,
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 6,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // First line: "Invoice <#>" + (open link icon if any) ... "Balance: $x"
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            inv.invoiceNumber.isNotEmpty
+                                                ? 'Invoice ${inv.invoiceNumber}'
+                                                : 'Invoice ${inv.id.substring(0, 6)}',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 15,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        if ((inv.documentLink ?? '')
+                                            .trim()
+                                            .isNotEmpty)
+                                          IconButton(
+                                            tooltip: 'Open document link',
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            iconSize: 18,
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(
+                                              minWidth: 28,
+                                              minHeight: 28,
+                                            ),
+                                            onPressed: () => _openLink(
+                                              inv.documentLink!.trim(),
+                                            ),
+                                            icon: const Icon(Icons.open_in_new),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Balance: ${currency.format(inv.balance)}',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodyMedium,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              // Second line (small): "Original: $..." • date
+                              DefaultTextStyle(
+                                style:
+                                    Theme.of(context).textTheme.bodySmall ??
+                                    const TextStyle(fontSize: 12),
+                                child: Row(
+                                  children: [
+                                    Text(
+                                      'Original: ${currency.format(inv.invoiceAmount)}',
+                                    ),
+                                    if (dateBit != null) ...[
+                                      const SizedBox(width: 10),
+                                      Text('•  $dateBit'),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 8),
                   if (isOwner && showNewButton)
@@ -114,108 +239,10 @@ class InvoicesSection extends StatelessWidget {
                     ),
                 ],
               );
-            }
-
-            return Column(
-              children: [
-                ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: invoices.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, i) {
-                    final inv = invoices[i];
-                    final dateBit =
-                    inv.invoiceDate != null ? fmtDate(inv.invoiceDate) : null;
-
-                    return InkWell(
-                      onTap: () => _showEditInvoiceDialog(context, inv, canEdit: isOwner),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // First line: "Invoice <#>" + (open link icon if any) ... "Balance: $x"
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          inv.invoiceNumber.isNotEmpty
-                                              ? 'Invoice ${inv.invoiceNumber}'
-                                              : 'Invoice ${inv.id.substring(0, 6)}',
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 15,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      if ((inv.documentLink ?? '').trim().isNotEmpty)
-                                        IconButton(
-                                          tooltip: 'Open document link',
-                                          visualDensity: VisualDensity.compact,
-                                          iconSize: 18,
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(
-                                              minWidth: 28, minHeight: 28),
-                                          onPressed: () => _openLink(inv.documentLink!.trim()),
-                                          icon: const Icon(Icons.open_in_new),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Balance: ${currency.format(inv.balance)}',
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 2),
-                            // Second line (small): "Original: $..." • date
-                            DefaultTextStyle(
-                              style: Theme.of(context).textTheme.bodySmall ??
-                                  const TextStyle(fontSize: 12),
-                              child: Row(
-                                children: [
-                                  Text('Original: ${currency.format(inv.invoiceAmount)}'),
-                                  if (dateBit != null) ...[
-                                    const SizedBox(width: 10),
-                                    Text('•  $dateBit'),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 8),
-                if (isOwner && showNewButton)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: FilledButton.icon(
-                      onPressed: () => showAddInvoiceDialog(
-                        context,
-                        projectId,
-                        defaultProjectNumber: projectNumberString,
-                        initialInvoiceType: invoiceTypeFilter ?? 'Client',
-                      ),
-                      icon: const Icon(Icons.add),
-                      label: const Text('New Invoice'),
-                    ),
-                  ),
-              ],
-            );
-          },
-        ),
-      ]),
+            },
+          ),
+        ],
+      ),
     );
 
     if (wrapInCard) {
@@ -227,16 +254,18 @@ class InvoicesSection extends StatelessWidget {
 
 /// Public helper so other widgets can open the "New Invoice" dialog.
 Future<void> showAddInvoiceDialog(
-    BuildContext context,
-    String projectId, {
-      String? defaultProjectNumber,
-      String initialInvoiceType = 'Client',
-    }) {
+  BuildContext context,
+  String? projectId, {
+  String? defaultProjectNumber,
+  String initialInvoiceType = 'Client',
+  List<Project>? projectChoices,
+}) {
   return _showAddInvoiceDialog(
     context,
     projectId,
     defaultProjectNumber: defaultProjectNumber,
     initialInvoiceType: initialInvoiceType,
+    projectChoices: projectChoices,
   );
 }
 
@@ -249,7 +278,10 @@ Future<bool> _projectNumberExists(String text) async {
   final projects = FirebaseFirestore.instance.collection('projects');
 
   // 1) Try exact match first (fast, indexed).
-  final exact = await projects.where('projectNumber', isEqualTo: text).limit(1).get();
+  final exact = await projects
+      .where('projectNumber', isEqualTo: text)
+      .limit(1)
+      .get();
   if (exact.docs.isNotEmpty) return true;
 
   // 2) Fallback: scan a reasonable number and compare digits-only client-side.
@@ -274,11 +306,12 @@ Future<void> _openLink(String url) async {
 
 // ---------- dialog helpers (uses Amount Paid) ----------
 Future<void> _showAddInvoiceDialog(
-    BuildContext context,
-    String projectId, {
-      String? defaultProjectNumber,
-      String initialInvoiceType = 'Client',
-    }) async {
+  BuildContext context,
+  String? projectId, {
+  String? defaultProjectNumber,
+  String initialInvoiceType = 'Client',
+  List<Project>? projectChoices,
+}) async {
   // Reordered fields per request:
   // 1) Project Number (defaults to current project's projectNumber string)
   // 2) Invoice Number
@@ -286,12 +319,39 @@ Future<void> _showAddInvoiceDialog(
   // 4) Amount Paid (default 0)
   // then dates (Invoice Date defaults today, Due Date = today+30), type, link.
 
+  final projectMap = <String, Project>{
+    for (final project in projectChoices ?? const <Project>[])
+      project.id: project,
+  };
+
+  String projectLabel(Project project) {
+    final number = (project.projectNumber ?? '').trim();
+    return number.isNotEmpty ? '$number ${project.name}' : project.name;
+  }
+
+  String? selectedProjectId = projectId;
+  if (projectMap.isNotEmpty) {
+    if (selectedProjectId == null ||
+        !projectMap.containsKey(selectedProjectId)) {
+      selectedProjectId = projectMap.keys.first;
+    }
+  }
+  Project? selectedProject = selectedProjectId != null
+      ? projectMap[selectedProjectId]
+      : null;
+
   final now = DateTime.now();
   DateTime? invoiceDate = DateTime(now.year, now.month, now.day);
-  DateTime? dueDate = DateTime(now.year, now.month, now.day).add(const Duration(days: 30));
+  DateTime? dueDate = DateTime(
+    now.year,
+    now.month,
+    now.day,
+  ).add(const Duration(days: 30));
   DateTime? paidDate;
 
-  final projectNumberCtl = TextEditingController(text: defaultProjectNumber ?? '');
+  final projectNumberCtl = TextEditingController(
+    text: defaultProjectNumber ?? selectedProject?.projectNumber ?? '',
+  );
   final invoiceNumberCtl = TextEditingController();
   final invoiceAmountCtl = TextEditingController();
   final amountPaidCtl = TextEditingController(text: '0');
@@ -304,8 +364,9 @@ Future<void> _showAddInvoiceDialog(
   final me = FirebaseAuth.instance.currentUser;
 
   if (me == null) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('You must be signed in.')));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('You must be signed in.')));
     return;
   }
 
@@ -351,6 +412,43 @@ Future<void> _showAddInvoiceDialog(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      if (projectMap.isNotEmpty) ...[
+                        DropdownButtonFormField<String>(
+                          value: selectedProjectId,
+                          decoration: const InputDecoration(
+                            labelText: 'Project',
+                            border: OutlineInputBorder(),
+                          ),
+                          isExpanded: true,
+                          items: projectMap.entries
+                              .map(
+                                (entry) => DropdownMenuItem<String>(
+                                  value: entry.key,
+                                  child: Text(projectLabel(entry.value)),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            setState(() {
+                              selectedProjectId = value;
+                              selectedProject = projectMap[value];
+                              final suggestion =
+                                  (selectedProject?.projectNumber ?? '').trim();
+                              if (suggestion.isNotEmpty) {
+                                projectNumberCtl.text = suggestion;
+                                projectNumberCtl.selection =
+                                    TextSelection.fromPosition(
+                                      TextPosition(
+                                        offset: projectNumberCtl.text.length,
+                                      ),
+                                    );
+                              }
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 10),
+                      ],
                       appTextField(
                         'Project Number',
                         projectNumberCtl,
@@ -358,16 +456,31 @@ Future<void> _showAddInvoiceDialog(
                         hint: 'e.g., 026-01',
                       ),
                       const SizedBox(height: 10),
-                      appTextField('Invoice Number', invoiceNumberCtl,
-                          required: true, hint: 'e.g., 1220'),
+                      appTextField(
+                        'Invoice Number',
+                        invoiceNumberCtl,
+                        required: true,
+                        hint: 'e.g., 1220',
+                      ),
                       const SizedBox(height: 10),
-                      appTextField('Invoice Amount', invoiceAmountCtl,
-                          required: true,
-                          hint: 'e.g., 17150.91',
-                          keyboardType: TextInputType.number),
+                      appTextField(
+                        'Invoice Amount',
+                        invoiceAmountCtl,
+                        required: true,
+                        hint: 'e.g., 17150.91',
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                      ),
                       const SizedBox(height: 10),
-                      appTextField('Amount Paid', amountPaidCtl,
-                          hint: '0', keyboardType: TextInputType.number),
+                      appTextField(
+                        'Amount Paid',
+                        amountPaidCtl,
+                        hint: '0',
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                      ),
                       const SizedBox(height: 10),
                       Row(
                         children: [
@@ -407,17 +520,28 @@ Future<void> _showAddInvoiceDialog(
                       DropdownButtonFormField<String>(
                         value: invoiceType,
                         items: const [
-                          DropdownMenuItem(value: 'Client', child: Text('Client')),
-                          DropdownMenuItem(value: 'Vendor', child: Text('Vendor')),
+                          DropdownMenuItem(
+                            value: 'Client',
+                            child: Text('Client'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'Vendor',
+                            child: Text('Vendor'),
+                          ),
                         ],
-                        onChanged: (v) => setState(() => invoiceType = v ?? 'Client'),
+                        onChanged: (v) =>
+                            setState(() => invoiceType = v ?? 'Client'),
                         decoration: const InputDecoration(
                           labelText: 'Invoice Type',
                           border: OutlineInputBorder(),
                         ),
                       ),
                       const SizedBox(height: 10),
-                      appTextField('Document Link', documentLinkCtl, hint: 'https://...'),
+                      appTextField(
+                        'Document Link',
+                        documentLinkCtl,
+                        hint: 'https://...',
+                      ),
                     ],
                   ),
                 ),
@@ -436,24 +560,34 @@ Future<void> _showAddInvoiceDialog(
                   final pnText = projectNumberCtl.text.trim();
                   if (pnText.isEmpty || !(await _projectNumberExists(pnText))) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Project Number not found.')),
+                      const SnackBar(
+                        content: Text('Project Number not found.'),
+                      ),
                     );
                     return;
                   }
 
-                  final amt = double.tryParse(invoiceAmountCtl.text.trim()) ?? 0.0;
+                  final amt =
+                      double.tryParse(invoiceAmountCtl.text.trim()) ?? 0.0;
                   final paid = amountPaidCtl.text.trim().isEmpty
                       ? 0.0
                       : (double.tryParse(amountPaidCtl.text.trim()) ?? 0.0);
 
                   // Store the project number exactly as entered so formatting is preserved.
-                  final projectNumberValue =
-                      pnText.isNotEmpty ? pnText : null;
+                  final projectNumberValue = pnText.isNotEmpty ? pnText : null;
+
+                  final targetProjectId = selectedProjectId ?? projectId;
+                  if (targetProjectId == null || targetProjectId.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Select a project.')),
+                    );
+                    return;
+                  }
 
                   final me = FirebaseAuth.instance.currentUser;
                   final inv = Invoice(
                     id: '_',
-                    projectId: projectId,
+                    projectId: targetProjectId,
                     ownerUid: me?.uid,
                     invoiceNumber: invoiceNumberCtl.text.trim(),
                     projectNumber: projectNumberValue,
@@ -462,17 +596,19 @@ Future<void> _showAddInvoiceDialog(
                     invoiceDate: invoiceDate,
                     dueDate: dueDate,
                     paidDate: paidDate,
-                    documentLink:
-                    documentLinkCtl.text.trim().isNotEmpty ? documentLinkCtl.text.trim() : null,
+                    documentLink: documentLinkCtl.text.trim().isNotEmpty
+                        ? documentLinkCtl.text.trim()
+                        : null,
                     invoiceType: invoiceType,
                   );
 
                   try {
                     await repo.add(inv);
-                    // ignore: use_build_context_synchronously
-                    Navigator.pop(context);
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                    }
                   } catch (e) {
-                    // ignore: use_build_context_synchronously
+                    if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text('Failed to create invoice: $e')),
                     );
@@ -488,8 +624,11 @@ Future<void> _showAddInvoiceDialog(
   );
 }
 
-Future<void> _showEditInvoiceDialog(BuildContext context, Invoice inv,
-    {required bool canEdit}) async {
+Future<void> _showEditInvoiceDialog(
+  BuildContext context,
+  Invoice inv, {
+  required bool canEdit,
+}) async {
   // Prefill the formatted project number string from the actual project doc.
   String initialProjectNumberText = inv.projectNumber ?? '';
   try {
@@ -503,12 +642,16 @@ Future<void> _showEditInvoiceDialog(BuildContext context, Invoice inv,
     // fall back to digits
   }
 
-  final projectNumberCtl = TextEditingController(text: initialProjectNumberText);
+  final projectNumberCtl = TextEditingController(
+    text: initialProjectNumberText,
+  );
   final invoiceNumberCtl = TextEditingController(text: inv.invoiceNumber);
-  final invoiceAmountCtl =
-  TextEditingController(text: inv.invoiceAmount.toStringAsFixed(2));
-  final amountPaidCtl =
-  TextEditingController(text: inv.amountPaid.toStringAsFixed(2));
+  final invoiceAmountCtl = TextEditingController(
+    text: inv.invoiceAmount.toStringAsFixed(2),
+  );
+  final amountPaidCtl = TextEditingController(
+    text: inv.amountPaid.toStringAsFixed(2),
+  );
   final documentLinkCtl = TextEditingController(text: inv.documentLink ?? '');
 
   String invoiceType = inv.invoiceType;
@@ -550,7 +693,10 @@ Future<void> _showEditInvoiceDialog(BuildContext context, Invoice inv,
     if (!canEdit) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('View-only: only the project owner can modify invoices.')),
+          content: Text(
+            'View-only: only the project owner can modify invoices.',
+          ),
+        ),
       );
     }
   }
@@ -561,7 +707,9 @@ Future<void> _showEditInvoiceDialog(BuildContext context, Invoice inv,
       return StatefulBuilder(
         builder: (context, setState) {
           return AlertDialog(
-            title: Text('Invoice ${inv.invoiceNumber.isNotEmpty ? inv.invoiceNumber : inv.id.substring(0, 6)}'),
+            title: Text(
+              'Invoice ${inv.invoiceNumber.isNotEmpty ? inv.invoiceNumber : inv.id.substring(0, 6)}',
+            ),
             content: Form(
               key: formKey,
               child: SizedBox(
@@ -570,17 +718,35 @@ Future<void> _showEditInvoiceDialog(BuildContext context, Invoice inv,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      appTextField('Project Number', projectNumberCtl,
-                          required: true, hint: 'e.g., 026-01'),
+                      appTextField(
+                        'Project Number',
+                        projectNumberCtl,
+                        required: true,
+                        hint: 'e.g., 026-01',
+                      ),
                       const SizedBox(height: 10),
-                      appTextField('Invoice Number', invoiceNumberCtl,
-                          required: true),
+                      appTextField(
+                        'Invoice Number',
+                        invoiceNumberCtl,
+                        required: true,
+                      ),
                       const SizedBox(height: 10),
-                      appTextField('Invoice Amount', invoiceAmountCtl,
-                          required: true, keyboardType: TextInputType.number),
+                      appTextField(
+                        'Invoice Amount',
+                        invoiceAmountCtl,
+                        required: true,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                      ),
                       const SizedBox(height: 10),
-                      appTextField('Amount Paid', amountPaidCtl,
-                          keyboardType: TextInputType.number),
+                      appTextField(
+                        'Amount Paid',
+                        amountPaidCtl,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                      ),
                       const SizedBox(height: 10),
                       Row(
                         children: [
@@ -623,11 +789,18 @@ Future<void> _showEditInvoiceDialog(BuildContext context, Invoice inv,
                       DropdownButtonFormField<String>(
                         value: invoiceType,
                         items: const [
-                          DropdownMenuItem(value: 'Client', child: Text('Client')),
-                          DropdownMenuItem(value: 'Vendor', child: Text('Vendor')),
+                          DropdownMenuItem(
+                            value: 'Client',
+                            child: Text('Client'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'Vendor',
+                            child: Text('Vendor'),
+                          ),
                         ],
                         onChanged: canEdit
-                            ? (v) => setState(() => invoiceType = v ?? invoiceType)
+                            ? (v) =>
+                                  setState(() => invoiceType = v ?? invoiceType)
                             : (v) => _viewOnlyTap(),
                         decoration: const InputDecoration(
                           labelText: 'Invoice Type',
@@ -645,7 +818,10 @@ Future<void> _showEditInvoiceDialog(BuildContext context, Invoice inv,
               if (canEdit)
                 TextButton(
                   onPressed: () async {
-                    final ok = await confirmDialog(context, 'Delete this invoice?');
+                    final ok = await confirmDialog(
+                      context,
+                      'Delete this invoice?',
+                    );
                     if (!ok) return;
                     try {
                       await repo.delete(inv.id);
@@ -654,7 +830,8 @@ Future<void> _showEditInvoiceDialog(BuildContext context, Invoice inv,
                     } catch (e) {
                       // ignore: use_build_context_synchronously
                       ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Failed to delete: $e')));
+                        SnackBar(content: Text('Failed to delete: $e')),
+                      );
                     }
                   },
                   child: const Text('Delete'),
@@ -670,23 +847,28 @@ Future<void> _showEditInvoiceDialog(BuildContext context, Invoice inv,
 
                     // Validate that the project number exists before saving.
                     final pnText = projectNumberCtl.text.trim();
-                    if (pnText.isEmpty || !(await _projectNumberExists(pnText))) {
+                    if (pnText.isEmpty ||
+                        !(await _projectNumberExists(pnText))) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Project Number not found.')),
+                        const SnackBar(
+                          content: Text('Project Number not found.'),
+                        ),
                       );
                       return;
                     }
 
-                    final amt = double.tryParse(invoiceAmountCtl.text.trim()) ??
+                    final amt =
+                        double.tryParse(invoiceAmountCtl.text.trim()) ??
                         inv.invoiceAmount;
                     final paid = amountPaidCtl.text.trim().isEmpty
                         ? inv.amountPaid
                         : (double.tryParse(amountPaidCtl.text.trim()) ??
-                        inv.amountPaid);
+                              inv.amountPaid);
 
                     // Store the project number exactly as entered so formatting is preserved.
-                    final projectNumberValue =
-                        pnText.isNotEmpty ? pnText : null;
+                    final projectNumberValue = pnText.isNotEmpty
+                        ? pnText
+                        : null;
 
                     try {
                       await repo.update(inv.id, {
@@ -694,10 +876,15 @@ Future<void> _showEditInvoiceDialog(BuildContext context, Invoice inv,
                         'projectNumber': projectNumberValue,
                         'invoiceAmount': amt,
                         'amountPaid': paid,
-                        'invoiceDate':
-                        invoiceDate != null ? Timestamp.fromDate(invoiceDate!) : null,
-                        'dueDate': dueDate != null ? Timestamp.fromDate(dueDate!) : null,
-                        'paidDate': paidDate != null ? Timestamp.fromDate(paidDate!) : null,
+                        'invoiceDate': invoiceDate != null
+                            ? Timestamp.fromDate(invoiceDate!)
+                            : null,
+                        'dueDate': dueDate != null
+                            ? Timestamp.fromDate(dueDate!)
+                            : null,
+                        'paidDate': paidDate != null
+                            ? Timestamp.fromDate(paidDate!)
+                            : null,
                         'documentLink': documentLinkCtl.text.trim().isNotEmpty
                             ? documentLinkCtl.text.trim()
                             : null,
@@ -708,7 +895,8 @@ Future<void> _showEditInvoiceDialog(BuildContext context, Invoice inv,
                     } catch (e) {
                       // ignore: use_build_context_synchronously
                       ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Failed to save: $e')));
+                        SnackBar(content: Text('Failed to save: $e')),
+                      );
                     }
                   },
                   child: const Text('Save'),

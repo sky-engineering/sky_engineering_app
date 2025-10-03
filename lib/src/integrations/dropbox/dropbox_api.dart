@@ -11,6 +11,7 @@ class DbxEntry {
     required this.id,
     required this.name,
     required this.pathLower,
+    required this.pathDisplay,
     required this.isFolder,
     this.size,
   });
@@ -18,6 +19,7 @@ class DbxEntry {
   final String id;
   final String name;
   final String pathLower;
+  final String pathDisplay;
   final bool isFolder;
   final int? size;
 }
@@ -73,6 +75,7 @@ class DropboxApi {
             id: map['id'] as String? ?? '',
             name: map['name'] as String? ?? '',
             pathLower: map['path_lower'] as String? ?? '',
+            pathDisplay: map['path_display'] as String? ?? '',
             isFolder: tag == 'folder',
             size: tag == 'file' ? (map['size'] as num?)?.toInt() : null,
           ),

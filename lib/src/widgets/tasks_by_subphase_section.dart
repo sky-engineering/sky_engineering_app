@@ -175,9 +175,10 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
               }).toList();
             }
 
+            final otherTasks = _maybeFilter(other);
             final boxes = <Widget>[
               header,
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
 
               if (sel.isEmpty)
                 Padding(
@@ -220,18 +221,19 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                 );
               }),
 
-              _SubphaseBox(
-                projectId: widget.projectId,
-                label: 'Other',
-                tasks: _maybeFilter(other),
-                allSubphases: sel,
-                isOwner: widget.isOwner,
-                subphase: null,
-                currentStatus: null,
-                onChangeStatus: null,
-              ),
+              if (otherTasks.isNotEmpty)
+                _SubphaseBox(
+                  projectId: widget.projectId,
+                  label: 'Other',
+                  tasks: otherTasks,
+                  allSubphases: sel,
+                  isOwner: widget.isOwner,
+                  subphase: null,
+                  currentStatus: null,
+                  onChangeStatus: null,
+                ),
 
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
 
               if (widget.isOwner)
                 Align(
@@ -250,7 +252,7 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
               children: [
                 ...boxes.expand((w) sync* {
                   yield w;
-                  if (w is _SubphaseBox) yield const SizedBox(height: 10);
+                  if (w is _SubphaseBox) yield const SizedBox(height: 8);
                 }),
               ],
             );
@@ -343,7 +345,7 @@ class _SubphaseBox extends StatelessWidget {
                 ),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
-                  vertical: 12,
+                  vertical: 6,
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -371,6 +373,12 @@ class _SubphaseBox extends StatelessWidget {
                         tooltip: 'Insert default tasks',
                         visualDensity: VisualDensity.compact,
                         iconSize: 20,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 32,
+                          minHeight: 32,
+                        ),
+                        alignment: Alignment.topCenter,
                         onPressed: isOwner
                             ? () => _insertDefaultsForSubphase(
                                 context,
@@ -388,15 +396,15 @@ class _SubphaseBox extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           if (tasks.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
               child: ListView.separated(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: tasks.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 4),
+                separatorBuilder: (_, __) => const SizedBox(height: 1),
                 itemBuilder: (context, i) {
                   final t = tasks[i];
                   return _CompactTaskTile(
@@ -525,14 +533,14 @@ class _CompactTaskTile extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0.5),
         child: Row(
           crossAxisAlignment: hasDesc
               ? CrossAxisAlignment.start
               : CrossAxisAlignment.center,
           children: [
             Padding(
-              padding: EdgeInsets.only(top: hasDesc ? 2 : 0),
+              padding: EdgeInsets.only(top: hasDesc ? 1 : 0),
               child: IconButton(
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
@@ -546,7 +554,7 @@ class _CompactTaskTile extends StatelessWidget {
                 tooltip: task.isStarred ? 'Unstar' : 'Star',
               ),
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 3),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -565,7 +573,7 @@ class _CompactTaskTile extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
                           value: _kTaskStatuses.contains(task.taskStatus)
@@ -589,7 +597,7 @@ class _CompactTaskTile extends StatelessWidget {
                   ),
                   if (hasDesc)
                     Padding(
-                      padding: const EdgeInsets.only(top: 2),
+                      padding: const EdgeInsets.only(top: 1),
                       child: Text(
                         task.description!.trim(),
                         maxLines: 3,
