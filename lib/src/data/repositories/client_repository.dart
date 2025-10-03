@@ -2,6 +2,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/client.dart';
+import '../../utils/phone_utils.dart';
 
 class ClientRepository {
   ClientRepository() : _col = FirebaseFirestore.instance.collection('clients');
@@ -39,7 +40,7 @@ class ClientRepository {
       'name': client.name.trim(),
       'contactName': sanitize(client.contactName),
       'contactEmail': sanitize(client.contactEmail),
-      'contactPhone': sanitize(client.contactPhone),
+      'contactPhone': normalizePhone(client.contactPhone),
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }

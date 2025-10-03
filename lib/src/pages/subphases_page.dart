@@ -25,7 +25,7 @@ class SubphasesPage extends StatelessWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Project Tasking')),
+      appBar: AppBar(title: const Text('Task Structure')),
       body: FutureBuilder<List<PhaseTemplate>>(
         future: _phaseRepo.getAllForUser(me.uid),
         builder: (context, phaseSnap) {

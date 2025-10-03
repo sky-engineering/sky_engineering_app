@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../data/models/client.dart';
 import '../data/repositories/client_repository.dart';
+import '../utils/phone_utils.dart';
 
 class ClientsPage extends StatelessWidget {
   ClientsPage({super.key});
@@ -66,7 +67,7 @@ class ClientsPage extends StatelessWidget {
       text: client?.contactEmail ?? '',
     );
     final contactPhoneCtl = TextEditingController(
-      text: client?.contactPhone ?? '',
+      text: formatPhoneForDisplay(client?.contactPhone),
     );
     final formKey = GlobalKey<FormState>();
 
@@ -90,6 +91,13 @@ class ClientsPage extends StatelessWidget {
                         hintText: 'e.g., 001',
                       ),
                       maxLength: 3,
+                      buildCounter:
+                          (
+                            _, {
+                            required int currentLength,
+                            required bool isFocused,
+                            int? maxLength,
+                          }) => null,
                       keyboardType: TextInputType.number,
                       validator: (value) {
                         final v = value?.trim() ?? '';
@@ -136,6 +144,7 @@ class ClientsPage extends StatelessWidget {
                         hintText: 'e.g., (555) 123-4567',
                       ),
                       keyboardType: TextInputType.phone,
+                      inputFormatters: const [UsPhoneInputFormatter()],
                     ),
                     const SizedBox(height: 8),
                     TextFormField(
@@ -211,7 +220,7 @@ class ClientsPage extends StatelessWidget {
 
                 final contactName = nullIfEmpty(contactNameCtl.text);
                 final contactEmail = nullIfEmpty(contactEmailCtl.text);
-                final contactPhone = nullIfEmpty(contactPhoneCtl.text);
+                final contactPhone = normalizePhone(contactPhoneCtl.text);
 
                 try {
                   final user = _auth.currentUser;

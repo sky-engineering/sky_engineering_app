@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../data/models/task.dart';
 import '../data/repositories/task_repository.dart';
 import 'project_detail_page.dart';
+import '../dialogs/task_edit_dialog.dart';
 
 class InProgressTasksPage extends StatelessWidget {
   InProgressTasksPage({super.key});
@@ -22,7 +23,7 @@ class InProgressTasksPage extends StatelessWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('In Progress Tasks')),
+      appBar: AppBar(title: const Text('Current Tasks')),
       body: StreamBuilder<List<TaskItem>>(
         stream: _repo.streamByStatuses(me.uid, _statuses),
         builder: (context, snap) {
@@ -52,6 +53,27 @@ class InProgressTasksPage extends StatelessWidget {
                 },
                 onToggleStar: () async {
                   await _repo.update(t.id, {'isStarred': !t.isStarred});
+                },
+                onEdit: () => showTaskEditDialog(
+                  context,
+                  t,
+                  canEdit: t.ownerUid == me.uid,
+                ),
+                onComplete: () async {
+                  try {
+                    await _repo.update(t.id, {
+                      'taskStatus': 'Completed',
+                      'status': 'Done',
+                    });
+                    return true;
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Could not mark complete: $e')),
+                      );
+                    }
+                    return false;
+                  }
                 },
               );
             },
@@ -97,11 +119,15 @@ class _TaskTile extends StatelessWidget {
   final TaskItem task;
   final VoidCallback onOpenProject;
   final VoidCallback onToggleStar;
+  final VoidCallback onEdit;
+  final Future<bool> Function() onComplete;
 
   const _TaskTile({
     required this.task,
     required this.onOpenProject,
     required this.onToggleStar,
+    required this.onEdit,
+    required this.onComplete,
   });
 
   @override
@@ -111,70 +137,90 @@ class _TaskTile extends StatelessWidget {
     final filledStar = Theme.of(context).colorScheme.secondary;
     final hollowStar = Theme.of(context).colorScheme.onSurfaceVariant;
 
-    return Card(
-      child: InkWell(
-        onTap: onOpenProject,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          child: Row(
-            crossAxisAlignment:
-                hasDesc ? CrossAxisAlignment.start : CrossAxisAlignment.center,
-            children: [
-              Padding(
-                padding: EdgeInsets.only(top: hasDesc ? 2 : 0),
-                child: IconButton(
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                  iconSize: 20,
-                  splashRadius: 18,
-                  onPressed: onToggleStar,
-                  icon: Icon(
-                    task.isStarred ? Icons.star : Icons.star_border,
-                    color: task.isStarred ? filledStar : hollowStar,
-                  ),
-                  tooltip: task.isStarred ? 'Unstar' : 'Star',
-                ),
-              ),
-
-              const SizedBox(width: 6),
-
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      task.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+    return Dismissible(
+      key: ValueKey('current-${task.id}'),
+      direction: DismissDirection.endToStart,
+      background: _dismissBackground(context),
+      confirmDismiss: (_) async => await onComplete(),
+      child: Card(
+        child: InkWell(
+          onTap: onEdit,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: Row(
+              crossAxisAlignment: hasDesc
+                  ? CrossAxisAlignment.start
+                  : CrossAxisAlignment.center,
+              children: [
+                Padding(
+                  padding: EdgeInsets.only(top: hasDesc ? 2 : 0),
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
                     ),
-                    if (hasDesc)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          task.description!.trim(),
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: small,
-                        ),
-                      ),
-                  ],
+                    iconSize: 20,
+                    splashRadius: 18,
+                    onPressed: onToggleStar,
+                    icon: Icon(
+                      task.isStarred ? Icons.star : Icons.star_border,
+                      color: task.isStarred ? filledStar : hollowStar,
+                    ),
+                    tooltip: task.isStarred ? 'Unstar' : 'Star',
+                  ),
                 ),
-              ),
 
-              const SizedBox(width: 4),
+                const SizedBox(width: 6),
 
-              IconButton(
-                tooltip: 'Open project',
-                onPressed: onOpenProject,
-                icon: const Icon(Icons.open_in_new),
-              ),
-            ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        task.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      if (hasDesc)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            task.description!.trim(),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: small,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(width: 4),
+
+                IconButton(
+                  tooltip: 'Open project',
+                  onPressed: onOpenProject,
+                  icon: const Icon(Icons.open_in_new),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
+}
+
+Widget _dismissBackground(BuildContext context) {
+  final color = Theme.of(context).colorScheme.primary;
+  return Container(
+    alignment: Alignment.centerRight,
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    color: color.withAlpha((0.2 * 255).round()),
+    child: Icon(Icons.check_circle, color: color),
+  );
 }
 
 class _Empty extends StatelessWidget {

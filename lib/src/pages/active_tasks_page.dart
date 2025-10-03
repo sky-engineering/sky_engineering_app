@@ -8,6 +8,7 @@ import '../data/models/project.dart';
 import '../data/repositories/project_repository.dart';
 import '../data/repositories/task_repository.dart';
 import 'project_detail_page.dart';
+import '../dialogs/task_edit_dialog.dart';
 
 class ActiveTasksPage extends StatelessWidget {
   ActiveTasksPage({super.key});
@@ -47,11 +48,12 @@ class ActiveTasksPage extends StatelessWidget {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              final list = (snap.data?.docs ??
-                  const <QueryDocumentSnapshot<Map<String, dynamic>>>[])
-                  .map((d) => TaskItem.fromDoc(d))
-                  .toList()
-                ..sort(_taskComparator);
+              final list =
+                  (snap.data?.docs ??
+                          const <QueryDocumentSnapshot<Map<String, dynamic>>>[])
+                      .map((d) => TaskItem.fromDoc(d))
+                      .toList()
+                    ..sort(_taskComparator);
 
               if (list.isEmpty) {
                 return const _Empty();
@@ -66,8 +68,9 @@ class ActiveTasksPage extends StatelessWidget {
                   final projNum = projectNumById[t.projectId];
                   return _ActiveTile(
                     task: t,
-                    projectNumber:
-                    (projNum != null && projNum.isNotEmpty) ? projNum : '—',
+                    projectNumber: (projNum != null && projNum.isNotEmpty)
+                        ? projNum
+                        : '—',
                     onOpenProject: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
@@ -78,14 +81,40 @@ class ActiveTasksPage extends StatelessWidget {
                     },
                     onToggleStar: () async {
                       try {
-                        await _taskRepo.update(
-                            t.id, {'isStarred': !t.isStarred});
+                        await _taskRepo.update(t.id, {
+                          'isStarred': !t.isStarred,
+                        });
                       } catch (e) {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Could not update star: $e')),
+                            SnackBar(
+                              content: Text('Could not update star: $e'),
+                            ),
                           );
                         }
+                      }
+                    },
+                    onTap: () => showTaskEditDialog(
+                      context,
+                      t,
+                      canEdit: t.ownerUid == me.uid,
+                    ),
+                    onComplete: () async {
+                      try {
+                        await _taskRepo.update(t.id, {
+                          'taskStatus': 'Completed',
+                          'status': 'Done',
+                        });
+                        return true;
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Could not mark complete: $e'),
+                            ),
+                          );
+                        }
+                        return false;
                       }
                     },
                   );
@@ -135,12 +164,16 @@ class _ActiveTile extends StatelessWidget {
   final String projectNumber;
   final VoidCallback onOpenProject;
   final VoidCallback onToggleStar;
+  final VoidCallback onTap;
+  final Future<bool> Function() onComplete;
 
   const _ActiveTile({
     required this.task,
     required this.projectNumber,
     required this.onOpenProject,
     required this.onToggleStar,
+    required this.onTap,
+    required this.onComplete,
   });
 
   @override
@@ -150,74 +183,96 @@ class _ActiveTile extends StatelessWidget {
     final filledStar = Theme.of(context).colorScheme.secondary;
     final hollowStar = Theme.of(context).colorScheme.onSurfaceVariant;
 
-    return Card(
-      child: InkWell(
-        onTap: onOpenProject,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          child: Row(
-            crossAxisAlignment:
-            hasDesc ? CrossAxisAlignment.start : CrossAxisAlignment.center,
-            children: [
-              Padding(
-                padding: EdgeInsets.only(top: hasDesc ? 2 : 0),
-                child: IconButton(
-                  padding: EdgeInsets.zero,
-                  constraints:
-                  const BoxConstraints(minWidth: 32, minHeight: 32),
-                  iconSize: 20,
-                  splashRadius: 18,
-                  onPressed: onToggleStar,
-                  icon: Icon(
-                    task.isStarred ? Icons.star : Icons.star_border,
-                    color: task.isStarred ? filledStar : hollowStar,
+    return Dismissible(
+      key: ValueKey('active-${task.id}'),
+      direction: DismissDirection.endToStart,
+      background: _dismissBackground(context),
+      confirmDismiss: (_) async {
+        final ok = await onComplete();
+        return false;
+      },
+      child: Card(
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: Row(
+              crossAxisAlignment: hasDesc
+                  ? CrossAxisAlignment.start
+                  : CrossAxisAlignment.center,
+              children: [
+                Padding(
+                  padding: EdgeInsets.only(top: hasDesc ? 2 : 0),
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
+                    ),
+                    iconSize: 20,
+                    splashRadius: 18,
+                    onPressed: onToggleStar,
+                    icon: Icon(
+                      task.isStarred ? Icons.star : Icons.star_border,
+                      color: task.isStarred ? filledStar : hollowStar,
+                    ),
+                    tooltip: task.isStarred ? 'Unstar' : 'Star',
                   ),
-                  tooltip: task.isStarred ? 'Unstar' : 'Star',
                 ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      task.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Project: $projectNumber',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: small,
-                    ),
-                    if (hasDesc)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          task.description!.trim(),
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: small,
-                        ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        task.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
-                  ],
+                      const SizedBox(height: 2),
+                      Text(
+                        'Project: $projectNumber',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: small,
+                      ),
+                      if (hasDesc)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            task.description!.trim(),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: small,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 4),
-              IconButton(
-                tooltip: 'Open project',
-                onPressed: onOpenProject,
-                icon: const Icon(Icons.open_in_new),
-              ),
-            ],
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: 'Open project',
+                  onPressed: onOpenProject,
+                  icon: const Icon(Icons.open_in_new),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
+}
+
+Widget _dismissBackground(BuildContext context) {
+  final color = Theme.of(context).colorScheme.primary;
+  return Container(
+    alignment: Alignment.centerRight,
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    color: color.withAlpha((0.2 * 255).round()),
+    child: Icon(Icons.check_circle, color: color),
+  );
 }
 
 class _Empty extends StatelessWidget {

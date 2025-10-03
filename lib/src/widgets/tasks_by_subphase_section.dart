@@ -429,6 +429,28 @@ class _SubphaseBox extends StatelessWidget {
                       canEdit: isOwner,
                       subphases: allSubphases,
                     ),
+                    onCompleteSwipe: () async {
+                      if (!isOwner) {
+                        _viewOnlySnack(context);
+                        return false;
+                      }
+                      try {
+                        await TaskRepository().update(t.id, {
+                          'taskStatus': 'Completed',
+                          'status': _legacyFromNew('Completed'),
+                        });
+                        return true;
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to update task: $e'),
+                            ),
+                          );
+                        }
+                        return false;
+                      }
+                    },
                   );
                 },
               ),
@@ -513,6 +535,7 @@ class _CompactTaskTile extends StatelessWidget {
   final VoidCallback onToggleStar;
   final ValueChanged<String> onChangeStatus;
   final VoidCallback onTap;
+  final Future<bool> Function() onCompleteSwipe;
 
   const _CompactTaskTile({
     required this.task,
@@ -520,6 +543,7 @@ class _CompactTaskTile extends StatelessWidget {
     required this.onToggleStar,
     required this.onChangeStatus,
     required this.onTap,
+    required this.onCompleteSwipe,
   });
 
   @override
@@ -530,89 +554,113 @@ class _CompactTaskTile extends StatelessWidget {
     final filledStarColor = Theme.of(context).colorScheme.secondary;
     final hollowStarColor = Theme.of(context).colorScheme.onSurfaceVariant;
 
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0.5),
-        child: Row(
-          crossAxisAlignment: hasDesc
-              ? CrossAxisAlignment.start
-              : CrossAxisAlignment.center,
-          children: [
-            Padding(
-              padding: EdgeInsets.only(top: hasDesc ? 1 : 0),
-              child: IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                iconSize: 18,
-                splashRadius: 16,
-                onPressed: onToggleStar,
-                icon: Icon(
-                  task.isStarred ? Icons.star : Icons.star_border,
-                  color: task.isStarred ? filledStarColor : hollowStarColor,
+    return Dismissible(
+      key: ValueKey('proj-task-${task.id}'),
+      direction: DismissDirection.endToStart,
+      background: _dismissBackground(context),
+      confirmDismiss: (_) async {
+        final ok = await onCompleteSwipe();
+        return false;
+      },
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0.5),
+          child: Row(
+            crossAxisAlignment: hasDesc
+                ? CrossAxisAlignment.start
+                : CrossAxisAlignment.center,
+            children: [
+              Padding(
+                padding: EdgeInsets.only(top: hasDesc ? 1 : 0),
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
+                  iconSize: 18,
+                  splashRadius: 16,
+                  onPressed: onToggleStar,
+                  icon: Icon(
+                    task.isStarred ? Icons.star : Icons.star_border,
+                    color: task.isStarred ? filledStarColor : hollowStarColor,
+                  ),
+                  tooltip: task.isStarred ? 'Unstar' : 'Star',
                 ),
-                tooltip: task.isStarred ? 'Unstar' : 'Star',
               ),
-            ),
-            const SizedBox(width: 3),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          task.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
+              const SizedBox(width: 3),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            task.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _kTaskStatuses.contains(task.taskStatus)
-                              ? task.taskStatus
-                              : 'In Progress', // default to In Progress
-                          items: _kTaskStatuses
-                              .map(
-                                (s) =>
-                                    DropdownMenuItem(value: s, child: Text(s)),
-                              )
-                              .toList(),
-                          onChanged: isOwner
-                              ? (v) => v != null ? onChangeStatus(v) : null
-                              : null,
-                          isDense: true,
-                          icon: const SizedBox.shrink(), // hide arrow
+                        const SizedBox(width: 6),
+                        DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _kTaskStatuses.contains(task.taskStatus)
+                                ? task.taskStatus
+                                : 'In Progress',
+                            items: _kTaskStatuses
+                                .map(
+                                  (s) => DropdownMenuItem(
+                                    value: s,
+                                    child: Text(s),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: isOwner
+                                ? (v) => v != null ? onChangeStatus(v) : null
+                                : null,
+                            isDense: true,
+                            icon: const SizedBox.shrink(),
+                            style: small,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (hasDesc)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 1),
+                        child: Text(
+                          task.description!.trim(),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
                           style: small,
                         ),
                       ),
-                    ],
-                  ),
-                  if (hasDesc)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 1),
-                      child: Text(
-                        task.description!.trim(),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: small,
-                      ),
-                    ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
+}
+
+Widget _dismissBackground(BuildContext context) {
+  final color = Theme.of(context).colorScheme.primary;
+  return Container(
+    alignment: Alignment.centerRight,
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    color: color.withAlpha((0.2 * 255).round()),
+    child: Icon(Icons.check_circle, color: color),
+  );
 }
 
 // ------------------- Add/Edit task dialogs (simplified) -------------------
@@ -678,7 +726,9 @@ Future<void> _showAddTaskDialog(
                               value: s.code,
                               child: Text(
                                 '${s.code}  ${s.name}',
-                                overflow: TextOverflow.visible,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                softWrap: false,
                               ),
                             ),
                           ),
@@ -808,7 +858,9 @@ Future<void> _showEditTaskDialog(
                                 value: s.code,
                                 child: Text(
                                   '${s.code}  ${s.name}',
-                                  overflow: TextOverflow.visible,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  softWrap: false,
                                 ),
                               ),
                             );
@@ -821,7 +873,9 @@ Future<void> _showEditTaskDialog(
                                 value: selectedCode,
                                 child: Text(
                                   '$selectedCode (inactive)',
-                                  overflow: TextOverflow.visible,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  softWrap: false,
                                 ),
                               ),
                             );
@@ -925,15 +979,13 @@ Future<void> _insertDefaultsForSubphase(
   }
 
   final templatesRepo = SubphaseTemplateRepository();
-  final tasksRepo = TaskRepository();
+  final messenger = ScaffoldMessenger.maybeOf(context);
 
   try {
-    LoadingOverlay.show(context, message: 'Inserting defaults…');
-
+    LoadingOverlay.show(context, message: 'Adding tasks…');
     final tpl = await templatesRepo.getByOwnerAndCode(me.uid, subphaseCode);
     if (tpl == null || tpl.defaultTasks.isEmpty) {
-      LoadingOverlay.hide(context);
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger?.showSnackBar(
         const SnackBar(
           content: Text('No default tasks defined for this subphase.'),
         ),
@@ -961,44 +1013,51 @@ Future<void> _insertDefaultsForSubphase(
         .where((t) => !existingTitleSet.contains(t.toLowerCase()))
         .toList();
 
-    LoadingOverlay.hide(context);
-
     if (toInsert.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger?.showSnackBar(
         const SnackBar(content: Text('All default tasks are already present.')),
       );
       return;
     }
 
-    LoadingOverlay.show(context, message: 'Adding tasks…');
+    final batch = FirebaseFirestore.instance.batch();
+    final tasksCol = FirebaseFirestore.instance.collection('tasks');
 
     for (final title in toInsert) {
-      final t = TaskItem(
-        id: '_',
+      final ref = tasksCol.doc();
+      final task = TaskItem(
+        id: ref.id,
         projectId: projectId,
         ownerUid: me.uid,
         title: title,
         description: null,
-        taskStatus: 'In Progress', // per request
+        taskStatus: 'In Progress',
         isStarred: false,
         taskCode: subphaseCode,
         dueDate: null,
         assigneeName: null,
         createdAt: null,
         updatedAt: null,
-      );
-      await tasksRepo.add(t);
+      ).toMap();
+
+      batch.set(ref, {
+        ...task,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
     }
 
-    LoadingOverlay.hide(context);
-    ScaffoldMessenger.of(context).showSnackBar(
+    await batch.commit();
+
+    messenger?.showSnackBar(
       SnackBar(content: Text('Inserted ${toInsert.length} task(s).')),
     );
   } catch (e) {
+    messenger?.showSnackBar(
+      SnackBar(content: Text('Failed to insert defaults: $e')),
+    );
+  } finally {
     LoadingOverlay.hide(context);
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('Failed to insert defaults: $e')));
   }
 }
 

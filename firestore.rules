@@ -59,6 +59,15 @@ service cloud.firestore {
       allow update, delete: if signedIn()
         && resource.data.ownerUid == request.auth.uid;
     }
+
+    // OTHER LINKS -- allow signed-in read; only owners can write
+    match /other_links/{linkId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if signedIn()
+        && resource.data.ownerUid == request.auth.uid;
+    }
     // TASKS — owner-only writes; everyone signed-in can read
     match /tasks/{taskId} {
       allow read: if signedIn();

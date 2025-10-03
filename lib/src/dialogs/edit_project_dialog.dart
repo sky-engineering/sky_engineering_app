@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import '../data/models/project.dart';
 import '../data/repositories/project_repository.dart';
+import '../utils/phone_utils.dart';
 import '../widgets/form_helpers.dart';
 
 Future<void> showEditProjectDialog(BuildContext context, Project p) async {
@@ -15,7 +16,9 @@ Future<void> showEditProjectDialog(BuildContext context, Project p) async {
 
   // NEW contact fields
   final contactNameCtl = TextEditingController(text: p.contactName ?? '');
-  final contactPhoneCtl = TextEditingController(text: p.contactPhone ?? '');
+  final contactPhoneCtl = TextEditingController(
+    text: formatPhoneForDisplay(p.contactPhone),
+  );
   final contactEmailCtl = TextEditingController(text: p.contactEmail ?? '');
 
   final formKey = GlobalKey<FormState>();
@@ -29,122 +32,147 @@ Future<void> showEditProjectDialog(BuildContext context, Project p) async {
 
   await showDialog<void>(
     context: context,
-    builder: (context) {
+    builder: (dialogContext) {
+      final mediaQuery = MediaQuery.of(dialogContext);
+      final bottomInset = mediaQuery.viewInsets.bottom;
+      final maxHeight = mediaQuery.size.height * 0.85;
+
       return AlertDialog(
         title: const Text('Edit Project'),
-        content: Form(
-          key: formKey,
-          child: SizedBox(
-            width: 520,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  appTextField(
-                    'Project Name',
-                    nameCtl,
-                    required: true,
-                    hint: 'e.g., Main St Improvements',
-                  ),
-                  const SizedBox(height: 10),
-                  appTextField(
-                    'Client',
-                    clientCtl,
-                    required: true,
-                    hint: 'e.g., City of Anywhere',
-                  ),
-                  const SizedBox(height: 10),
-                  appTextField(
-                    'Project Number',
-                    projectNumCtl,
-                    hint: 'e.g., 026-01',
-                  ),
-                  const SizedBox(height: 10),
-                  appTextField(
-                    'Dropbox Folder',
-                    folderCtl,
-                    hint: 'e.g., /2024/Project123',
-                  ),
-                  const SizedBox(height: 10),
-                  appTextField(
-                    'Contract Amount',
-                    contractCtl,
-                    hint: 'e.g., 150000.00',
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 16),
+        content: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: 520, maxHeight: maxHeight),
+          child: AnimatedPadding(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            padding: EdgeInsets.only(bottom: bottomInset),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Form(
+                      key: formKey,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          appTextField(
+                            'Project Name',
+                            nameCtl,
+                            required: true,
+                            hint: 'e.g., Main St Improvements',
+                          ),
+                          const SizedBox(height: 10),
+                          appTextField(
+                            'Client',
+                            clientCtl,
+                            required: true,
+                            hint: 'e.g., City of Anywhere',
+                          ),
+                          const SizedBox(height: 10),
+                          appTextField(
+                            'Project Number',
+                            projectNumCtl,
+                            hint: 'e.g., 026-01',
+                          ),
+                          const SizedBox(height: 10),
+                          appTextField(
+                            'Dropbox Folder',
+                            folderCtl,
+                            hint: 'e.g., /2024/Project123',
+                          ),
+                          const SizedBox(height: 10),
+                          appTextField(
+                            'Contract Amount',
+                            contractCtl,
+                            hint: 'e.g., 150000.00',
+                            keyboardType: TextInputType.number,
+                          ),
+                          const SizedBox(height: 16),
 
-                  // Contact block (NEW)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Client Contact',
-                      style: Theme.of(context).textTheme.titleMedium,
+                          // Contact block (NEW)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Client Contact',
+                              style: Theme.of(
+                                dialogContext,
+                              ).textTheme.titleMedium,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          appTextField(
+                            'Contact Name',
+                            contactNameCtl,
+                            hint: 'e.g., Jane Smith',
+                          ),
+                          const SizedBox(height: 10),
+                          appTextField(
+                            'Contact Phone',
+                            contactPhoneCtl,
+                            hint: 'e.g., (555) 123-4567',
+                            keyboardType: TextInputType.phone,
+                            inputFormatters: const [UsPhoneInputFormatter()],
+                          ),
+                          const SizedBox(height: 10),
+                          appTextField(
+                            'Contact Email',
+                            contactEmailCtl,
+                            hint: 'e.g., jane@example.com',
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  appTextField(
-                    'Contact Name',
-                    contactNameCtl,
-                    hint: 'e.g., Jane Smith',
-                  ),
-                  const SizedBox(height: 10),
-                  appTextField(
-                    'Contact Phone',
-                    contactPhoneCtl,
-                    hint: 'e.g., (555) 123-4567',
-                  ),
-                  const SizedBox(height: 10),
-                  appTextField(
-                    'Contact Email',
-                    contactEmailCtl,
-                    hint: 'e.g., jane@example.com',
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      child: const Text('Cancel'),
+                    ),
+                    const SizedBox(width: 12),
+                    FilledButton(
+                      onPressed: () async {
+                        // Basic required checks (since appTextField doesn't validate itself)
+                        if (nameCtl.text.trim().isEmpty ||
+                            clientCtl.text.trim().isEmpty) {
+                          final msg = nameCtl.text.trim().isEmpty
+                              ? 'Project Name is required.'
+                              : 'Client is required.';
+                          ScaffoldMessenger.of(
+                            dialogContext,
+                          ).showSnackBar(SnackBar(content: Text(msg)));
+                          return;
+                        }
+
+                        final amt = _parseMoney(contractCtl.text);
+                        String? nullIfEmpty(String s) =>
+                            s.trim().isEmpty ? null : s.trim();
+
+                        await repo.update(p.id, {
+                          'name': nameCtl.text.trim(),
+                          'clientName': clientCtl.text.trim(),
+                          'contractAmount': amt,
+                          'projectNumber': nullIfEmpty(projectNumCtl.text),
+                          'folderName': nullIfEmpty(folderCtl.text),
+                          'contactName': nullIfEmpty(contactNameCtl.text),
+                          'contactPhone': normalizePhone(contactPhoneCtl.text),
+                          'contactEmail': nullIfEmpty(contactEmailCtl.text),
+                        });
+
+                        // ignore: use_build_context_synchronously
+                        Navigator.pop(dialogContext);
+                      },
+                      child: const Text('Save'),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              // Basic required checks (since appTextField doesn't validate itself)
-              if (nameCtl.text.trim().isEmpty ||
-                  clientCtl.text.trim().isEmpty) {
-                final msg = nameCtl.text.trim().isEmpty
-                    ? 'Project Name is required.'
-                    : 'Client is required.';
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text(msg)));
-                return;
-              }
-
-              final amt = _parseMoney(contractCtl.text);
-              String? nullIfEmpty(String s) =>
-                  s.trim().isEmpty ? null : s.trim();
-
-              await repo.update(p.id, {
-                'name': nameCtl.text.trim(),
-                'clientName': clientCtl.text.trim(),
-                'contractAmount': amt,
-                'projectNumber': nullIfEmpty(projectNumCtl.text),
-                'folderName': nullIfEmpty(folderCtl.text),
-                'contactName': nullIfEmpty(contactNameCtl.text),
-                'contactPhone': nullIfEmpty(contactPhoneCtl.text),
-                'contactEmail': nullIfEmpty(contactEmailCtl.text),
-              });
-
-              // ignore: use_build_context_synchronously
-              Navigator.pop(context);
-            },
-            child: const Text('Save'),
-          ),
-        ],
       );
     },
   );

@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // FirebaseException
 import '../data/models/user_profile.dart';
 import '../data/repositories/user_repository.dart';
+import '../utils/phone_utils.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -48,7 +49,7 @@ class _ProfilePageState extends State<ProfilePage> {
     if (_seeded) return;
     _userType = p?.userType;
     _userNameCtl.text = p?.userName ?? '';
-    _userPhoneCtl.text = p?.userPhone ?? '';
+    _userPhoneCtl.text = formatPhoneForDisplay(p?.userPhone);
     _userAddressCtl.text = p?.userAddress ?? '';
     _clientNumberCtl.text = p?.clientNumber ?? '';
     _seeded = true;
@@ -115,6 +116,7 @@ class _ProfilePageState extends State<ProfilePage> {
                               border: InputBorder.none,
                               hintText: '(555) 123-4567',
                             ),
+                            inputFormatters: const [UsPhoneInputFormatter()],
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -245,6 +247,8 @@ class _ProfilePageState extends State<ProfilePage> {
     final u = _me;
     if (u == null) return;
 
+    final normalizedPhone = normalizePhone(_userPhoneCtl.text);
+
     final profile = UserProfile(
       uid: u.uid,
       userType: _userType ?? 'Other',
@@ -254,9 +258,7 @@ class _ProfilePageState extends State<ProfilePage> {
       userName: _userNameCtl.text.trim().isNotEmpty
           ? _userNameCtl.text.trim()
           : null,
-      userPhone: _userPhoneCtl.text.trim().isNotEmpty
-          ? _userPhoneCtl.text.trim()
-          : null,
+      userPhone: normalizedPhone,
       userAddress: _userAddressCtl.text.trim().isNotEmpty
           ? _userAddressCtl.text.trim()
           : null,

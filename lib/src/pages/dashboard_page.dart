@@ -6,6 +6,7 @@ import 'subphases_page.dart';
 import 'in_progress_tasks_page.dart';
 import 'starred_tasks_page.dart';
 import '../dialogs/city_inspect_links_dialog.dart';
+import '../dialogs/other_links_dialog.dart';
 import '../integrations/dropbox/dropbox_folder_list_page.dart';
 import '../pages/clients_page.dart';
 
@@ -28,6 +29,28 @@ class DashboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final linkColor = Theme.of(context).colorScheme.onSurface;
+    final linkStyle = TextButton.styleFrom(
+      foregroundColor: linkColor,
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(0, 0),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      alignment: Alignment.centerLeft,
+    );
+
+    Widget linkButton(String label, VoidCallback onPressed) {
+      return TextButton.icon(
+        onPressed: onPressed,
+        icon: const Icon(Icons.arrow_right, size: 16),
+        label: Text(
+          label,
+          style: const TextStyle(
+            decoration: TextDecoration.underline,
+            decorationThickness: 1.5,
+          ),
+        ),
+        style: linkStyle,
+      );
+    }
 
     return Center(
       child: ConstrainedBox(
@@ -48,209 +71,72 @@ class DashboardPage extends StatelessWidget {
               Center(child: Text(_user?.email ?? '(no email)')),
               const SizedBox(height: 32),
 
-              Text(
-                'Helpful Links',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-
+              linkButton('Current Tasks', () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => InProgressTasksPage()),
+                );
+              }),
               const SizedBox(height: 16),
 
-              // In Progress Tasks
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => InProgressTasksPage()),
-                  );
-                },
-                style: TextButton.styleFrom(
-                  foregroundColor: linkColor,
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(0, 0),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  alignment: Alignment.centerLeft,
-                ),
-                child: const Text(
-                  'In Progress Tasks',
-                  style: TextStyle(
-                    decoration: TextDecoration.underline,
-                    decorationThickness: 1.5,
-                  ),
-                ),
-              ),
-
+              linkButton('Starred Tasks', () {
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => StarredTasksPage()));
+              }),
               const SizedBox(height: 16),
 
-              // Starred Tasks
-              TextButton(
-                onPressed: () {
-                  Navigator.of(
-                    context,
-                  ).push(MaterialPageRoute(builder: (_) => StarredTasksPage()));
-                },
-                style: TextButton.styleFrom(
-                  foregroundColor: linkColor,
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(0, 0),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  alignment: Alignment.centerLeft,
-                ),
-                child: const Text(
-                  'Starred Tasks',
-                  style: TextStyle(
-                    decoration: TextDecoration.underline,
-                    decorationThickness: 1.5,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Project Tasking
-              TextButton(
-                onPressed: () {
-                  Navigator.of(
-                    context,
-                  ).push(MaterialPageRoute(builder: (_) => SubphasesPage()));
-                },
-                style: TextButton.styleFrom(
-                  foregroundColor: linkColor,
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(0, 0),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  alignment: Alignment.centerLeft,
-                ),
-                child: const Text(
-                  'Project Tasking',
-                  style: TextStyle(
-                    decoration: TextDecoration.underline,
-                    decorationThickness: 1.5,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Sky Engineering Website
-              TextButton(
-                onPressed: () {
-                  _launchExternal(context, 'https://www.skyengineering.co');
-                },
-                style: TextButton.styleFrom(
-                  foregroundColor: linkColor,
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(0, 0),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  alignment: Alignment.centerLeft,
-                ),
-                child: const Text(
-                  'Sky Engineering Website',
-                  style: TextStyle(
-                    decoration: TextDecoration.underline,
-                    decorationThickness: 1.5,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Sky Engineering Dropbox
-              TextButton(
-                onPressed: () {
-                  _launchExternal(
-                    context,
-                    'https://www.dropbox.com/scl/fo/qb19djm48m3ko65x8ua1n/ADxAvonvBPlx5uVypAWlQ6A?rlkey=e9brozwr2qpq9k1b0t256kt56&dl=0',
-                  );
-                },
-                style: TextButton.styleFrom(
-                  foregroundColor: linkColor,
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(0, 0),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  alignment: Alignment.centerLeft,
-                ),
-                child: const Text(
-                  'Sky Engineering Dropbox',
-                  style: TextStyle(
-                    decoration: TextDecoration.underline,
-                    decorationThickness: 1.5,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const DropboxFolderListPage(
-                        title: 'Proposal Dropbox Folders',
-                        path: 'SKY/02 PROP',
-                      ),
+              linkButton('Proposals', () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const DropboxFolderListPage(
+                      title: 'Proposals',
+                      path: 'SKY/02 PROP',
                     ),
-                  );
-                },
-                style: TextButton.styleFrom(
-                  foregroundColor: linkColor,
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(0, 0),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  alignment: Alignment.centerLeft,
-                ),
-                child: const Text(
-                  'Proposal Dropbox Folders',
-                  style: TextStyle(
-                    decoration: TextDecoration.underline,
-                    decorationThickness: 1.5,
                   ),
-                ),
-              ),
-
+                );
+              }),
               const SizedBox(height: 16),
 
-              TextButton(
-                onPressed: () {
-                  Navigator.of(
-                    context,
-                  ).push(MaterialPageRoute(builder: (_) => ClientsPage()));
-                },
-                style: TextButton.styleFrom(
-                  foregroundColor: linkColor,
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(0, 0),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  alignment: Alignment.centerLeft,
-                ),
-                child: const Text(
-                  'Clients',
-                  style: TextStyle(
-                    decoration: TextDecoration.underline,
-                    decorationThickness: 1.5,
-                  ),
-                ),
-              ),
-
+              linkButton('Clients', () {
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => ClientsPage()));
+              }),
               const SizedBox(height: 16),
 
-              // City Inspects
-              TextButton(
-                onPressed: () => showCityInspectLinksDialog(context),
-                style: TextButton.styleFrom(
-                  foregroundColor: linkColor,
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(0, 0),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  alignment: Alignment.centerLeft,
-                ),
-                child: const Text(
-                  'City Inspects',
-                  style: TextStyle(
-                    decoration: TextDecoration.underline,
-                    decorationThickness: 1.5,
-                  ),
-                ),
-              ),
+              linkButton('Task Structure', () {
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => SubphasesPage()));
+              }),
+              const SizedBox(height: 16),
+
+              linkButton('Dropbox', () {
+                _launchExternal(
+                  context,
+                  'https://www.dropbox.com/scl/fo/qb19djm48m3ko65x8ua1n/ADxAvonvBPlx5uVypAWlQ6A?rlkey=e9brozwr2qpq9k1b0t256kt56&dl=0',
+                );
+              }),
+              const SizedBox(height: 24),
+
+              linkButton('City Inspect Links', () {
+                showCityInspectLinksDialog(context);
+              }),
+              const SizedBox(height: 16),
+
+              linkButton('Washington County GIS', () {
+                _launchExternal(
+                  context,
+                  'https://geoprodvm.washco.utah.gov/Html5Viewer/?viewer=RecordersOffice',
+                );
+              }),
+              const SizedBox(height: 16),
+
+              linkButton('Other Links', () {
+                showOtherLinksDialog(context);
+              }),
+
+              const SizedBox(height: 16),
             ],
           ),
         ),

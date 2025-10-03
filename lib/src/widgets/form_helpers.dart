@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 String fmtDate(DateTime? d) {
   if (d == null) return '—';
@@ -6,17 +7,22 @@ String fmtDate(DateTime? d) {
 }
 
 Widget appTextField(
-    String label,
-    TextEditingController ctl, {
-      bool required = false,
-      String? hint,
-      TextInputType? keyboardType,
-      int maxLines = 1,
-    }) {
+  String label,
+  TextEditingController ctl, {
+  bool required = false,
+  String? hint,
+  TextInputType? keyboardType,
+  int maxLines = 1,
+  List<TextInputFormatter>? inputFormatters,
+  int? maxLength,
+  String? Function(String?)? validator,
+}) {
   return TextFormField(
     controller: ctl,
     maxLines: maxLines,
     keyboardType: keyboardType,
+    inputFormatters: inputFormatters,
+    maxLength: maxLength,
     decoration: InputDecoration(
       labelText: label,
       hintText: hint,
@@ -24,6 +30,7 @@ Widget appTextField(
     ),
     validator: (v) {
       if (required && (v == null || v.trim().isEmpty)) return 'Required';
+      if (validator != null) return validator(v);
       return null;
     },
   );

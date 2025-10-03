@@ -12,6 +12,7 @@ import '../widgets/form_helpers.dart';
 import '../widgets/tasks_by_subphase_section.dart';
 import '../widgets/invoices_section.dart' as inv;
 import '../dialogs/edit_project_dialog.dart';
+import '../utils/phone_utils.dart';
 
 class ProjectDetailPage extends StatefulWidget {
   final String projectId;
@@ -36,8 +37,16 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
     final offset = _scrollCtrl.hasClients ? _scrollCtrl.offset : 0.0;
     setState(() => _unpaidOnly = v);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollCtrl.hasClients) {
-        _scrollCtrl.jumpTo(offset);
+      if (!_scrollCtrl.hasClients) return;
+      var target = offset;
+      final maxScroll = _scrollCtrl.position.maxScrollExtent;
+      if (target > maxScroll) {
+        target = maxScroll;
+      } else if (target < 0) {
+        target = 0;
+      }
+      if ((_scrollCtrl.offset - target).abs() > 0.5) {
+        _scrollCtrl.jumpTo(target);
       }
     });
   }
@@ -63,6 +72,8 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
           );
         }
         final isOwner = (p.ownerUid != null && p.ownerUid == me?.uid);
+
+        final phoneDisplay = formatPhoneForDisplay(p.contactPhone);
 
         return Scaffold(
           appBar: AppBar(
@@ -91,7 +102,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
 
               if ((p.contactName ?? '').isNotEmpty ||
                   (p.contactEmail ?? '').isNotEmpty ||
-                  (p.contactPhone ?? '').isNotEmpty)
+                  phoneDisplay.isNotEmpty)
                 Card(
                   color: _subtleSurfaceTint(context),
                   child: Padding(
@@ -102,17 +113,17 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'Contact',
-                          style: TextStyle(fontWeight: FontWeight.w600),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w600),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 4),
                         if ((p.contactName ?? '').isNotEmpty)
                           Text(p.contactName!),
                         if ((p.contactEmail ?? '').isNotEmpty)
                           Text(p.contactEmail!),
-                        if ((p.contactPhone ?? '').isNotEmpty)
-                          Text(p.contactPhone!),
+                        if (phoneDisplay.isNotEmpty) Text(phoneDisplay),
                       ],
                     ),
                   ),
