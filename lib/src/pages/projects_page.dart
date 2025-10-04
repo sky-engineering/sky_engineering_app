@@ -89,7 +89,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
           final sorted = [...items]..sort(_byProjectNumberNaturalAscThenName);
 
           return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
+            padding: const EdgeInsets.fromLTRB(10, 6, 10, 100),
             itemCount: sorted.length,
             separatorBuilder: (_, __) => const SizedBox(height: 4),
             itemBuilder: (context, i) {
@@ -286,23 +286,9 @@ class _ProjectsPageState extends State<ProjectsPage> {
     }
 
     try {
-      var signedIn = await _dropboxAuth.isSignedIn();
-      if (!signedIn) {
-        await _dropboxAuth.signIn();
-        signedIn = await _dropboxAuth.isSignedIn();
-      }
-      if (!signedIn) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Dropbox sign-in is required.')),
-        );
-        return;
-      }
-
-      final api = DropboxApi(_dropboxAuth);
-      final sharedLink = await api.getOrCreateSharedLink(folderPath);
+      final uri = _dropboxWebUri(folderPath);
       final launched = await launchUrl(
-        sharedLink,
+        uri,
         mode: LaunchMode.externalApplication,
       );
       if (!launched && mounted) {
@@ -316,6 +302,22 @@ class _ProjectsPageState extends State<ProjectsPage> {
         SnackBar(content: Text('Could not open Dropbox folder: $e')),
       );
     }
+  }
+
+  Uri _dropboxWebUri(String path) {
+    final trimmed = path.trim();
+    if (trimmed.isEmpty || trimmed == '/') {
+      return Uri.parse('https://www.dropbox.com/home');
+    }
+    final withoutLeadingSlash = trimmed.startsWith('/')
+        ? trimmed.substring(1)
+        : trimmed;
+    final segments = withoutLeadingSlash
+        .split('/')
+        .where((segment) => segment.isNotEmpty)
+        .map(Uri.encodeComponent);
+    final encodedPath = segments.join('/');
+    return Uri.parse('https://www.dropbox.com/home/$encodedPath');
   }
 
   String? _resolveProjectDropboxPath(Project project) {

@@ -137,23 +137,29 @@ class _DropboxFolderListPageState extends State<DropboxFolderListPage> {
       return;
     }
 
-    try {
-      final sharedLink = await _api.getOrCreateSharedLink(path);
-      final launched = await launchUrl(
-        sharedLink,
-        mode: LaunchMode.externalApplication,
-      );
-      if (!launched && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open Dropbox folder')),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
+    final uri = _dropboxWebUri(path);
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not open Dropbox folder')),
       );
     }
+  }
+
+  Uri _dropboxWebUri(String path) {
+    final trimmed = path.trim();
+    if (trimmed.isEmpty || trimmed == '/') {
+      return Uri.parse('https://www.dropbox.com/home');
+    }
+    final withoutLeadingSlash = trimmed.startsWith('/')
+        ? trimmed.substring(1)
+        : trimmed;
+    final segments = withoutLeadingSlash
+        .split('/')
+        .where((segment) => segment.isNotEmpty)
+        .map(Uri.encodeComponent);
+    final encodedPath = segments.join('/');
+    return Uri.parse('https://www.dropbox.com/home/$encodedPath');
   }
 
   String _folderTitle(DbxEntry entry) {
