@@ -4,7 +4,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../data/models/project.dart';
 import '../data/models/task.dart';
+import '../data/repositories/project_repository.dart';
 import '../data/repositories/task_repository.dart';
 import 'project_detail_page.dart';
 import '../dialogs/task_edit_dialog.dart';
@@ -18,6 +20,10 @@ class StarredTasksPage extends StatefulWidget {
 
 class _StarredTasksPageState extends State<StarredTasksPage> {
   final TaskRepository _repo = TaskRepository();
+  final ProjectRepository _projectRepo = ProjectRepository();
+
+  final Map<String, Project?> _projects = {};
+  final Map<String, StreamSubscription<Project?>> _projectSubs = {};
 
   StreamSubscription<List<TaskItem>>? _sub;
   List<TaskItem> _tasks = const [];
@@ -48,6 +54,9 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
   @override
   void dispose() {
     _sub?.cancel();
+    for (final sub in _projectSubs.values) {
+      sub.cancel();
+    }
     super.dispose();
   }
 
@@ -63,10 +72,14 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
         }
       });
     }
+    final removedProjectIds = _syncProjectSubscriptions(sorted);
     if (!mounted) return;
     setState(() {
       _tasks = sorted;
       _loading = false;
+      for (final id in removedProjectIds) {
+        _projects.remove(id);
+      }
     });
   }
 
@@ -92,6 +105,38 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
       expected++;
     }
     return false;
+  }
+
+  List<String> _syncProjectSubscriptions(List<TaskItem> tasks) {
+    final requiredIds = <String>{};
+    for (final task in tasks) {
+      final id = task.projectId;
+      if (id.isNotEmpty) {
+        requiredIds.add(id);
+      }
+    }
+
+    for (final id in requiredIds) {
+      if (_projectSubs.containsKey(id)) continue;
+      _projectSubs[id] = _projectRepo.streamById(id).listen((project) {
+        if (!mounted) return;
+        setState(() {
+          if (project != null) {
+            _projects[id] = project;
+          } else {
+            _projects.remove(id);
+          }
+        });
+      });
+    }
+
+    final removed = _projectSubs.keys
+        .where((id) => !requiredIds.contains(id))
+        .toList(growable: false);
+    for (final id in removed) {
+      _projectSubs.remove(id)?.cancel();
+    }
+    return removed;
   }
 
   Future<void> _handleReorder(int oldIndex, int newIndex) async {
@@ -183,6 +228,7 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
               onReorder: _handleReorder,
               itemBuilder: (context, index) {
                 final task = _tasks[index];
+                final project = _projects[task.projectId];
                 return Dismissible(
                   key: ValueKey('starred-${task.id}'),
                   direction: DismissDirection.endToStart,
@@ -193,6 +239,7 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
                   },
                   child: _StarredTile(
                     task: task,
+                    project: project,
                     onOpenProject: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
@@ -247,6 +294,7 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
 
 class _StarredTile extends StatelessWidget {
   final TaskItem task;
+  final Project? project;
   final VoidCallback onOpenProject;
   final Future<void> Function() onToggleStar;
   final VoidCallback onTap;
@@ -254,18 +302,36 @@ class _StarredTile extends StatelessWidget {
 
   const _StarredTile({
     required this.task,
+    this.project,
     required this.onOpenProject,
     required this.onToggleStar,
     required this.onTap,
     required this.onComplete,
   });
 
+  String? _projectSummary() {
+    final number = project?.projectNumber?.trim() ?? '';
+    final name = project?.name.trim() ?? '';
+    final parts = <String>[];
+    if (number.isNotEmpty) parts.add(number);
+    if (name.isNotEmpty) parts.add(name);
+    if (parts.isNotEmpty) return parts.join(' · ');
+    if (task.projectId.isNotEmpty) return 'Project ${task.projectId}';
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final hasDesc = (task.description ?? '').trim().isNotEmpty;
+    final projectLabel = _projectSummary();
     final small = Theme.of(context).textTheme.bodySmall;
+    final Color? baseProjectColor = small?.color;
+    final projectStyle = small?.copyWith(
+      color: baseProjectColor?.withOpacity(0.8),
+    );
     final filledStar = Theme.of(context).colorScheme.secondary;
     final hollowStar = Theme.of(context).colorScheme.onSurfaceVariant;
+    final hasMultiLine = hasDesc || projectLabel != null;
 
     return Card(
       child: InkWell(
@@ -273,12 +339,12 @@ class _StarredTile extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: Row(
-            crossAxisAlignment: hasDesc
+            crossAxisAlignment: hasMultiLine
                 ? CrossAxisAlignment.start
                 : CrossAxisAlignment.center,
             children: [
               Padding(
-                padding: EdgeInsets.only(top: hasDesc ? 2 : 0),
+                padding: EdgeInsets.only(top: hasMultiLine ? 2 : 0),
                 child: IconButton(
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(
@@ -308,9 +374,21 @@ class _StarredTile extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
-                    if (hasDesc)
+                    if (projectLabel != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          projectLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: projectStyle ?? small,
+                        ),
+                      ),
+                    if (hasDesc)
+                      Padding(
+                        padding: EdgeInsets.only(
+                          top: projectLabel != null ? 3 : 2,
+                        ),
                         child: Text(
                           task.description!.trim(),
                           maxLines: 3,
