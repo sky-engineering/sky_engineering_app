@@ -67,100 +67,117 @@ class _ProjectsPageState extends State<ProjectsPage> {
           ),
         ],
       ),
-      body: StreamBuilder<List<Project>>(
-        // Show all projects; we'll filter by isArchived and sort client-side.
-        stream: repo.streamAll(),
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          var items = snap.data ?? const <Project>[];
+      body: Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Expanded(
+              child: StreamBuilder<List<Project>>(
+                // Show all projects; we'll filter by isArchived and sort client-side.
+                stream: repo.streamAll(),
+                builder: (context, snap) {
+                  if (snap.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  var items = snap.data ?? const <Project>[];
 
-          // Filter by archived state unless toggle is ON
-          if (!_showArchived) {
-            items = items.where((p) => !(p.isArchived)).toList();
-          }
+                  // Filter by archived state unless toggle is ON
+                  if (!_showArchived) {
+                    items = items.where((p) => !p.isArchived).toList();
+                  }
 
-          if (items.isEmpty) {
-            return _Empty(onAdd: () => _showAddDialog(context));
-          }
+                  if (items.isEmpty) {
+                    return _Empty(onAdd: () => _showAddDialog(context));
+                  }
 
-          // Natural sort by project number ascending, nulls last; tie-break by name
-          final sorted = [...items]..sort(_byProjectNumberNaturalAscThenName);
+                  // Natural sort by project number ascending, nulls last; tie-break by name
+                  final sorted = [...items]
+                    ..sort(_byProjectNumberNaturalAscThenName);
 
-          return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(10, 6, 10, 100),
-            itemCount: sorted.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 4),
-            itemBuilder: (context, i) {
-              final p = sorted[i];
+                  return ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(10, 6, 10, 100),
+                    itemCount: sorted.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 4),
+                    itemBuilder: (context, i) {
+                      final p = sorted[i];
 
-              final titleStyle = Theme.of(context).textTheme.titleMedium
-                  ?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    fontSize:
-                        (Theme.of(context).textTheme.titleMedium?.fontSize ??
-                            16) +
-                        1,
-                  );
-
-              return Card(
-                margin: EdgeInsets.zero, // tighter vertical rhythm
-                color: _subtleSurfaceTint(context),
-                child: ListTile(
-                  dense: true,
-                  visualDensity: const VisualDensity(vertical: -2),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 4,
-                  ),
-                  // No leading avatar
-                  title: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          (p.projectNumber != null &&
-                                  p.projectNumber!.trim().isNotEmpty)
-                              ? '${p.projectNumber} ${p.name}'
-                              : p.name,
-                          style: titleStyle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      _buildLinkStatusIcon(p, context),
-                    ],
-                  ),
-                  subtitle: Text(
-                    [
-                      p.clientName,
-                    ].where((s) => s.toString().trim().isNotEmpty).join(' • '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  trailing: p.isArchived
-                      ? Padding(
-                          padding: const EdgeInsets.only(left: 6),
-                          child: Icon(
-                            Icons.archive,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurfaceVariant,
+                      final titleStyle = Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            fontSize:
+                                (Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium?.fontSize ??
+                                    16) +
+                                1,
+                          );
+                      final titleColor = _statusTextColor(context, p);
+                      return Card(
+                        margin: EdgeInsets.zero, // tighter vertical rhythm
+                        color: _subtleSurfaceTint(context),
+                        child: ListTile(
+                          dense: true,
+                          visualDensity: const VisualDensity(vertical: -2),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
                           ),
-                        )
-                      : null,
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => ProjectDetailPage(projectId: p.id),
-                      ),
-                    );
-                  },
-                ),
-              );
-            },
-          );
-        },
+                          // No leading avatar
+                          title: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  (p.projectNumber != null &&
+                                          p.projectNumber!.trim().isNotEmpty)
+                                      ? '${p.projectNumber} ${p.name}'
+                                      : p.name,
+                                  style: titleStyle?.copyWith(
+                                    color: titleColor,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              _buildLinkStatusIcon(p, context, titleColor),
+                            ],
+                          ),
+                          subtitle: Text(
+                            [p.clientName, p.status]
+                                .where((s) => s.toString().trim().isNotEmpty)
+                                .join(' • '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: p.isArchived
+                              ? Padding(
+                                  padding: const EdgeInsets.only(left: 6),
+                                  child: Icon(
+                                    Icons.archive,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
+                                )
+                              : null,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    ProjectDetailPage(projectId: p.id),
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showAddDialog(context),
@@ -229,7 +246,11 @@ class _ProjectsPageState extends State<ProjectsPage> {
     return name.trim().toLowerCase();
   }
 
-  Widget _buildLinkStatusIcon(Project project, BuildContext context) {
+  Widget _buildLinkStatusIcon(
+    Project project,
+    BuildContext context,
+    Color accent,
+  ) {
     final theme = Theme.of(context);
     if (!_dropboxChecked) {
       return const SizedBox(width: 18, height: 18);
@@ -257,8 +278,9 @@ class _ProjectsPageState extends State<ProjectsPage> {
         icon: icon,
         tooltip: 'Open Dropbox folder',
         padding: EdgeInsets.zero,
-        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-        splashRadius: 20,
+        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+        visualDensity: VisualDensity.compact,
+        splashRadius: 18,
         onPressed: () => _openProjectFolder(project),
       );
     } else if (unavailable) {
@@ -337,6 +359,22 @@ class _ProjectsPageState extends State<ProjectsPage> {
     return '/$sanitized';
   }
 
+  Color _statusTextColor(BuildContext context, Project project) {
+    switch (project.status) {
+      case 'On Hold':
+        return const Color(0xFF546E7A);
+      case 'Under Construction':
+        return const Color(0xFF2E7D32);
+      case 'Close When Paid':
+        return const Color(0xFFE65100);
+      case 'Archive':
+        return const Color(0xFFC62828);
+      case 'In Progress':
+      default:
+        return Theme.of(context).colorScheme.onSurface;
+    }
+  }
+
   Color _subtleSurfaceTint(BuildContext context) {
     final surface = Theme.of(context).colorScheme.surface;
     return Color.alphaBlend(const Color(0x14FFFFFF), surface);
@@ -362,7 +400,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
       return 1; // null/empty last
     }
 
-    // tie-breaker: name A→Z
+    // tie-breaker: name Aâ†’Z
     return a.name.toLowerCase().compareTo(b.name.toLowerCase());
   }
 
@@ -484,6 +522,7 @@ Future<void> _showAddDialog(BuildContext context) async {
   if (!context.mounted) return;
 
   ClientRecord? selectedClient;
+  String projectStatus = 'In Progress';
 
   await showDialog<void>(
     context: context,
@@ -590,6 +629,26 @@ Future<void> _showAddDialog(BuildContext context) async {
                             border: OutlineInputBorder(),
                           ),
                         ),
+                        const SizedBox(height: 10),
+                        DropdownButtonFormField<String>(
+                          value: projectStatus,
+                          decoration: const InputDecoration(
+                            labelText: 'Status',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: kProjectStatuses
+                              .map(
+                                (status) => DropdownMenuItem<String>(
+                                  value: status,
+                                  child: Text(status),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            setState(() => projectStatus = value);
+                          },
+                        ),
                         const SizedBox(height: 16),
                         Align(
                           alignment: Alignment.centerLeft,
@@ -680,7 +739,7 @@ Future<void> _showAddDialog(BuildContext context) async {
                     id: '_',
                     name: nameCtl.text.trim(),
                     clientName: clientName,
-                    status: 'Active',
+                    status: projectStatus,
                     contractAmount: amt,
                     contactName: nullIfEmpty(contactNameCtl.text),
                     contactEmail: nullIfEmpty(contactEmailCtl.text),
@@ -689,7 +748,7 @@ Future<void> _showAddDialog(BuildContext context) async {
                     projectNumber: nullIfEmpty(projectNumCtl.text),
                     folderName: nullIfEmpty(folderCtl.text),
                     createdAt: null,
-                    isArchived: false,
+                    isArchived: projectStatus == 'Archive',
                   );
 
                   await repo.add(project);

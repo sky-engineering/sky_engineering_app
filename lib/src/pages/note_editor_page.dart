@@ -180,7 +180,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     await _ensureNotesFolders(api, projectRoot);
 
     final notesFolder = _stripTrailingSlashes('$projectRoot/00 PRMG/05 NOTE');
-    final fileName = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final fileName = DateFormat('yyyy-MM-dd_HHmmss').format(DateTime.now());
     final filePath = '$notesFolder/$fileName.txt';
     final bytes = Uint8List.fromList(utf8.encode(content));
 

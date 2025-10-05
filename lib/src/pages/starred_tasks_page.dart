@@ -1,20 +1,170 @@
 // lib/src/pages/starred_tasks_page.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
 import '../data/models/task.dart';
 import '../data/repositories/task_repository.dart';
 import 'project_detail_page.dart';
 import '../dialogs/task_edit_dialog.dart';
 
-class StarredTasksPage extends StatelessWidget {
-  StarredTasksPage({super.key});
+class StarredTasksPage extends StatefulWidget {
+  const StarredTasksPage({super.key});
 
-  final _repo = TaskRepository();
+  @override
+  State<StarredTasksPage> createState() => _StarredTasksPageState();
+}
+
+class _StarredTasksPageState extends State<StarredTasksPage> {
+  final TaskRepository _repo = TaskRepository();
+
+  StreamSubscription<List<TaskItem>>? _sub;
+  List<TaskItem> _tasks = const [];
+  bool _loading = true;
+  bool _normalizing = false;
+  User? _user;
+
+  @override
+  void initState() {
+    super.initState();
+    _user = FirebaseAuth.instance.currentUser;
+    if (_user != null) {
+      _sub = _repo
+          .streamStarredForUser(_user!.uid)
+          .listen(
+            _onTasks,
+            onError: (_) {
+              if (mounted) {
+                setState(() => _loading = false);
+              }
+            },
+          );
+    } else {
+      _loading = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  void _onTasks(List<TaskItem> snapshot) {
+    final sorted = _sortedTasks(snapshot);
+    if (!_normalizing && _requiresResequence(sorted)) {
+      _normalizing = true;
+      _repo.reorderStarredTasks(sorted).whenComplete(() {
+        if (mounted) {
+          setState(() => _normalizing = false);
+        } else {
+          _normalizing = false;
+        }
+      });
+    }
+    if (!mounted) return;
+    setState(() {
+      _tasks = sorted;
+      _loading = false;
+    });
+  }
+
+  List<TaskItem> _sortedTasks(List<TaskItem> input) {
+    final copy = [...input];
+    copy.sort((a, b) {
+      final ao = a.starredOrder ?? 1 << 30;
+      final bo = b.starredOrder ?? 1 << 30;
+      final cmp = ao.compareTo(bo);
+      if (cmp != 0) return cmp;
+      return _taskComparator(a, b);
+    });
+    return copy;
+  }
+
+  bool _requiresResequence(List<TaskItem> tasks) {
+    var expected = 0;
+    for (final task in tasks) {
+      final order = task.starredOrder;
+      if (order == null || order != expected) {
+        return true;
+      }
+      expected++;
+    }
+    return false;
+  }
+
+  Future<void> _handleReorder(int oldIndex, int newIndex) async {
+    if (oldIndex < newIndex) newIndex -= 1;
+    setState(() {
+      final updated = [..._tasks];
+      final item = updated.removeAt(oldIndex);
+      updated.insert(newIndex, item);
+      final reindexed = <TaskItem>[];
+      for (var i = 0; i < updated.length; i++) {
+        reindexed.add(updated[i].copyWith(starredOrder: i));
+      }
+      _tasks = reindexed;
+    });
+
+    try {
+      await _repo.reorderStarredTasks(_tasks);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to reorder tasks: $e')));
+    }
+  }
+
+  Future<void> _toggleStar(TaskItem task) async {
+    final newValue = !task.isStarred;
+    if (!mounted) return;
+
+    if (!newValue) {
+      setState(() {
+        final remaining = _tasks.where((t) => t.id != task.id).toList();
+        for (var i = 0; i < remaining.length; i++) {
+          remaining[i] = remaining[i].copyWith(starredOrder: i);
+        }
+        _tasks = remaining;
+      });
+    }
+
+    try {
+      await _repo.setStarred(
+        task,
+        newValue,
+        order: newValue ? _tasks.length : null,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not update star: $e')));
+    }
+  }
+
+  Future<bool> _completeTask(TaskItem task) async {
+    try {
+      await _repo.update(task.id, {
+        'taskStatus': 'Completed',
+        'status': 'Done',
+      });
+      return true;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not mark complete: $e')));
+      }
+      return false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final me = FirebaseAuth.instance.currentUser;
-    if (me == null) {
+    if (_user == null) {
       return const Scaffold(
         body: Center(child: Text('Please sign in to view starred tasks')),
       );
@@ -22,62 +172,47 @@ class StarredTasksPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Starred Tasks')),
-      body: StreamBuilder<List<TaskItem>>(
-        stream: _repo.streamStarredForUser(me.uid),
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final list = (snap.data ?? const <TaskItem>[])..sort(_taskComparator);
-
-          if (list.isEmpty) {
-            return const _Empty();
-          }
-
-          return ListView.separated(
-            padding: const EdgeInsets.all(12),
-            itemCount: list.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (context, i) {
-              final t = list[i];
-              return _StarredTile(
-                task: t,
-                onOpenProject: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => ProjectDetailPage(projectId: t.projectId),
-                    ),
-                  );
-                },
-                onToggleStar: () async {
-                  await _repo.update(t.id, {'isStarred': !t.isStarred});
-                },
-                onTap: () => showTaskEditDialog(context, t, canEdit: true),
-                onComplete: () async {
-                  try {
-                    await _repo.update(t.id, {
-                      'taskStatus': 'Completed',
-                      'status': 'Done',
-                    });
-                    return true;
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Could not mark complete: $e')),
-                      );
-                    }
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _tasks.isEmpty
+          ? const _Empty()
+          : ReorderableListView.builder(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+              buildDefaultDragHandles: true,
+              itemCount: _tasks.length,
+              onReorder: _handleReorder,
+              itemBuilder: (context, index) {
+                final task = _tasks[index];
+                return Dismissible(
+                  key: ValueKey('starred-${task.id}'),
+                  direction: DismissDirection.endToStart,
+                  background: _dismissBackground(context),
+                  confirmDismiss: (_) async {
+                    final ok = await _completeTask(task);
                     return false;
-                  }
-                },
-              );
-            },
-          );
-        },
-      ),
+                  },
+                  child: _StarredTile(
+                    task: task,
+                    onOpenProject: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              ProjectDetailPage(projectId: task.projectId),
+                        ),
+                      );
+                    },
+                    onToggleStar: () => _toggleStar(task),
+                    onTap: () =>
+                        showTaskEditDialog(context, task, canEdit: true),
+                    onComplete: () => _completeTask(task),
+                  ),
+                );
+              },
+            ),
     );
   }
 
-  // ---------- sorting helpers (code asc -> due date -> title) ----------
+  // ---------- fallback comparator (code asc -> due date -> title) ----------
   static int? _codeToInt(String? code) {
     if (code == null) return null;
     final s = code.trim();
@@ -86,7 +221,7 @@ class StarredTasksPage extends StatelessWidget {
   }
 
   static int? _extractTitleCode(String title) {
-    final m = RegExp(r'^\s*(\d{4})\b').firstMatch(title);
+    final m = RegExp(r'^\s*(\d{4})').firstMatch(title);
     return (m == null) ? null : int.tryParse(m.group(1)!);
   }
 
@@ -113,7 +248,7 @@ class StarredTasksPage extends StatelessWidget {
 class _StarredTile extends StatelessWidget {
   final TaskItem task;
   final VoidCallback onOpenProject;
-  final VoidCallback onToggleStar;
+  final Future<void> Function() onToggleStar;
   final VoidCallback onTap;
   final Future<bool> Function() onComplete;
 
@@ -129,83 +264,70 @@ class _StarredTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasDesc = (task.description ?? '').trim().isNotEmpty;
     final small = Theme.of(context).textTheme.bodySmall;
-    final filledStar = Theme.of(
-      context,
-    ).colorScheme.secondary; // accent (yellow)
-    final hollowStar = Theme.of(
-      context,
-    ).colorScheme.onSurfaceVariant; // subtle gray
+    final filledStar = Theme.of(context).colorScheme.secondary;
+    final hollowStar = Theme.of(context).colorScheme.onSurfaceVariant;
 
-    return Dismissible(
-      key: ValueKey('starred-${task.id}'),
-      direction: DismissDirection.endToStart,
-      background: _dismissBackground(context),
-      confirmDismiss: (_) async {
-        final ok = await onComplete();
-        return false;
-      },
-      child: Card(
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            child: Row(
-              crossAxisAlignment: hasDesc
-                  ? CrossAxisAlignment.start
-                  : CrossAxisAlignment.center,
-              children: [
-                // Star toggle
-                Padding(
-                  padding: EdgeInsets.only(top: hasDesc ? 2 : 0),
-                  child: IconButton(
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 32,
-                      minHeight: 32,
-                    ),
-                    iconSize: 20,
-                    splashRadius: 18,
-                    onPressed: onToggleStar,
-                    icon: Icon(
-                      task.isStarred ? Icons.star : Icons.star_border,
-                      color: task.isStarred ? filledStar : hollowStar,
-                    ),
-                    tooltip: task.isStarred ? 'Unstar' : 'Star',
+    return Card(
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: Row(
+            crossAxisAlignment: hasDesc
+                ? CrossAxisAlignment.start
+                : CrossAxisAlignment.center,
+            children: [
+              Padding(
+                padding: EdgeInsets.only(top: hasDesc ? 2 : 0),
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
                   ),
+                  iconSize: 20,
+                  splashRadius: 18,
+                  onPressed: () {
+                    onToggleStar();
+                  },
+                  icon: Icon(
+                    task.isStarred ? Icons.star : Icons.star_border,
+                    color: task.isStarred ? filledStar : hollowStar,
+                  ),
+                  tooltip: task.isStarred ? 'Unstar' : 'Star',
                 ),
-                const SizedBox(width: 6),
-                // Texts
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        task.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      if (hasDesc)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(
-                            task.description!.trim(),
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                            style: small,
-                          ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      task.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    if (hasDesc)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          task.description!.trim(),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: small,
                         ),
-                    ],
-                  ),
+                      ),
+                  ],
                 ),
-                const SizedBox(width: 4),
-                IconButton(
-                  tooltip: 'Open project',
-                  onPressed: onOpenProject,
-                  icon: const Icon(Icons.open_in_new),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                tooltip: 'Open project',
+                onPressed: onOpenProject,
+                icon: const Icon(Icons.open_in_new),
+              ),
+            ],
           ),
         ),
       ),

@@ -52,7 +52,15 @@ class InProgressTasksPage extends StatelessWidget {
                   );
                 },
                 onToggleStar: () async {
-                  await _repo.update(t.id, {'isStarred': !t.isStarred});
+                  try {
+                    await _repo.setStarred(t, !t.isStarred);
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Could not update star: $e')),
+                      );
+                    }
+                  }
                 },
                 onEdit: () => showTaskEditDialog(
                   context,

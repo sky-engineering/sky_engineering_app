@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'subphases_page.dart';
 import 'in_progress_tasks_page.dart';
 import 'starred_tasks_page.dart';
+import 'task_overview_page.dart';
 import '../dialogs/city_inspect_links_dialog.dart';
 import '../dialogs/other_links_dialog.dart';
 import '../integrations/dropbox/dropbox_folder_list_page.dart';
@@ -71,17 +72,17 @@ class DashboardPage extends StatelessWidget {
               Center(child: Text(_user?.email ?? '(no email)')),
               const SizedBox(height: 32),
 
-              linkButton('Current Tasks', () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => InProgressTasksPage()),
-                );
-              }),
-              const SizedBox(height: 16),
-
               linkButton('Starred Tasks', () {
                 Navigator.of(
                   context,
                 ).push(MaterialPageRoute(builder: (_) => StarredTasksPage()));
+              }),
+              const SizedBox(height: 16),
+
+              linkButton('Task Overview', () {
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => TaskOverviewPage()));
               }),
               const SizedBox(height: 16),
 

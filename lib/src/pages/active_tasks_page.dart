@@ -81,9 +81,7 @@ class ActiveTasksPage extends StatelessWidget {
                     },
                     onToggleStar: () async {
                       try {
-                        await _taskRepo.update(t.id, {
-                          'isStarred': !t.isStarred,
-                        });
+                        await _taskRepo.setStarred(t, !t.isStarred);
                       } catch (e) {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(

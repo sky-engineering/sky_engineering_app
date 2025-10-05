@@ -1,6 +1,14 @@
 // lib/src/data/models/project.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+const kProjectStatuses = <String>[
+  'In Progress',
+  'On Hold',
+  'Under Construction',
+  'Close When Paid',
+  'Archive',
+];
+
 const kSubphaseStatuses = <String>['In Progress', 'On Hold', 'Completed'];
 
 /// Each project stores the selected subphases + per-project status.
@@ -73,7 +81,7 @@ class Project {
   final String id;
   final String name;
   final String clientName;
-  final String status; // e.g., 'Active'
+  final String status; // Project status
   final double? contractAmount;
 
   final String? contactName;
@@ -154,11 +162,19 @@ class Project {
       return null;
     }
 
+    final rawStatus = _str(data['status']);
+    final archivedFlag = _bool(data['isArchived'], fallback: false);
+    final resolvedStatus = (rawStatus != null && rawStatus.isNotEmpty)
+        ? (kProjectStatuses.contains(rawStatus)
+              ? rawStatus
+              : (archivedFlag ? 'Archive' : 'In Progress'))
+        : (archivedFlag ? 'Archive' : 'In Progress');
+
     return Project(
       id: doc.id,
       name: _str(data['name']) ?? '',
       clientName: _str(data['clientName']) ?? '',
-      status: _str(data['status']) ?? 'Active',
+      status: resolvedStatus,
       contractAmount: _toDoubleOrNull(data['contractAmount']),
       contactName: _str(data['contactName']),
       contactEmail: _str(data['contactEmail']),
@@ -169,7 +185,7 @@ class Project {
       createdAt: _toDate(data['createdAt']),
       updatedAt: _toDate(data['updatedAt']),
       selectedSubphases: _readSelected(data['selectedSubphases']),
-      isArchived: _bool(data['isArchived'], fallback: false),
+      isArchived: archivedFlag || resolvedStatus == 'Archive',
     );
   }
 
@@ -222,11 +238,14 @@ class Project {
     List<SelectedSubphase>? selectedSubphases,
     bool? isArchived,
   }) {
+    final resolvedStatus = status ?? this.status;
+    final resolvedIsArchived = isArchived ?? (resolvedStatus == 'Archive');
+
     return Project(
       id: id ?? this.id,
       name: name ?? this.name,
       clientName: clientName ?? this.clientName,
-      status: status ?? this.status,
+      status: resolvedStatus,
       contractAmount: contractAmount ?? this.contractAmount,
       contactName: contactName ?? this.contactName,
       contactEmail: contactEmail ?? this.contactEmail,
@@ -237,7 +256,7 @@ class Project {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       selectedSubphases: selectedSubphases ?? this.selectedSubphases,
-      isArchived: isArchived ?? this.isArchived,
+      isArchived: resolvedIsArchived,
     );
   }
 }

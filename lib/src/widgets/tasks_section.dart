@@ -86,10 +86,21 @@ class TasksSection extends StatelessWidget {
                           task: t,
                           isOwner: isOwner,
                           onToggleStar: () async {
-                            if (!isOwner) return _viewOnlySnack(context);
-                            await repo.update(t.id, {
-                              'isStarred': !t.isStarred,
-                            });
+                            if (!isOwner) {
+                              _viewOnlySnack(context);
+                              return;
+                            }
+                            try {
+                              await repo.setStarred(t, !t.isStarred);
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Could not update star: $e'),
+                                  ),
+                                );
+                              }
+                            }
                           },
                           onChangeStatus: (newStatus) async {
                             if (!isOwner) return _viewOnlySnack(context);
@@ -481,6 +492,9 @@ Future<void> _showAddTaskDialog(BuildContext context, String projectId) async {
                     taskStatus: taskStatus,
                     isStarred: isStarred,
                     taskCode: code.isEmpty ? null : code,
+                    starredOrder: isStarred
+                        ? DateTime.now().millisecondsSinceEpoch
+                        : null,
                     dueDate: dueDate,
                     assigneeName: assigneeCtl.text.trim().isEmpty
                         ? null

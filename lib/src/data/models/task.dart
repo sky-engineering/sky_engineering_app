@@ -24,9 +24,11 @@ class TaskItem {
   final DateTime? dueDate;
 
   // NEW schema
-  final String taskStatus; // 'In Progress' | 'On Hold' | 'Pending' | 'Completed'
-  final bool isStarred;    // star marker in lists
-  final String? taskCode;  // optional 4-digit code like '0101'
+  final String
+  taskStatus; // 'In Progress' | 'On Hold' | 'Pending' | 'Completed'
+  final bool isStarred; // star marker in lists
+  final String? taskCode; // optional 4-digit code like '0101'
+  final int? starredOrder; // manual sort index for starred lists
 
   // Meta
   final DateTime? createdAt;
@@ -52,34 +54,43 @@ class TaskItem {
     String? taskStatus,
     bool? isStarred,
     this.taskCode,
+    this.starredOrder,
 
     // Legacy input (still accepted)
     String? status,
 
     this.createdAt,
     this.updatedAt,
-  })  : taskStatus = taskStatus ?? _fromLegacyStatus(status) ?? 'Pending',
-        isStarred  = isStarred ?? false;
+  }) : taskStatus = taskStatus ?? _fromLegacyStatus(status) ?? 'Pending',
+       isStarred = isStarred ?? false;
 
   // ----------------- mapping helpers -----------------
   static String _toLegacyStatus(String taskStatus) {
     switch (taskStatus) {
-      case 'In Progress': return 'In Progress';
-      case 'On Hold':     return 'Blocked';
-      case 'Completed':   return 'Done';
+      case 'In Progress':
+        return 'In Progress';
+      case 'On Hold':
+        return 'Blocked';
+      case 'Completed':
+        return 'Done';
       case 'Pending':
-      default:            return 'Open';
+      default:
+        return 'Open';
     }
   }
 
   static String? _fromLegacyStatus(String? legacy) {
     switch ((legacy ?? '').trim()) {
-      case 'In Progress': return 'In Progress';
-      case 'Blocked':     return 'On Hold';
-      case 'Done':        return 'Completed';
+      case 'In Progress':
+        return 'In Progress';
+      case 'Blocked':
+        return 'On Hold';
+      case 'Done':
+        return 'Completed';
       case 'Open':
       case '':
-      default:            return 'Pending';
+      default:
+        return 'Pending';
     }
   }
 
@@ -97,6 +108,13 @@ class TaskItem {
       return s == 'true' || s == 'yes' || s == '1';
     }
     return false;
+  }
+
+  static int? _toInt(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) return int.tryParse(v);
+    return null;
   }
 
   // ----------------- fromDoc -----------------
@@ -120,6 +138,7 @@ class TaskItem {
       taskStatus: resolvedTaskStatus,
       isStarred: _toBool(data['isStarred']),
       taskCode: (data['taskCode'] as String?)?.trim(),
+      starredOrder: _toInt(data['starredOrder']),
       createdAt: _toDate(data['createdAt']),
       updatedAt: _toDate(data['updatedAt']),
     );
@@ -143,6 +162,7 @@ class TaskItem {
       'taskStatus': taskStatus,
       'isStarred': isStarred,
       'taskCode': taskCode,
+      if (starredOrder != null) 'starredOrder': starredOrder,
 
       // Legacy mirror
       'status': legacy,
@@ -165,6 +185,7 @@ class TaskItem {
     String? taskStatus,
     bool? isStarred,
     String? taskCode,
+    int? starredOrder,
 
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -183,6 +204,7 @@ class TaskItem {
       taskStatus: taskStatus ?? this.taskStatus,
       isStarred: isStarred ?? this.isStarred,
       taskCode: taskCode ?? this.taskCode,
+      starredOrder: starredOrder ?? this.starredOrder,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

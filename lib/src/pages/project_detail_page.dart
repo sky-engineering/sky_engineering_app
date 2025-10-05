@@ -253,26 +253,6 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
 
               const SizedBox(height: 12),
 
-              // Archive / Unarchive toggle button (full width)
-              if (isOwner)
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: p.isArchived
-                          ? Colors.green.shade700
-                          : Colors.orange.shade700,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    onPressed: () async {
-                      await repo.update(p.id, {'isArchived': !p.isArchived});
-                    },
-                    child: Text(
-                      p.isArchived ? 'Unarchive Project' : 'Archive Project',
-                    ),
-                  ),
-                ),
 
               const SizedBox(height: 16),
 

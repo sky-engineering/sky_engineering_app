@@ -43,3 +43,31 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+
+# Big/generated stuff
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Platform trees
+android/
+ios/
+macos/
+windows/
+linux/
+web/
+
+# VCS + IDE
+.git/
+.gitignore
+.idea/
+.vscode/
+*.iml
+
+# Assets (keep only tiny config files if needed)
+assets/**
+
+# Misc
+coverage/

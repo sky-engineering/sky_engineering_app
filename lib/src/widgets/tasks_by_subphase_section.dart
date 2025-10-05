@@ -412,9 +412,17 @@ class _SubphaseBox extends StatelessWidget {
                     isOwner: isOwner,
                     onToggleStar: () async {
                       if (!isOwner) return _viewOnlySnack(context);
-                      await TaskRepository().update(t.id, {
-                        'isStarred': !t.isStarred,
-                      });
+                      try {
+                        await TaskRepository().setStarred(t, !t.isStarred);
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Could not update star: $e'),
+                            ),
+                          );
+                        }
+                      }
                     },
                     onChangeStatus: (newStatus) async {
                       if (!isOwner) return _viewOnlySnack(context);

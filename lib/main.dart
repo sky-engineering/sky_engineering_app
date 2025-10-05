@@ -1,6 +1,7 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'firebase_options.dart';
@@ -8,6 +9,18 @@ import 'src/app/shell.dart';
 import 'src/integrations/dropbox/dropbox_page.dart';
 import 'src/pages/auth_page.dart';
 import 'src/theme/app_theme.dart';
+
+Future<void> _configureFirestorePersistence() async {
+  try {
+    FirebaseFirestore.instance.settings = const Settings(
+      persistenceEnabled: true,
+    );
+  } catch (e) {
+    // If persistence cannot be enabled (e.g., multiple tabs on web), fallback silently.
+    // ignore: avoid_print
+    print('Firestore persistence not enabled: $e');
+  }
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

@@ -36,7 +36,12 @@ Future<void> showQuickAddInvoiceDialog(BuildContext context) async {
     return;
   }
 
-  final projects = await _loadProjectsForCurrentUser();
+  final projects = await _loadProjectsForCurrentUser()
+    ..sort(
+      (a, b) => _projectDisplay(a)
+          .toLowerCase()
+          .compareTo(_projectDisplay(b).toLowerCase()),
+    );
   if (!context.mounted) return;
   if (projects.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -65,7 +70,12 @@ Future<void> showQuickAddTaskDialog(BuildContext context) async {
     return;
   }
 
-  final projects = await _loadProjectsForCurrentUser();
+  final projects = await _loadProjectsForCurrentUser()
+    ..sort(
+      (a, b) => _projectDisplay(a)
+          .toLowerCase()
+          .compareTo(_projectDisplay(b).toLowerCase()),
+    );
   if (!context.mounted) return;
   if (projects.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(

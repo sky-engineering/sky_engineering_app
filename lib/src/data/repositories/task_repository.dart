@@ -34,7 +34,10 @@ class TaskRepository {
   }
 
   /// Stream tasks for a user filtered by status.
-  Stream<List<TaskItem>> streamByStatuses(String ownerUid, List<String> statuses) {
+  Stream<List<TaskItem>> streamByStatuses(
+    String ownerUid,
+    List<String> statuses,
+  ) {
     assert(statuses.isNotEmpty, 'statuses cannot be empty');
     return _col
         .where('ownerUid', isEqualTo: ownerUid)
@@ -84,6 +87,31 @@ class TaskRepository {
     await _col.doc(id).update(encoded);
   }
 
+  Future<void> setStarred(TaskItem task, bool value, {int? order}) async {
+    final data = <String, dynamic>{
+      'isStarred': value,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    if (value) {
+      data['starredOrder'] =
+          order ?? task.starredOrder ?? DateTime.now().millisecondsSinceEpoch;
+    } else {
+      data['starredOrder'] = FieldValue.delete();
+    }
+    await _col.doc(task.id).update(data);
+  }
+
+  Future<void> reorderStarredTasks(List<TaskItem> tasks) async {
+    final batch = FirebaseFirestore.instance.batch();
+    for (var i = 0; i < tasks.length; i++) {
+      batch.update(_col.doc(tasks[i].id), {
+        'starredOrder': i,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+  }
+
   Future<void> delete(String id) => _col.doc(id).delete();
 
   // ----------------- helpers -----------------
@@ -101,5 +129,3 @@ class TaskRepository {
     return a.title.toLowerCase().compareTo(b.title.toLowerCase());
   }
 }
-
-
