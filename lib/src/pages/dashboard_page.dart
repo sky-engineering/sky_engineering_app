@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'subphases_page.dart';
-import 'in_progress_tasks_page.dart';
 import 'starred_tasks_page.dart';
 import 'task_overview_page.dart';
 import '../dialogs/city_inspect_links_dialog.dart';
@@ -53,13 +52,13 @@ class DashboardPage extends StatelessWidget {
       );
     }
 
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
+    return Align(
+      alignment: Alignment.topCenter,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 24, 16, 72),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Center(
@@ -68,9 +67,9 @@ class DashboardPage extends StatelessWidget {
                   height: 128,
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Center(child: Text(_user?.email ?? '(no email)')),
-              const SizedBox(height: 32),
+              const SizedBox(height: 28),
 
               linkButton('Starred Tasks', () {
                 Navigator.of(
@@ -136,8 +135,7 @@ class DashboardPage extends StatelessWidget {
               linkButton('Other Links', () {
                 showOtherLinksDialog(context);
               }),
-
-              const SizedBox(height: 16),
+              const SizedBox(height: 32),
             ],
           ),
         ),

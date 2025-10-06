@@ -6,6 +6,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../data/models/project.dart';
 import '../data/models/task.dart';
+import '../data/models/personal_checklist_item.dart';
+import '../services/personal_checklist_service.dart';
+import 'personal_checklist_page.dart';
 import '../data/repositories/project_repository.dart';
 import '../data/repositories/task_repository.dart';
 import 'project_detail_page.dart';
@@ -31,6 +34,11 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
   bool _normalizing = false;
   User? _user;
 
+  final PersonalChecklistService _personalService =
+      PersonalChecklistService.instance;
+  List<PersonalChecklistItem> _personalItems = const [];
+  bool _showPersonal = false;
+
   @override
   void initState() {
     super.initState();
@@ -49,6 +57,11 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
     } else {
       _loading = false;
     }
+    _personalService.addListener(_onPersonalChanged);
+    _personalService.ensureLoaded().then((_) {
+      if (!mounted) return;
+      _syncPersonal();
+    });
   }
 
   @override
@@ -57,6 +70,7 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
     for (final sub in _projectSubs.values) {
       sub.cancel();
     }
+    _personalService.removeListener(_onPersonalChanged);
     super.dispose();
   }
 
@@ -81,6 +95,18 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
         _projects.remove(id);
       }
     });
+  }
+
+  void _syncPersonal() {
+    if (!mounted) return;
+    setState(() {
+      _personalItems = List<PersonalChecklistItem>.from(_personalService.items);
+      _showPersonal = _personalService.showInStarred;
+    });
+  }
+
+  void _onPersonalChanged() {
+    _syncPersonal();
   }
 
   List<TaskItem> _sortedTasks(List<TaskItem> input) {
@@ -207,6 +233,18 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
     }
   }
 
+  Future<void> _togglePersonalItem(PersonalChecklistItem item, bool value) {
+    return _personalService.setCompletion(item.id, value);
+  }
+
+  void _openPersonalChecklist() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const PersonalChecklistPage()));
+  }
+
+  bool get _shouldShowPersonal => _showPersonal && _personalItems.isNotEmpty;
+
   @override
   Widget build(BuildContext context) {
     if (_user == null) {
@@ -215,26 +253,37 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Starred Tasks')),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _tasks.isEmpty
-          ? const _Empty()
-          : ReorderableListView.builder(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-              buildDefaultDragHandles: true,
-              itemCount: _tasks.length,
-              onReorder: _handleReorder,
-              itemBuilder: (context, index) {
-                final task = _tasks[index];
-                final project = _projects[task.projectId];
-                return Dismissible(
-                  key: ValueKey('starred-${task.id}'),
+    final includePersonal = _shouldShowPersonal;
+    final hasStarredTasks = _tasks.isNotEmpty;
+
+    if (_loading && !hasStarredTasks && !includePersonal) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Starred Tasks')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final slivers = <Widget>[];
+
+    if (hasStarredTasks) {
+      slivers.add(
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(12, 12, 12, includePersonal ? 12 : 24),
+          sliver: SliverReorderableList(
+            itemCount: _tasks.length,
+            onReorder: _handleReorder,
+            itemBuilder: (context, index) {
+              final task = _tasks[index];
+              final project = _projects[task.projectId];
+              return ReorderableDelayedDragStartListener(
+                key: ValueKey('starred-${task.id}'),
+                index: index,
+                child: Dismissible(
+                  key: ValueKey('dismiss-${task.id}'),
                   direction: DismissDirection.endToStart,
                   background: _dismissBackground(context),
                   confirmDismiss: (_) async {
-                    final ok = await _completeTask(task);
+                    await _completeTask(task);
                     return false;
                   },
                   child: _StarredTile(
@@ -253,13 +302,69 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
                         showTaskEditDialog(context, task, canEdit: true),
                     onComplete: () => _completeTask(task),
                   ),
-                );
-              },
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    } else if (!_loading) {
+      slivers.add(
+        SliverToBoxAdapter(
+          child: const Padding(
+            padding: EdgeInsets.fromLTRB(12, 24, 12, 12),
+            child: _Empty(),
+          ),
+        ),
+      );
+    }
+
+    if (includePersonal) {
+      slivers.add(
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(16, hasStarredTasks ? 8 : 24, 16, 8),
+            child: Text(
+              'Personal Checklist',
+              style: Theme.of(context).textTheme.titleMedium,
             ),
+          ),
+        ),
+      );
+      slivers.add(
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate((context, index) {
+              final item = _personalItems[index];
+              return _PersonalStarredTile(
+                item: item,
+                onToggle: (value) => _togglePersonalItem(item, value),
+                onOpenChecklist: _openPersonalChecklist,
+              );
+            }, childCount: _personalItems.length),
+          ),
+        ),
+      );
+    }
+
+    if (slivers.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Starred Tasks')),
+        body: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : const _Empty(),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Starred Tasks')),
+      body: CustomScrollView(slivers: slivers),
     );
   }
 
   // ---------- fallback comparator (code asc -> due date -> title) ----------
+
   static int? _codeToInt(String? code) {
     if (code == null) return null;
     final s = code.trim();
@@ -315,7 +420,7 @@ class _StarredTile extends StatelessWidget {
     final parts = <String>[];
     if (number.isNotEmpty) parts.add(number);
     if (name.isNotEmpty) parts.add(name);
-    if (parts.isNotEmpty) return parts.join(' · ');
+    if (parts.isNotEmpty) return parts.join(' - ');
     if (task.projectId.isNotEmpty) return 'Project ${task.projectId}';
     return null;
   }
@@ -407,6 +512,71 @@ class _StarredTile extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PersonalStarredTile extends StatelessWidget {
+  const _PersonalStarredTile({
+    required this.item,
+    required this.onToggle,
+    required this.onOpenChecklist,
+  });
+
+  final PersonalChecklistItem item;
+  final Future<void> Function(bool) onToggle;
+  final VoidCallback onOpenChecklist;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final small = textTheme.bodySmall;
+    final titleStyle = item.isDone
+        ? const TextStyle(
+            decoration: TextDecoration.lineThrough,
+            fontWeight: FontWeight.w600,
+          )
+        : const TextStyle(fontWeight: FontWeight.w600);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Checkbox(
+              value: item.isDone,
+              onChanged: (value) => onToggle(value ?? false),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: titleStyle,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Personal',
+                    style: small?.copyWith(
+                      color: small?.color?.withOpacity(0.8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: 'Open checklist',
+              onPressed: onOpenChecklist,
+              icon: const Icon(Icons.open_in_new),
+            ),
+          ],
         ),
       ),
     );

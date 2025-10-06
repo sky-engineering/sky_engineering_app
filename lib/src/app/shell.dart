@@ -8,6 +8,7 @@ import '../pages/profile_page.dart';
 import '../pages/note_editor_page.dart';
 import '../dialogs/quick_actions.dart';
 import '../pages/invoices_page.dart';
+import '../pages/personal_checklist_page.dart';
 
 class Shell extends StatefulWidget {
   final User user;
@@ -92,6 +93,12 @@ class _ShellState extends State<Shell> {
     );
   }
 
+  void _openChecklist() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const PersonalChecklistPage()));
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_error != null) {
@@ -108,15 +115,29 @@ class _ShellState extends State<Shell> {
       appBar: AppBar(title: _logoTitle()),
       body: IndexedStack(index: _index, children: _pages),
       floatingActionButton: _index == 0
-          ? FloatingActionButton(
-              heroTag: 'dashboard-quick',
-              backgroundColor: const Color(0xFFF1C400),
-              foregroundColor: Colors.black,
-              onPressed: _showQuickActionSheet,
-              child: const Icon(Icons.add),
+          ? Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  FloatingActionButton(
+                    heroTag: 'dashboard-checklist',
+                    onPressed: _openChecklist,
+                    tooltip: 'Personal checklist',
+                    child: const Icon(Icons.fact_check),
+                  ),
+                  FloatingActionButton(
+                    heroTag: 'dashboard-quick',
+                    backgroundColor: const Color(0xFFF1C400),
+                    foregroundColor: Colors.black,
+                    onPressed: _showQuickActionSheet,
+                    child: const Icon(Icons.add),
+                  ),
+                ],
+              ),
             )
           : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
