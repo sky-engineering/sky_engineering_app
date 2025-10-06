@@ -278,6 +278,79 @@ class Invoice {
     );
   }
 
+  /// Returns true when this invoice should be considered part of the project
+  /// identified by [projectId] and/or [projectNumber].
+  bool matchesProjectKey({
+    required String projectId,
+    String? projectNumber,
+  }) {
+    if (projectId.isNotEmpty && this.projectId == projectId) {
+      return true;
+    }
+
+    if (projectNumber == null || projectNumber.trim().isEmpty) {
+      return false;
+    }
+
+    final candidate = this.projectNumber;
+    if (candidate == null || candidate.trim().isEmpty) {
+      return false;
+    }
+
+    final canonicalTarget = canonicalProjectNumber(projectNumber);
+    final canonicalCandidate = canonicalProjectNumber(candidate);
+    if (canonicalTarget.isNotEmpty &&
+        canonicalCandidate.isNotEmpty &&
+        canonicalTarget == canonicalCandidate) {
+      return true;
+    }
+
+    final digitsTarget = projectNumberDigitsValue(projectNumber);
+    final digitsCandidate = projectNumberDigitsValue(candidate);
+    if (digitsTarget != null &&
+        digitsCandidate != null &&
+        digitsTarget == digitsCandidate) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /// Returns invoices from [invoices] that match the provided project key.
+  static List<Invoice> filterForProject(
+    Iterable<Invoice> invoices, {
+    required String projectId,
+    String? projectNumber,
+  }) {
+    final seen = <String>{};
+    final result = <Invoice>[];
+    for (final inv in invoices) {
+      if (inv.matchesProjectKey(
+            projectId: projectId,
+            projectNumber: projectNumber,
+          ) &&
+          seen.add(inv.id)) {
+        result.add(inv);
+      }
+    }
+    return result;
+  }
+
+  /// Canonical form for project numbers: letters/digits only, lowercase.
+  static String canonicalProjectNumber(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) return '';
+    final cleaned = trimmed.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
+    return cleaned.toLowerCase();
+  }
+
+  /// Integer representation of the digits in a project number (ignores letters).
+  static int? projectNumberDigitsValue(String? value) {
+    final digits = value?.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits == null || digits.isEmpty) return null;
+    return int.tryParse(digits);
+  }
+
   static String? _normalizeProjectNumber(String? value) {
     final trimmed = value?.trim();
     if (trimmed == null || trimmed.isEmpty) return null;

@@ -7,15 +7,7 @@ class InvoiceRepository {
 
   /// All invoices (no filter). Sorted client-side by invoiceDate/createdAt desc.
   Stream<List<Invoice>> streamAll() {
-    return _col.snapshots().map((snap) {
-      final list = snap.docs.map((d) => Invoice.fromDoc(d)).toList();
-      list.sort((a, b) {
-        final ad = a.invoiceDate ?? a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bd = b.invoiceDate ?? b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        return bd.compareTo(ad);
-      });
-      return list;
-    });
+    return _col.snapshots().map(_docsToSortedInvoices);
   }
 
   /// Invoices owned by a specific user. (InvoicesPage uses this.)
@@ -31,17 +23,33 @@ class InvoiceRepository {
     });
   }
 
-  /// Invoices for a single project.
+  /// Invoices for a single project by id.
   Stream<List<Invoice>> streamByProject(String projectId) {
-    return _col.where('projectId', isEqualTo: projectId).snapshots().map((snap) {
-      final list = snap.docs.map((d) => Invoice.fromDoc(d)).toList();
-      list.sort((a, b) {
-        final ad = a.invoiceDate ?? a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bd = b.invoiceDate ?? b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        return bd.compareTo(ad);
-      });
-      return list;
-    });
+    return _col.where('projectId', isEqualTo: projectId).snapshots().map(_docsToSortedInvoices);
+  }
+
+  /// Invoices whose `projectNumber` matches [projectNumber].
+  Stream<List<Invoice>> streamByProjectNumber(String projectNumber) {
+    final trimmed = projectNumber.trim();
+    if (trimmed.isEmpty) {
+      return const Stream<List<Invoice>>.empty();
+    }
+    return streamAll().map((list) =>
+        Invoice.filterForProject(list, projectId: '', projectNumber: trimmed));
+  }
+
+  /// Invoices for a project, merging projectId and projectNumber matches.
+  Stream<List<Invoice>> streamForProject({
+    required String projectId,
+    String? projectNumber,
+  }) {
+    return streamAll().map(
+      (list) => Invoice.filterForProject(
+        list,
+        projectId: projectId,
+        projectNumber: projectNumber,
+      ),
+    );
   }
 
   Future<Invoice?> getById(String id) async {
@@ -154,4 +162,14 @@ class InvoiceRepository {
   }
 
   Future<void> delete(String id) => _col.doc(id).delete();
+
+  List<Invoice> _docsToSortedInvoices(QuerySnapshot<Map<String, dynamic>> snap) {
+    final list = snap.docs.map((d) => Invoice.fromDoc(d)).toList();
+    list.sort((a, b) {
+      final ad = a.invoiceDate ?? a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bd = b.invoiceDate ?? b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return bd.compareTo(ad);
+    });
+    return list;
+  }
 }

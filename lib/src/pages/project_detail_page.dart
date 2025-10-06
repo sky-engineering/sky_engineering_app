@@ -141,6 +141,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
 
               _FinancialSummaryCard(
                 projectId: p.id,
+                projectNumber: p.projectNumber,
                 contractAmount: p.contractAmount,
               ),
 
@@ -317,10 +318,12 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
 
 class _FinancialSummaryCard extends StatelessWidget {
   final String projectId;
+  final String? projectNumber;
   final double? contractAmount;
 
   const _FinancialSummaryCard({
     required this.projectId,
+    required this.projectNumber,
     required this.contractAmount,
   });
 
@@ -332,7 +335,10 @@ class _FinancialSummaryCard extends StatelessWidget {
     ); // no cents for contract
 
     return StreamBuilder<List<Invoice>>(
-      stream: InvoiceRepository().streamByProject(projectId),
+      stream: InvoiceRepository().streamForProject(
+        projectId: projectId,
+        projectNumber: projectNumber,
+      ),
       builder: (context, snap) {
         final invoices = snap.data ?? const <Invoice>[];
 

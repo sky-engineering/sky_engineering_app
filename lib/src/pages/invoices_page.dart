@@ -157,10 +157,31 @@ class _InvoicesPageState extends State<InvoicesPage> {
 
                     // Apply project filter
                     if (_selectedProjectIds.isNotEmpty) {
+                      final selectedCanonical = _selectedProjectIds
+                          .map((id) =>
+                              Invoice.canonicalProjectNumber(_projectNumById[id]))
+                          .where((value) => value.isNotEmpty)
+                          .toSet();
+                      final selectedDigitValues = _selectedProjectIds
+                          .map((id) =>
+                              Invoice.projectNumberDigitsValue(_projectNumById[id]))
+                          .whereType<int>()
+                          .toSet();
+
                       invoices = invoices
-                          .where(
-                            (i) => _selectedProjectIds.contains(i.projectId),
-                          )
+                          .where((i) {
+                            final matchesId =
+                                _selectedProjectIds.contains(i.projectId);
+                            final canonical =
+                                Invoice.canonicalProjectNumber(i.projectNumber);
+                            final digitsValue =
+                                Invoice.projectNumberDigitsValue(i.projectNumber);
+                            final matchesNumber = (canonical.isNotEmpty &&
+                                    selectedCanonical.contains(canonical)) ||
+                                (digitsValue != null &&
+                                    selectedDigitValues.contains(digitsValue));
+                            return matchesId || matchesNumber;
+                          })
                           .toList();
                     }
 
@@ -789,4 +810,5 @@ class _InvoicesPageState extends State<InvoicesPage> {
       ),
     );
   }
+
 }

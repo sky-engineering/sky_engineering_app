@@ -63,7 +63,10 @@ class InvoicesSection extends StatelessWidget {
           if (title != null && title!.trim().isNotEmpty)
             const SizedBox(height: 8),
           StreamBuilder<List<Invoice>>(
-            stream: repo.streamByProject(projectId),
+            stream: repo.streamForProject(
+              projectId: projectId,
+              projectNumber: projectNumberString,
+            ),
             builder: (context, snap) {
               if (snap.connectionState == ConnectionState.waiting) {
                 return const Padding(
@@ -72,8 +75,7 @@ class InvoicesSection extends StatelessWidget {
                 );
               }
 
-              // start with all invoices
-              var invoices = (snap.data ?? const <Invoice>[]);
+              var invoices = snap.data ?? const <Invoice>[];
 
               // filter by type
               if (invoiceTypeFilter != null) {
