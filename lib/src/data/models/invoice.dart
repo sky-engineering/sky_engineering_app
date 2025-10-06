@@ -144,24 +144,35 @@ class Invoice {
     DateTime? _toDate(dynamic v) {
       if (v is Timestamp) return v.toDate();
       if (v is DateTime) return v;
+      if (v is String) {
+        final trimmed = v.trim();
+        if (trimmed.isEmpty) return null;
+        try {
+          return DateTime.parse(trimmed);
+        } catch (_) {
+          return null;
+        }
+      }
       return null;
     }
 
     final createdAt = _toDate(data['createdAt']);
     final updatedAt = _toDate(data['updatedAt']);
 
-    final String invNum =
-        (data['invoiceNumber'] as String?) ?? (data['number'] as String?) ?? '';
+    final String invNum = _stringOrEmpty(
+      data.containsKey('invoiceNumber')
+          ? data['invoiceNumber']
+          : data['number'],
+    );
 
     final double invAmt = data.containsKey('invoiceAmount')
         ? _toDouble(data['invoiceAmount'])
         : _toDouble(data['amount']);
 
-    final DateTime? invDate =
-        _toDate(data['invoiceDate']) ?? _toDate(data['issueDate']);
+    final DateTime? invDate = _toDate(data['invoiceDate']) ?? _toDate(data['issueDate']);
 
     final String type =
-    (data['invoiceType'] as String?) == 'Vendor' ? 'Vendor' : 'Client';
+        _stringOrEmpty(data['invoiceType']).toLowerCase() == 'vendor' ? 'Vendor' : 'Client';
 
     // Prefer stored amountPaid; otherwise derive from legacy balanceDue.
     final double? storedPaid = _toDoubleOrNull(data['amountPaid']);
@@ -175,7 +186,7 @@ class Invoice {
 
     return Invoice(
       id: doc.id,
-      projectId: (data['projectId'] as String?) ?? '',
+      projectId: _stringOrEmpty(data['projectId']),
       projectNumber: _toProjectNumber(data['projectNumber']),
       invoiceNumber: invNum,
       invoiceAmount: invAmt,
@@ -184,15 +195,15 @@ class Invoice {
       invoiceDate: invDate,
       dueDate: _toDate(data['dueDate']),
       paidDate: _toDate(data['paidDate']),
-      documentLink: data['documentLink'] as String?,
+      documentLink: _stringOrNull(data['documentLink']),
       invoiceType: type,
-      ownerUid: data['ownerUid'] as String?,
+      ownerUid: _stringOrNull(data['ownerUid']),
       createdAt: createdAt,
       updatedAt: updatedAt,
 
       // Legacy fields (still persisted in many docs)
-      status: data['status'] as String?, // stored status if present
-      notes: data['notes'] as String?, // optional passthrough
+      status: _stringOrNull(data['status']), // stored status if present
+      notes: _stringOrNull(data['notes']), // optional passthrough
     );
   }
 
@@ -333,7 +344,39 @@ class Invoice {
         result.add(inv);
       }
     }
-    return result;
+    return mergeAndSort([result]);
+  }
+
+  /// Merge multiple invoice lists, deduplicate by id, and sort newest first.
+  static List<Invoice> mergeAndSort(Iterable<Iterable<Invoice>> sources) {
+    final map = <String, Invoice>{};
+    for (final group in sources) {
+      for (final inv in group) {
+        map[inv.id] = inv;
+      }
+    }
+
+    final list = map.values.toList();
+    list.sort((a, b) {
+      final ad = a.invoiceDate ?? a.createdAt ?? a.updatedAt;
+      final bd = b.invoiceDate ?? b.createdAt ?? b.updatedAt;
+      if (ad != null && bd != null) return bd.compareTo(ad);
+      if (ad == null && bd != null) return 1;
+      if (ad != null && bd == null) return -1;
+      return b.invoiceNumber.compareTo(a.invoiceNumber);
+    });
+    return list;
+  }
+
+  static String _stringOrEmpty(dynamic value) {
+    if (value == null) return '';
+    if (value is String) return value.trim();
+    return value.toString().trim();
+  }
+
+  static String? _stringOrNull(dynamic value) {
+    final text = _stringOrEmpty(value);
+    return text.isEmpty ? null : text;
   }
 
   /// Canonical form for project numbers: letters/digits only, lowercase.

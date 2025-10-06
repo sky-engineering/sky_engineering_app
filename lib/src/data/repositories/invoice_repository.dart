@@ -25,20 +25,13 @@ class InvoiceRepository {
 
   /// Invoices for a single project by id.
   Stream<List<Invoice>> streamByProject(String projectId) {
-    return _col.where('projectId', isEqualTo: projectId).snapshots().map(_docsToSortedInvoices);
+    return _col
+        .where('projectId', isEqualTo: projectId)
+        .snapshots()
+        .map(_docsToSortedInvoices);
   }
 
-  /// Invoices whose `projectNumber` matches [projectNumber].
-  Stream<List<Invoice>> streamByProjectNumber(String projectNumber) {
-    final trimmed = projectNumber.trim();
-    if (trimmed.isEmpty) {
-      return const Stream<List<Invoice>>.empty();
-    }
-    return streamAll().map((list) =>
-        Invoice.filterForProject(list, projectId: '', projectNumber: trimmed));
-  }
-
-  /// Invoices for a project, merging projectId and projectNumber matches.
+  /// Invoices for a project, matching by `projectId` or `projectNumber`.
   Stream<List<Invoice>> streamForProject({
     required String projectId,
     String? projectNumber,

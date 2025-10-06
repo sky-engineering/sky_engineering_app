@@ -151,12 +151,16 @@ class InvoicesSection extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // First line: "Invoice <#>" + (open link icon if any) ... "Balance: $x"
                               Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Expanded(
-                                    child: Row(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
+                                        Row(
+                                          children: [
                                         Expanded(
                                           child: Text(
                                             inv.invoiceNumber.isNotEmpty
@@ -170,43 +174,27 @@ class InvoicesSection extends StatelessWidget {
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
-                                        if ((inv.documentLink ?? '')
-                                            .trim()
-                                            .isNotEmpty)
-                                          IconButton(
-                                            tooltip: 'Open document link',
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                            iconSize: 18,
-                                            padding: EdgeInsets.zero,
-                                            constraints: const BoxConstraints(
-                                              minWidth: 28,
-                                              minHeight: 28,
-                                            ),
-                                            onPressed: () => _openLink(
-                                              inv.documentLink!.trim(),
-                                            ),
-                                            icon: const Icon(Icons.open_in_new),
-                                          ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Original: ${currency.format(inv.invoiceAmount)}',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall,
+                                        ),
                                       ],
                                     ),
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    currency.format(inv.invoiceAmount),
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodyMedium,
+                                    currency.format(inv.balance),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(fontWeight: FontWeight.w600),
                                   ),
                                 ],
-                              ),
-                              DefaultTextStyle(
-                                style:
-                                    Theme.of(context).textTheme.bodySmall ??
-                                    const TextStyle(fontSize: 12),
-                                child: Text(
-                                  'Balance: ${currency.format(inv.balance)}',
-                                ),
                               ),
                             ],
                           ),

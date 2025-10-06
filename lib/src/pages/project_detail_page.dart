@@ -23,7 +23,7 @@ class ProjectDetailPage extends StatefulWidget {
 }
 
 class _ProjectDetailPageState extends State<ProjectDetailPage> {
-  bool _unpaidOnly = false; // toggle for invoice filtering
+  bool _unpaidOnly = true; // toggle for invoice filtering (default hide paid)
   final ScrollController _scrollCtrl = ScrollController();
   static const _accentYellow = Color(0xFFF1C400);
 

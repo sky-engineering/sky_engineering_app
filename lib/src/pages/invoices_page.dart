@@ -290,20 +290,9 @@ class _InvoicesPageState extends State<InvoicesPage> {
                                           ),
                                         ),
                                       ),
-                                      if ((inv.documentLink ?? '')
-                                          .trim()
-                                          .isNotEmpty)
-                                        IconButton(
-                                          tooltip: 'Open document link',
-                                          icon: const Icon(Icons.link),
-                                          onPressed: () => _openLink(
-                                            inv.documentLink!.trim(),
-                                          ),
-                                          visualDensity: VisualDensity.compact,
-                                        ),
                                       const SizedBox(width: 4),
                                       Text(
-                                        'Balance: ${currency.format(inv.balance)}',
+                                        currency.format(inv.balance),
                                         style: const TextStyle(
                                           fontWeight: FontWeight.w600,
                                         ),
