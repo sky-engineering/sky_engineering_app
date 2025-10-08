@@ -1,4 +1,4 @@
-﻿// lib/src/services/personal_checklist_service.dart
+// lib/src/services/personal_checklist_service.dart
 import 'dart:collection';
 import 'dart:convert';
 
@@ -75,6 +75,38 @@ class PersonalChecklistService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> reorderItems(List<String> orderedIds) async {
+    await ensureLoaded();
+    if (orderedIds.isEmpty) return;
+
+    final lookup = {for (final item in _items) item.id: item};
+    final reordered = <PersonalChecklistItem>[];
+    final seen = <String>{};
+
+    for (final id in orderedIds) {
+      final item = lookup[id];
+      if (item != null && seen.add(id)) {
+        reordered.add(item);
+      }
+    }
+
+    for (final item in _items) {
+      if (seen.add(item.id)) {
+        reordered.add(item);
+      }
+    }
+
+    final currentOrder = _items.map((item) => item.id).toList(growable: false);
+    final nextOrder = reordered.map((item) => item.id).toList(growable: false);
+    if (listEquals(currentOrder, nextOrder)) return;
+
+    _items
+      ..clear()
+      ..addAll(reordered);
+    await _persistItems();
+    notifyListeners();
+  }
+
   Future<void> removeItem(String id) async {
     await ensureLoaded();
     final originalLength = _items.length;
@@ -115,5 +147,3 @@ class PersonalChecklistService extends ChangeNotifier {
     await prefs.setBool(_showKey, _showInStarred);
   }
 }
-
-

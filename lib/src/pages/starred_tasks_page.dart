@@ -39,6 +39,8 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
   List<PersonalChecklistItem> _personalItems = const [];
   bool _showPersonal = false;
 
+  List<_StarredEntry> _entries = const [];
+
   @override
   void initState() {
     super.initState();
@@ -88,25 +90,88 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
     }
     final removedProjectIds = _syncProjectSubscriptions(sorted);
     if (!mounted) return;
+    final includePersonal = _shouldShowPersonal;
+    final merged = _mergeEntries(
+      entries: _entries,
+      tasks: sorted,
+      personal: includePersonal ? _personalItems : const [],
+      includePersonal: includePersonal,
+    );
     setState(() {
       _tasks = sorted;
       _loading = false;
       for (final id in removedProjectIds) {
         _projects.remove(id);
       }
+      _entries = merged;
     });
   }
 
   void _syncPersonal() {
     if (!mounted) return;
+    final items = List<PersonalChecklistItem>.from(_personalService.items);
+    final show = _personalService.showInStarred;
+    final includePersonal = show && items.isNotEmpty;
+    final merged = _mergeEntries(
+      entries: _entries,
+      tasks: _tasks,
+      personal: includePersonal ? items : const [],
+      includePersonal: includePersonal,
+    );
     setState(() {
-      _personalItems = List<PersonalChecklistItem>.from(_personalService.items);
-      _showPersonal = _personalService.showInStarred;
+      _personalItems = items;
+      _showPersonal = show;
+      _entries = merged;
     });
   }
 
   void _onPersonalChanged() {
     _syncPersonal();
+  }
+
+  List<_StarredEntry> _mergeEntries({
+    required List<_StarredEntry> entries,
+    required List<TaskItem> tasks,
+    required List<PersonalChecklistItem> personal,
+    required bool includePersonal,
+  }) {
+    final taskMap = {for (final task in tasks) task.id: task};
+    final personalMap = {for (final item in personal) item.id: item};
+    final merged = <_StarredEntry>[];
+    final seenTaskIds = <String>{};
+    final seenPersonalIds = <String>{};
+
+    for (final entry in entries) {
+      if (entry.isTask) {
+        final task = taskMap[entry.task!.id];
+        if (task != null) {
+          merged.add(_StarredEntry.task(task));
+          seenTaskIds.add(task.id);
+        }
+      } else if (includePersonal) {
+        final item = personalMap[entry.personal!.id];
+        if (item != null) {
+          merged.add(_StarredEntry.personal(item));
+          seenPersonalIds.add(item.id);
+        }
+      }
+    }
+
+    for (final task in tasks) {
+      if (seenTaskIds.add(task.id)) {
+        merged.add(_StarredEntry.task(task));
+      }
+    }
+
+    if (includePersonal) {
+      for (final item in personal) {
+        if (seenPersonalIds.add(item.id)) {
+          merged.add(_StarredEntry.personal(item));
+        }
+      }
+    }
+
+    return merged;
   }
 
   List<TaskItem> _sortedTasks(List<TaskItem> input) {
@@ -167,24 +232,50 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
 
   Future<void> _handleReorder(int oldIndex, int newIndex) async {
     if (oldIndex < newIndex) newIndex -= 1;
-    setState(() {
-      final updated = [..._tasks];
-      final item = updated.removeAt(oldIndex);
-      updated.insert(newIndex, item);
-      final reindexed = <TaskItem>[];
-      for (var i = 0; i < updated.length; i++) {
-        reindexed.add(updated[i].copyWith(starredOrder: i));
+    final updatedEntries = [..._entries];
+    final moved = updatedEntries.removeAt(oldIndex);
+    updatedEntries.insert(newIndex, moved);
+
+    final normalizedEntries = <_StarredEntry>[];
+    final updatedTasks = <TaskItem>[];
+    final updatedPersonal = <PersonalChecklistItem>[];
+    var order = 0;
+    for (final entry in updatedEntries) {
+      if (entry.isTask) {
+        final updatedTask = entry.task!.copyWith(starredOrder: order++);
+        updatedTasks.add(updatedTask);
+        normalizedEntries.add(_StarredEntry.task(updatedTask));
+      } else {
+        final item = entry.personal!;
+        updatedPersonal.add(item);
+        normalizedEntries.add(_StarredEntry.personal(item));
       }
-      _tasks = reindexed;
+    }
+
+    setState(() {
+      _entries = normalizedEntries;
+      _tasks = updatedTasks;
+      if (_showPersonal) {
+        _personalItems = updatedPersonal;
+      }
     });
 
+    final futures = <Future<void>>[_repo.reorderStarredTasks(updatedTasks)];
+    if (_showPersonal && updatedPersonal.isNotEmpty) {
+      futures.add(
+        _personalService.reorderItems(
+          updatedPersonal.map((item) => item.id).toList(growable: false),
+        ),
+      );
+    }
+
     try {
-      await _repo.reorderStarredTasks(_tasks);
+      await Future.wait(futures);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to reorder tasks: $e')));
+      ).showSnackBar(SnackBar(content: Text('Failed to reorder items: $e')));
     }
   }
 
@@ -199,6 +290,13 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
           remaining[i] = remaining[i].copyWith(starredOrder: i);
         }
         _tasks = remaining;
+        final includePersonal = _shouldShowPersonal;
+        _entries = _mergeEntries(
+          entries: _entries,
+          tasks: remaining,
+          personal: includePersonal ? _personalItems : const [],
+          includePersonal: includePersonal,
+        );
       });
     }
 
@@ -253,10 +351,9 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
       );
     }
 
-    final includePersonal = _shouldShowPersonal;
-    final hasStarredTasks = _tasks.isNotEmpty;
+    final hasEntries = _entries.isNotEmpty;
 
-    if (_loading && !hasStarredTasks && !includePersonal) {
+    if (_loading && !hasEntries) {
       return Scaffold(
         appBar: AppBar(title: const Text('Starred Tasks')),
         body: const Center(child: CircularProgressIndicator()),
@@ -265,43 +362,57 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
 
     final slivers = <Widget>[];
 
-    if (hasStarredTasks) {
+    if (hasEntries) {
       slivers.add(
         SliverPadding(
-          padding: EdgeInsets.fromLTRB(12, 12, 12, includePersonal ? 12 : 24),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
           sliver: SliverReorderableList(
-            itemCount: _tasks.length,
+            itemCount: _entries.length,
             onReorder: _handleReorder,
             itemBuilder: (context, index) {
-              final task = _tasks[index];
-              final project = _projects[task.projectId];
-              return ReorderableDelayedDragStartListener(
-                key: ValueKey('starred-${task.id}'),
-                index: index,
-                child: Dismissible(
-                  key: ValueKey('dismiss-${task.id}'),
-                  direction: DismissDirection.endToStart,
-                  background: _dismissBackground(context),
-                  confirmDismiss: (_) async {
-                    await _completeTask(task);
-                    return false;
-                  },
-                  child: _StarredTile(
-                    task: task,
-                    project: project,
-                    onOpenProject: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              ProjectDetailPage(projectId: task.projectId),
-                        ),
-                      );
+              final entry = _entries[index];
+              if (entry.isTask) {
+                final task = entry.task!;
+                final project = _projects[task.projectId];
+                return ReorderableDelayedDragStartListener(
+                  key: ValueKey(entry.key),
+                  index: index,
+                  child: Dismissible(
+                    key: ValueKey('dismiss-${task.id}'),
+                    direction: DismissDirection.endToStart,
+                    background: _dismissBackground(context),
+                    confirmDismiss: (_) async {
+                      await _completeTask(task);
+                      return false;
                     },
-                    onToggleStar: () => _toggleStar(task),
-                    onTap: () =>
-                        showTaskEditDialog(context, task, canEdit: true),
-                    onComplete: () => _completeTask(task),
+                    child: _StarredTile(
+                      task: task,
+                      project: project,
+                      onOpenProject: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                ProjectDetailPage(projectId: task.projectId),
+                          ),
+                        );
+                      },
+                      onToggleStar: () => _toggleStar(task),
+                      onTap: () =>
+                          showTaskEditDialog(context, task, canEdit: true),
+                      onComplete: () => _completeTask(task),
+                    ),
                   ),
+                );
+              }
+
+              final item = entry.personal!;
+              return ReorderableDelayedDragStartListener(
+                key: ValueKey(entry.key),
+                index: index,
+                child: _PersonalStarredTile(
+                  item: item,
+                  onToggle: (value) => _togglePersonalItem(item, value),
+                  onOpenChecklist: _openPersonalChecklist,
                 ),
               );
             },
@@ -314,35 +425,6 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
           child: const Padding(
             padding: EdgeInsets.fromLTRB(12, 24, 12, 12),
             child: _Empty(),
-          ),
-        ),
-      );
-    }
-
-    if (includePersonal) {
-      slivers.add(
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(16, hasStarredTasks ? 8 : 24, 16, 8),
-            child: Text(
-              'Personal Checklist',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ),
-        ),
-      );
-      slivers.add(
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate((context, index) {
-              final item = _personalItems[index];
-              return _PersonalStarredTile(
-                item: item,
-                onToggle: (value) => _togglePersonalItem(item, value),
-                onOpenChecklist: _openPersonalChecklist,
-              );
-            }, childCount: _personalItems.length),
           ),
         ),
       );
@@ -397,6 +479,19 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
   }
 }
 
+class _StarredEntry {
+  const _StarredEntry.task(this.task) : personal = null;
+  const _StarredEntry.personal(this.personal) : task = null;
+
+  final TaskItem? task;
+  final PersonalChecklistItem? personal;
+
+  bool get isTask => task != null;
+  bool get isPersonal => personal != null;
+  String get key =>
+      isTask ? 'starred-task-${task!.id}' : 'starred-personal-${personal!.id}';
+}
+
 class _StarredTile extends StatelessWidget {
   final TaskItem task;
   final Project? project;
@@ -427,18 +522,22 @@ class _StarredTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final hasDesc = (task.description ?? '').trim().isNotEmpty;
     final projectLabel = _projectSummary();
-    final small = Theme.of(context).textTheme.bodySmall;
+    final small = theme.textTheme.bodySmall;
     final Color? baseProjectColor = small?.color;
     final projectStyle = small?.copyWith(
       color: baseProjectColor?.withOpacity(0.8),
     );
-    final filledStar = Theme.of(context).colorScheme.secondary;
-    final hollowStar = Theme.of(context).colorScheme.onSurfaceVariant;
+    final filledStar = theme.colorScheme.secondary;
+    final hollowStar = theme.colorScheme.onSurfaceVariant;
     final hasMultiLine = hasDesc || projectLabel != null;
+    final isCompleted = task.taskStatus.trim().toLowerCase() == 'completed';
+    final cardColor = isCompleted ? theme.colorScheme.surfaceVariant : null;
 
     return Card(
+      color: cardColor,
       child: InkWell(
         onTap: onTap,
         child: Padding(
@@ -532,13 +631,18 @@ class _PersonalStarredTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final small = textTheme.bodySmall;
+    const personalColor = Color(0xFFF3EAA5);
+    final baseTitleStyle = TextStyle(
+      fontWeight: FontWeight.w600,
+      color: personalColor,
+    );
     final titleStyle = item.isDone
-        ? const TextStyle(
-            decoration: TextDecoration.lineThrough,
-            fontWeight: FontWeight.w600,
-          )
-        : const TextStyle(fontWeight: FontWeight.w600);
+        ? baseTitleStyle.copyWith(decoration: TextDecoration.lineThrough)
+        : baseTitleStyle;
+    final labelTemplate = textTheme.bodySmall ?? const TextStyle();
+    final labelStyle = labelTemplate.copyWith(
+      color: personalColor.withOpacity(0.8),
+    );
 
     return Card(
       child: Padding(
@@ -562,12 +666,7 @@ class _PersonalStarredTile extends StatelessWidget {
                     style: titleStyle,
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    'Personal',
-                    style: small?.copyWith(
-                      color: small?.color?.withOpacity(0.8),
-                    ),
-                  ),
+                  Text('Personal', style: labelStyle),
                 ],
               ),
             ),

@@ -57,6 +57,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             hintText: 'Start typing...',
           ),
           autofocus: true,
+          cursorColor: Theme.of(context).colorScheme.onPrimary,
           maxLines: null,
           keyboardType: TextInputType.multiline,
         ),
