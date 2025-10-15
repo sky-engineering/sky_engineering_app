@@ -23,46 +23,106 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   final DropboxAuth _dropboxAuth = DropboxAuth();
 
   bool _saving = false;
+  bool _hasChanges = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_handleTextChanged);
+  }
+
+  void _handleTextChanged() {
+    final dirty = _controller.text.isNotEmpty;
+    if (dirty != _hasChanges && !_saving) {
+      setState(() => _hasChanges = dirty);
+    }
+  }
 
   @override
   void dispose() {
+    _controller.removeListener(_handleTextChanged);
     _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('New Note'),
-        actions: [
-          TextButton(
-            onPressed: _saving ? null : _handleDone,
-            child: _saving
-                ? const SizedBox(
-                    height: 16,
-                    width: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Done'),
+    return PopScope(
+      canPop: !_hasChanges || _saving,
+      onPopInvoked: (didPop) async {
+        if (didPop || _saving) return;
+        final shouldLeave = await _confirmDiscard();
+        if (shouldLeave && mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('New Note'),
+          leading: BackButton(onPressed: _handleBack),
+          actions: [
+            TextButton(
+              onPressed: _saving ? null : _handleDone,
+              child: _saving
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Done'),
+            ),
+          ],
+        ),
+        body: Padding(
+          padding: const EdgeInsets.all(16),
+          child: TextField(
+            controller: _controller,
+            decoration: const InputDecoration(
+              border: InputBorder.none,
+              hintText: 'Start typing...',
+            ),
+            autofocus: true,
+            cursorColor: Theme.of(context).colorScheme.primary,
+            maxLines: null,
+            keyboardType: TextInputType.multiline,
           ),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: TextField(
-          controller: _controller,
-          decoration: const InputDecoration(
-            border: InputBorder.none,
-            hintText: 'Start typing...',
-          ),
-          autofocus: true,
-          cursorColor: Theme.of(context).colorScheme.onPrimary,
-          maxLines: null,
-          keyboardType: TextInputType.multiline,
         ),
       ),
     );
+  }
+
+  Future<void> _handleBack() async {
+    if (_saving) return;
+    final shouldLeave = await _confirmDiscard();
+    if (shouldLeave && mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  Future<bool> _confirmDiscard() async {
+    if (!_hasChanges) return true;
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Discard changes?'),
+          content: const Text(
+            'Proceed without saving and all changes will be lost.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Go back to editor'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Proceed without saving'),
+            ),
+          ],
+        );
+      },
+    );
+    return result ?? false;
   }
 
   Future<void> _handleDone() async {
@@ -99,6 +159,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       await _saveNoteToDropbox(selectedProject, content);
       closeProgress();
       if (!mounted) return;
+      setState(() => _hasChanges = false);
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Note saved to Dropbox.')));

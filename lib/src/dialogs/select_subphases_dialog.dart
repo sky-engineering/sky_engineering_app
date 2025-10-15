@@ -10,10 +10,10 @@ import '../data/repositories/subphase_template_repository.dart';
 /// - On save, stores selected subphases with a per-project `status`.
 ///   New selections default to 'In Progress'. Existing ones preserve status.
 Future<void> showSelectSubphasesDialog(
-    BuildContext context, {
-      required String projectId,
-      required String ownerUid,
-    }) async {
+  BuildContext context, {
+  required String projectId,
+  required String ownerUid,
+}) async {
   final projRepo = ProjectRepository();
   final tmplRepo = SubphaseTemplateRepository();
 
@@ -24,7 +24,9 @@ Future<void> showSelectSubphasesDialog(
     // ignore: use_build_context_synchronously
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('No subphases configured yet. Add them under “Project Subphases”.'),
+        content: Text(
+          'No subphases configured yet. Add them under “Project Subphases”.',
+        ),
       ),
     );
     return;
@@ -37,10 +39,16 @@ Future<void> showSelectSubphasesDialog(
 
   // Group templates by phase
   final grouped = <String, List<SubphaseTemplate>>{
-    '01': [], '02': [], '03': [], '04': [], '??': [],
+    '01': [],
+    '02': [],
+    '03': [],
+    '04': [],
+    '??': [],
   };
   for (final t in templates) {
-    final phase = (t.subphaseCode.length >= 2) ? t.subphaseCode.substring(0, 2) : '??';
+    final phase = (t.subphaseCode.length >= 2)
+        ? t.subphaseCode.substring(0, 2)
+        : '??';
     (grouped[phase] ??= []).add(t);
   }
   for (final k in grouped.keys) {
@@ -49,11 +57,16 @@ Future<void> showSelectSubphasesDialog(
 
   String _phaseLabel(String code) {
     switch (code) {
-      case '01': return '01 — Land Use';
-      case '02': return '02 — Preliminary Design';
-      case '03': return '03 — Construction Design';
-      case '04': return '04 — Construction Management';
-      default:   return 'Other / Unknown';
+      case '01':
+        return '01 — Land Use';
+      case '02':
+        return '02 — Preliminary Design';
+      case '03':
+        return '03 — Construction Design';
+      case '04':
+        return '04 — Construction Management';
+      default:
+        return 'Other / Unknown';
     }
   }
 
@@ -84,11 +97,15 @@ Future<void> showSelectSubphasesDialog(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(_phaseLabel(phaseKey),
-                              style: Theme.of(context).textTheme.titleSmall),
+                          Text(
+                            _phaseLabel(phaseKey),
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
                           const SizedBox(height: 6),
-                          Text('No subphases configured for this phase.',
-                              style: Theme.of(context).textTheme.bodySmall),
+                          Text(
+                            'No subphases configured for this phase.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
                         ],
                       ),
                     );
@@ -102,33 +119,9 @@ Future<void> showSelectSubphasesDialog(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(_phaseLabel(phaseKey),
-                                      style: Theme.of(context).textTheme.titleSmall),
-                                ),
-                                TextButton(
-                                  onPressed: () {
-                                    setState(() {
-                                      for (final t in items) {
-                                        selected.add(t.subphaseCode);
-                                      }
-                                    });
-                                  },
-                                  child: const Text('Select all'),
-                                ),
-                                TextButton(
-                                  onPressed: () {
-                                    setState(() {
-                                      for (final t in items) {
-                                        selected.remove(t.subphaseCode);
-                                      }
-                                    });
-                                  },
-                                  child: const Text('Clear'),
-                                ),
-                              ],
+                            Text(
+                              _phaseLabel(phaseKey),
+                              style: Theme.of(context).textTheme.titleSmall,
                             ),
                             const SizedBox(height: 4),
                             ...items.map((t) {
@@ -144,11 +137,14 @@ Future<void> showSelectSubphasesDialog(
                                     }
                                   });
                                 },
-                                controlAffinity: ListTileControlAffinity.leading,
+                                controlAffinity:
+                                    ListTileControlAffinity.leading,
                                 dense: true,
                                 contentPadding: EdgeInsets.zero,
-                                title: Text('${t.subphaseCode}  ${t.subphaseName}',
-                                    overflow: TextOverflow.ellipsis),
+                                title: Text(
+                                  '${t.subphaseCode}  ${t.subphaseName}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               );
                             }),
                           ],
@@ -168,38 +164,46 @@ Future<void> showSelectSubphasesDialog(
                 onPressed: selected.isEmpty
                     ? null
                     : () async {
-                  // Build new list:
-                  // - For codes in templates: use template snapshot + preserve existing status if any
-                  // - For codes no longer in templates: if still selected and existed before, preserve as-is
-                  final picked = <Map<String, dynamic>>[];
+                        // Build new list:
+                        // - For codes in templates: use template snapshot + preserve existing status if any
+                        // - For codes no longer in templates: if still selected and existed before, preserve as-is
+                        final picked = <Map<String, dynamic>>[];
 
-                  for (final code in selected) {
-                    final template = templateByCode[code];
-                    final prev = existingByCode[code];
-                    if (template != null) {
-                      picked.add(SelectedSubphase(
-                        code: template.subphaseCode,
-                        name: template.subphaseName,
-                        responsibility: template.responsibility,
-                        isDeliverable: template.isDeliverable,
-                        status: prev?.status ?? 'In Progress',
-                      ).toMap());
-                    } else if (prev != null) {
-                      picked.add(prev.toMap()); // preserve unknown legacy selection
-                    }
-                  }
+                        for (final code in selected) {
+                          final template = templateByCode[code];
+                          final prev = existingByCode[code];
+                          if (template != null) {
+                            picked.add(
+                              SelectedSubphase(
+                                code: template.subphaseCode,
+                                name: template.subphaseName,
+                                responsibility: template.responsibility,
+                                isDeliverable: template.isDeliverable,
+                                status: prev?.status ?? 'In Progress',
+                              ).toMap(),
+                            );
+                          } else if (prev != null) {
+                            picked.add(
+                              prev.toMap(),
+                            ); // preserve unknown legacy selection
+                          }
+                        }
 
-                  await projRepo.update(projectId, {
-                    'selectedSubphases': picked,
-                  });
+                        await projRepo.update(projectId, {
+                          'selectedSubphases': picked,
+                        });
 
-                  // ignore: use_build_context_synchronously
-                  Navigator.pop(context);
-                  // ignore: use_build_context_synchronously
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Saved ${picked.length} subphase(s).')),
-                  );
-                },
+                        // ignore: use_build_context_synchronously
+                        Navigator.pop(context);
+                        // ignore: use_build_context_synchronously
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Saved ${picked.length} subphase(s).',
+                            ),
+                          ),
+                        );
+                      },
                 child: const Text('Save'),
               ),
             ],

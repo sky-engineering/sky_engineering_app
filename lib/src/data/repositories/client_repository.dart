@@ -35,12 +35,24 @@ class ClientRepository {
       return trimmed.isEmpty ? null : trimmed;
     }
 
+    List<String>? sanitizeList(List<String>? value) {
+      if (value == null) return null;
+      final cleaned = value
+          .map((entry) => entry.trim())
+          .where((entry) => entry.isNotEmpty)
+          .toList();
+      return cleaned.isEmpty ? null : cleaned;
+    }
+
     await _col.doc(id).update({
       'code': client.code.trim(),
       'name': client.name.trim(),
       'contactName': sanitize(client.contactName),
       'contactEmail': sanitize(client.contactEmail),
       'contactPhone': normalizePhone(client.contactPhone),
+      'currentProposals': sanitizeList(client.currentProposals),
+      'notes': sanitize(client.notes),
+      'priority': client.priority,
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }

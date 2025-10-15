@@ -314,18 +314,22 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
     }
   }
 
-  Future<bool> _completeTask(TaskItem task) async {
+  Future<bool> _toggleTaskDone(TaskItem task) async {
+    final nextDone = !(task.taskStatus == 'Completed');
+    final nextStatus = nextDone ? 'Completed' : 'Pending';
+    final nextLabel = nextDone ? 'Done' : 'Todo';
     try {
       await _repo.update(task.id, {
-        'taskStatus': 'Completed',
-        'status': 'Done',
+        'taskStatus': nextStatus,
+        'status': nextLabel,
       });
       return true;
     } catch (e) {
       if (mounted) {
+        final action = nextStatus == 'Completed' ? 'mark complete' : 'reopen';
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Could not mark complete: $e')));
+        ).showSnackBar(SnackBar(content: Text('Could not $action: $e')));
       }
       return false;
     }
@@ -428,7 +432,7 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
                     onToggleStar: () => _toggleStar(task),
                     onTap: () =>
                         showTaskEditDialog(context, task, canEdit: true),
-                    onCompleteSwipe: () => _completeTask(task),
+                    onCompleteSwipe: () => _toggleTaskDone(task),
                     onDeleteSwipe: () => _deleteTask(task),
                   ),
                 );

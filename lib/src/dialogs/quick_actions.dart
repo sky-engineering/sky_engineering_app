@@ -7,6 +7,7 @@ import '../data/models/task.dart';
 import '../data/repositories/project_repository.dart';
 import '../data/repositories/task_repository.dart';
 import '../widgets/invoices_section.dart';
+import '../pages/project_detail_page.dart';
 
 Future<List<Project>> _loadProjectsForCurrentUser() async {
   final me = FirebaseAuth.instance.currentUser;
@@ -27,6 +28,74 @@ String _projectDisplay(Project project) {
   return number.isNotEmpty ? '$number ${project.name}' : project.name;
 }
 
+class _TaskFollowUpChoice {
+  const _TaskFollowUpChoice({
+    required this.starTask,
+    required this.openProject,
+  });
+
+  final bool starTask;
+  final bool openProject;
+}
+
+Future<_TaskFollowUpChoice?> _promptTaskFollowUp(
+  BuildContext context,
+  Project project,
+) {
+  var starTask = false;
+  var openProject = false;
+  final projectLabel = _projectDisplay(project);
+
+  return showDialog<_TaskFollowUpChoice>(
+    context: context,
+    builder: (dialogContext) {
+      return StatefulBuilder(
+        builder: (innerContext, setState) {
+          return AlertDialog(
+            title: const Text('Task created'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CheckboxListTile(
+                  value: starTask,
+                  onChanged: (value) =>
+                      setState(() => starTask = value ?? false),
+                  title: const Text('Star this task'),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+                CheckboxListTile(
+                  value: openProject,
+                  onChanged: (value) =>
+                      setState(() => openProject = value ?? false),
+                  title: const Text('Go to project detail page'),
+                  subtitle: Text(projectLabel),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Skip'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(
+                  dialogContext,
+                  _TaskFollowUpChoice(
+                    starTask: starTask,
+                    openProject: openProject,
+                  ),
+                ),
+                child: const Text('Continue'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
+
 Future<void> showQuickAddInvoiceDialog(BuildContext context) async {
   final me = FirebaseAuth.instance.currentUser;
   if (me == null) {
@@ -38,9 +107,9 @@ Future<void> showQuickAddInvoiceDialog(BuildContext context) async {
 
   final projects = await _loadProjectsForCurrentUser()
     ..sort(
-      (a, b) => _projectDisplay(a)
-          .toLowerCase()
-          .compareTo(_projectDisplay(b).toLowerCase()),
+      (a, b) => _projectDisplay(
+        a,
+      ).toLowerCase().compareTo(_projectDisplay(b).toLowerCase()),
     );
   if (!context.mounted) return;
   if (projects.isEmpty) {
@@ -72,9 +141,9 @@ Future<void> showQuickAddTaskDialog(BuildContext context) async {
 
   final projects = await _loadProjectsForCurrentUser()
     ..sort(
-      (a, b) => _projectDisplay(a)
-          .toLowerCase()
-          .compareTo(_projectDisplay(b).toLowerCase()),
+      (a, b) => _projectDisplay(
+        a,
+      ).toLowerCase().compareTo(_projectDisplay(b).toLowerCase()),
     );
   if (!context.mounted) return;
   if (projects.isEmpty) {
@@ -150,21 +219,25 @@ Future<void> showQuickAddTaskDialog(BuildContext context) async {
                   ),
                   const SizedBox(height: 10),
                   if (subphases.isNotEmpty) ...[
-                    DropdownButtonFormField<String>(
+                    DropdownButtonFormField<String?>(
                       value: selectedTaskCode,
                       isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Project code',
                         border: OutlineInputBorder(),
                       ),
-                      items: subphases
-                          .map(
-                            (s) => DropdownMenuItem<String>(
-                              value: s.code,
-                              child: Text('${s.code} ${s.name}'),
-                            ),
-                          )
-                          .toList(),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('No project code'),
+                        ),
+                        ...subphases.map(
+                          (s) => DropdownMenuItem<String?>(
+                            value: s.code,
+                            child: Text('${s.code} ${s.name}'),
+                          ),
+                        ),
+                      ],
                       onChanged: (value) =>
                           setState(() => selectedTaskCode = value),
                     ),
@@ -229,11 +302,70 @@ Future<void> showQuickAddTaskDialog(BuildContext context) async {
                   );
 
                   try {
-                    await repo.add(task);
-                    if (dialogContext.mounted) {
-                      Navigator.pop(dialogContext);
+                    final taskId = await repo.add(task);
+                    final persistedTask = task.copyWith(id: taskId);
+
+                    if (!dialogContext.mounted) return;
+                    Navigator.pop(dialogContext);
+                    if (!context.mounted) return;
+
+                    final followUp = await _promptTaskFollowUp(
+                      context,
+                      selectedProject,
+                    );
+
+                    if (!context.mounted) return;
+
+                    var feedbackShown = false;
+
+                    if (followUp == null ||
+                        (!followUp.starTask && !followUp.openProject)) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Task created.')),
+                      );
+                      return;
                     }
-                    if (context.mounted) {
+
+                    if (followUp.starTask) {
+                      try {
+                        await repo.setStarred(persistedTask, true);
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Task starred.')),
+                        );
+                        feedbackShown = true;
+                      } catch (e) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Failed to star task: $e')),
+                        );
+                        feedbackShown = true;
+                      }
+                    }
+
+                    if (followUp.openProject) {
+                      if (!context.mounted) return;
+
+                      if (!feedbackShown) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Task created.')),
+                        );
+                        feedbackShown = true;
+                      }
+
+                      if (!context.mounted) return;
+
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ProjectDetailPage(
+                            projectId: persistedTask.projectId,
+                          ),
+                        ),
+                      );
+                    }
+
+                    if (!feedbackShown) {
+                      if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Task created.')),
                       );
