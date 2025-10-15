@@ -9,6 +9,8 @@ import '../data/models/project.dart';
 import '../data/repositories/invoice_repository.dart';
 import '../data/repositories/project_repository.dart';
 
+enum _InvoiceSort { numberDesc, numberAsc, amountDesc, amountAsc }
+
 class InvoicesPage extends StatefulWidget {
   const InvoicesPage({super.key});
 
@@ -22,17 +24,27 @@ class _InvoicesPageState extends State<InvoicesPage> {
   /// When true, only invoices with balance > 0 are shown.
   bool _unpaidOnly = false;
 
-  /// If empty => all projects. Otherwise, filter by these projectIds.
-  final Set<String> _selectedProjectIds = <String>{};
-
   /// Cache of projectId -> display project number string (from Project.projectNumber).
   final Map<String, String> _projectNumById = <String, String>{};
+
+  /// Cache of projectId -> client display name.
+  final Map<String, String> _clientNameById = <String, String>{};
 
   /// Current invoice type filter. Only 'Client' or 'Vendor'.
   String _typeFilter = 'Client';
 
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  _InvoiceSort _sortMode = _InvoiceSort.numberDesc;
+
   final _invoiceRepo = InvoiceRepository();
   final _projectRepo = ProjectRepository();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -64,12 +76,6 @@ class _InvoicesPageState extends State<InvoicesPage> {
               ),
             ),
           ),
-          // Project filter button (multi-select projects)
-          IconButton(
-            tooltip: 'Filter by projects',
-            onPressed: _openProjectFilter,
-            icon: const Icon(Icons.filter_list),
-          ),
         ],
       ),
       body: Column(
@@ -92,31 +98,59 @@ class _InvoicesPageState extends State<InvoicesPage> {
           ),
           const SizedBox(height: 6),
 
-          if (_selectedProjectIds.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Wrap(
-                  spacing: 8,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Chip(
-                      label: Text(
-                        _selectedProjectIds.length == 1
-                            ? '1 project selected'
-                            : '${_selectedProjectIds.length} projects selected',
-                      ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      labelText: 'Search invoices',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              tooltip: 'Clear search',
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _searchQuery = '');
+                              },
+                              icon: const Icon(Icons.clear),
+                            )
+                          : null,
                     ),
-                    TextButton(
-                      onPressed: () =>
-                          setState(() => _selectedProjectIds.clear()),
-                      child: const Text('Clear project filter'),
+                    onChanged: (value) => setState(() => _searchQuery = value),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                DropdownButton<_InvoiceSort>(
+                  value: _sortMode,
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() => _sortMode = value);
+                  },
+                  items: const [
+                    DropdownMenuItem(
+                      value: _InvoiceSort.numberDesc,
+                      child: Text('Number (desc)'),
+                    ),
+                    DropdownMenuItem(
+                      value: _InvoiceSort.numberAsc,
+                      child: Text('Number (asc)'),
+                    ),
+                    DropdownMenuItem(
+                      value: _InvoiceSort.amountDesc,
+                      child: Text('Amount (desc)'),
+                    ),
+                    DropdownMenuItem(
+                      value: _InvoiceSort.amountAsc,
+                      child: Text('Amount (asc)'),
                     ),
                   ],
                 ),
-              ),
+              ],
             ),
+          ),
 
           // Everything below (summary + list) reacts to projects and invoices.
           Expanded(
@@ -131,6 +165,11 @@ class _InvoicesPageState extends State<InvoicesPage> {
                     projects.map(
                       (p) => MapEntry(p.id, (p.projectNumber ?? '').trim()),
                     ),
+                  );
+                _clientNameById
+                  ..clear()
+                  ..addEntries(
+                    projects.map((p) => MapEntry(p.id, p.clientName.trim())),
                   );
 
                 return StreamBuilder<List<Invoice>>(
@@ -155,45 +194,11 @@ class _InvoicesPageState extends State<InvoicesPage> {
                           .toList();
                     }
 
-                    // Apply project filter
-                    if (_selectedProjectIds.isNotEmpty) {
-                      final selectedCanonical = _selectedProjectIds
-                          .map((id) =>
-                              Invoice.canonicalProjectNumber(_projectNumById[id]))
-                          .where((value) => value.isNotEmpty)
-                          .toSet();
-                      final selectedDigitValues = _selectedProjectIds
-                          .map((id) =>
-                              Invoice.projectNumberDigitsValue(_projectNumById[id]))
-                          .whereType<int>()
-                          .toSet();
-
-                      invoices = invoices
-                          .where((i) {
-                            final matchesId =
-                                _selectedProjectIds.contains(i.projectId);
-                            final canonical =
-                                Invoice.canonicalProjectNumber(i.projectNumber);
-                            final digitsValue =
-                                Invoice.projectNumberDigitsValue(i.projectNumber);
-                            final matchesNumber = (canonical.isNotEmpty &&
-                                    selectedCanonical.contains(canonical)) ||
-                                (digitsValue != null &&
-                                    selectedDigitValues.contains(digitsValue));
-                            return matchesId || matchesNumber;
-                          })
-                          .toList();
+                    if (_searchQuery.trim().isNotEmpty) {
+                      invoices = invoices.where(_matchesSearch).toList();
                     }
 
-                    // Sort: newest date first (fallback to createdAt/updatedAt/number)
-                    invoices.sort((a, b) {
-                      final ad = a.invoiceDate ?? a.createdAt ?? a.updatedAt;
-                      final bd = b.invoiceDate ?? b.createdAt ?? b.updatedAt;
-                      if (ad != null && bd != null) return bd.compareTo(ad);
-                      if (ad == null && bd != null) return 1;
-                      if (ad != null && bd == null) return -1;
-                      return b.invoiceNumber.compareTo(a.invoiceNumber);
-                    });
+                    invoices.sort(_compareInvoices);
 
                     // ---- NEW summary of total unpaid for currently listed invoices
                     final totalUnpaid = invoices.fold<double>(
@@ -203,6 +208,8 @@ class _InvoicesPageState extends State<InvoicesPage> {
                     final summaryLabel = (_typeFilter == 'Client')
                         ? 'Total Unpaid (Clients)'
                         : 'Total Unpaid (Vendors)';
+                    final hasFilters =
+                        _unpaidOnly || _searchQuery.trim().isNotEmpty;
 
                     if (invoices.isEmpty) {
                       // Still show the summary line (will be $0.00) for clarity.
@@ -225,7 +232,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
                               child: Padding(
                                 padding: const EdgeInsets.all(24),
                                 child: Text(
-                                  _selectedProjectIds.isNotEmpty || _unpaidOnly
+                                  hasFilters
                                       ? 'No ${_typeFilter.toLowerCase()} invoices match your filters.'
                                       : 'No ${_typeFilter.toLowerCase()} invoices yet.',
                                 ),
@@ -327,135 +334,158 @@ class _InvoicesPageState extends State<InvoicesPage> {
 
   // -------- actions / helpers --------
 
-  Future<void> _openProjectFilter() async {
-    final allProjects = await _projectRepo.streamAll().first;
-    final projects = allProjects.where((p) => !p.isArchived).toList()
-      ..sort((a, b) {
-        final an = a.projectNumber ?? '';
-        final bn = b.projectNumber ?? '';
-        final cmp = an.compareTo(bn);
-        if (cmp != 0) return cmp;
-        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
-      });
+  bool _matchesSearch(Invoice invoice) {
+    final rawQuery = _searchQuery.trim();
+    if (rawQuery.isEmpty) {
+      return true;
+    }
+    final query = rawQuery.toLowerCase();
 
-    if (projects.isEmpty) {
-      if (mounted && _selectedProjectIds.isNotEmpty) {
-        setState(() => _selectedProjectIds.clear());
+    final fields = <String>[
+      invoice.invoiceNumber,
+      invoice.projectNumber ?? '',
+      _projectNumById[invoice.projectId] ?? '',
+      _clientNameById[invoice.projectId] ?? '',
+    ];
+
+    for (final field in fields) {
+      if (field.toLowerCase().contains(query)) {
+        return true;
       }
-      if (!mounted) return;
-      await showDialog<void>(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: const Text('Filter by Projects'),
-            content: const Text('No active projects available to filter.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
-              ),
-            ],
-          );
-        },
-      );
-      return;
     }
 
-    final activeIds = projects.map((p) => p.id).toSet();
-    final localSel = {..._selectedProjectIds}
-      ..removeWhere((id) => !activeIds.contains(id));
+    final numericQuery = query.replaceAll(RegExp(r'[^0-9.]'), '');
+    if (numericQuery.isEmpty) {
+      return false;
+    }
 
-    await showDialog<void>(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setStateDialog) {
-            return AlertDialog(
-              title: const Text('Filter by Projects'),
-              content: SizedBox(
-                width: 420,
-                height: 420,
-                child: Column(
-                  children: [
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        FilterChip(
-                          label: const Text('All projects'),
-                          selected: localSel.isEmpty,
-                          onSelected: (_) =>
-                              setStateDialog(() => localSel.clear()),
-                        ),
-                        if (localSel.isNotEmpty)
-                          FilterChip(
-                            label: const Text('Clear'),
-                            selected: false,
-                            onSelected: (_) =>
-                                setStateDialog(() => localSel.clear()),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: projects.length,
-                        itemBuilder: (context, i) {
-                          final p = projects[i];
-                          final selected = localSel.contains(p.id);
-                          final hasNumber =
-                              p.projectNumber != null &&
-                              p.projectNumber!.trim().isNotEmpty;
-                          final label = hasNumber
-                              ? '${p.projectNumber} ${p.name}'
-                              : p.name;
-                          return CheckboxListTile(
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            value: selected,
-                            onChanged: (v) {
-                              setStateDialog(() {
-                                if (v == true) {
-                                  localSel.add(p.id);
-                                } else {
-                                  localSel.remove(p.id);
-                                }
-                              });
-                            },
-                            title: Text(
-                              label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () {
-                    setState(() {
-                      _selectedProjectIds
-                        ..clear()
-                        ..addAll(localSel);
-                    });
-                    Navigator.pop(context);
-                  },
-                  child: const Text('Apply'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+    final numberFields = <String>[
+      invoice.invoiceAmount.toStringAsFixed(2),
+      invoice.invoiceAmount.toStringAsFixed(0),
+      invoice.balance.toStringAsFixed(2),
+      invoice.balance.toStringAsFixed(0),
+      invoice.amountPaid.toStringAsFixed(2),
+      invoice.amountPaid.toStringAsFixed(0),
+    ];
+
+    for (final value in numberFields) {
+      if (value.contains(numericQuery)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  int _compareInvoices(Invoice a, Invoice b) {
+    switch (_sortMode) {
+      case _InvoiceSort.numberDesc:
+        return _compareByNumberDesc(a, b);
+      case _InvoiceSort.numberAsc:
+        return _compareByNumberAsc(a, b);
+      case _InvoiceSort.amountDesc:
+        return _compareByAmountDesc(a, b);
+      case _InvoiceSort.amountAsc:
+        return _compareByAmountAsc(a, b);
+    }
+    return 0;
+  }
+
+  int _compareByNumberDesc(Invoice a, Invoice b) {
+    final aDigits = _invoiceNumberDigits(a.invoiceNumber);
+    final bDigits = _invoiceNumberDigits(b.invoiceNumber);
+
+    if (aDigits != null && bDigits != null && aDigits != bDigits) {
+      return bDigits.compareTo(aDigits);
+    }
+
+    if (aDigits == null && bDigits != null) {
+      return 1;
+    }
+
+    if (aDigits != null && bDigits == null) {
+      return -1;
+    }
+
+    final textCmp = b.invoiceNumber.toLowerCase().compareTo(
+      a.invoiceNumber.toLowerCase(),
     );
+    if (textCmp != 0) {
+      return textCmp;
+    }
+
+    return _compareByDateDesc(a, b);
+  }
+
+  int _compareByNumberAsc(Invoice a, Invoice b) {
+    final aDigits = _invoiceNumberDigits(a.invoiceNumber);
+    final bDigits = _invoiceNumberDigits(b.invoiceNumber);
+
+    if (aDigits != null && bDigits != null && aDigits != bDigits) {
+      return aDigits.compareTo(bDigits);
+    }
+
+    if (aDigits == null && bDigits != null) {
+      return 1;
+    }
+
+    if (aDigits != null && bDigits == null) {
+      return -1;
+    }
+
+    final textCmp = a.invoiceNumber.toLowerCase().compareTo(
+      b.invoiceNumber.toLowerCase(),
+    );
+    if (textCmp != 0) {
+      return textCmp;
+    }
+
+    return _compareByDateDesc(a, b);
+  }
+
+  int _compareByAmountDesc(Invoice a, Invoice b) {
+    final cmp = b.invoiceAmount.compareTo(a.invoiceAmount);
+
+    if (cmp != 0) {
+      return cmp;
+    }
+
+    return _compareByNumberDesc(a, b);
+  }
+
+  int _compareByAmountAsc(Invoice a, Invoice b) {
+    final cmp = a.invoiceAmount.compareTo(b.invoiceAmount);
+
+    if (cmp != 0) {
+      return cmp;
+    }
+
+    return _compareByNumberAsc(a, b);
+  }
+
+  int _compareByDateDesc(Invoice a, Invoice b) {
+    final ad = a.invoiceDate ?? a.createdAt ?? a.updatedAt;
+    final bd = b.invoiceDate ?? b.createdAt ?? b.updatedAt;
+    if (ad != null && bd != null) {
+      return bd.compareTo(ad);
+    }
+    if (ad == null && bd != null) {
+      return 1;
+    }
+    if (ad != null && bd == null) {
+      return -1;
+    }
+    return b.id.compareTo(a.id);
+  }
+
+  int? _invoiceNumberDigits(String value) {
+    final digits = RegExp(
+      r'[0-9]+',
+    ).allMatches(value).map((match) => match.group(0)!).join();
+    if (digits.isEmpty) {
+      return null;
+    }
+    return int.tryParse(digits);
   }
 
   Future<void> _openLink(String urlStr) async {
@@ -799,5 +829,4 @@ class _InvoicesPageState extends State<InvoicesPage> {
       ),
     );
   }
-
 }

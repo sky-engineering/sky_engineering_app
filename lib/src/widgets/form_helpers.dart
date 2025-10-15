@@ -16,6 +16,8 @@ Widget appTextField(
   List<TextInputFormatter>? inputFormatters,
   int? maxLength,
   String? Function(String?)? validator,
+  bool dense = false,
+  EdgeInsetsGeometry? contentPadding,
 }) {
   return TextFormField(
     controller: ctl,
@@ -27,6 +29,12 @@ Widget appTextField(
       labelText: label,
       hintText: hint,
       border: const OutlineInputBorder(),
+      isDense: dense,
+      contentPadding:
+          contentPadding ??
+          (dense
+              ? const EdgeInsets.symmetric(horizontal: 12, vertical: 8)
+              : null),
     ),
     validator: (v) {
       if (required && (v == null || v.trim().isEmpty)) return 'Required';

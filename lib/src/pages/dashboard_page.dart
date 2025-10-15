@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'subphases_page.dart';
 import 'starred_tasks_page.dart';
 import 'task_overview_page.dart';
+import 'external_tasks_overview_page.dart';
 import '../dialogs/city_inspect_links_dialog.dart';
 import '../dialogs/other_links_dialog.dart';
 import '../integrations/dropbox/dropbox_folder_list_page.dart';
@@ -78,10 +79,19 @@ class DashboardPage extends StatelessWidget {
               }),
               const SizedBox(height: 16),
 
-              linkButton('Task Overview', () {
+              linkButton('Tasks Overview', () {
                 Navigator.of(
                   context,
                 ).push(MaterialPageRoute(builder: (_) => TaskOverviewPage()));
+              }),
+              const SizedBox(height: 16),
+
+              linkButton('External Tasks Overview', () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ExternalTasksOverviewPage(),
+                  ),
+                );
               }),
               const SizedBox(height: 16),
 

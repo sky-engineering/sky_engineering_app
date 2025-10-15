@@ -150,9 +150,6 @@ class _PersonalChecklistPageState extends State<PersonalChecklistPage> {
                             )
                           : null,
                     ),
-                    subtitle: item.isDone
-                        ? const Text('Completed')
-                        : const Text('Pending'),
                     value: item.isDone,
                     onChanged: (value) => _toggleItem(item, value),
                   ),

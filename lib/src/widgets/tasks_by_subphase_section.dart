@@ -459,6 +459,30 @@ class _SubphaseBox extends StatelessWidget {
                         return false;
                       }
                     },
+                    onDeleteSwipe: () async {
+                      if (!isOwner) {
+                        _viewOnlySnack(context);
+                        return false;
+                      }
+                      final ok = await confirmDialog(
+                        context,
+                        'Delete this task?',
+                      );
+                      if (!ok) return false;
+                      try {
+                        await TaskRepository().delete(t.id);
+                        return true;
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to delete task: $e'),
+                            ),
+                          );
+                        }
+                        return false;
+                      }
+                    },
                   );
                 },
               ),
@@ -537,13 +561,14 @@ class _SubphaseBox extends StatelessWidget {
 }
 
 // ===== Compact task tile =====
-class _CompactTaskTile extends StatelessWidget {
+class _CompactTaskTile extends StatefulWidget {
   final TaskItem task;
   final bool isOwner;
   final VoidCallback onToggleStar;
   final ValueChanged<String> onChangeStatus;
   final VoidCallback onTap;
   final Future<bool> Function() onCompleteSwipe;
+  final Future<bool> Function() onDeleteSwipe;
 
   const _CompactTaskTile({
     required this.task,
@@ -552,11 +577,42 @@ class _CompactTaskTile extends StatelessWidget {
     required this.onChangeStatus,
     required this.onTap,
     required this.onCompleteSwipe,
+    required this.onDeleteSwipe,
   });
+
+  @override
+  State<_CompactTaskTile> createState() => _CompactTaskTileState();
+}
+
+class _CompactTaskTileState extends State<_CompactTaskTile> {
+  static const double _completeThreshold = 0.6;
+  static const double _deleteThreshold = 0.85;
+
+  double _dragProgress = 0.0;
+  DismissDirection? _currentDirection;
+
+  bool get _completeArmed =>
+      _currentDirection == DismissDirection.startToEnd &&
+      _dragProgress >= _completeThreshold;
+
+  bool get _deleteArmed =>
+      _currentDirection == DismissDirection.endToStart &&
+      _dragProgress >= _deleteThreshold;
+
+  void _resetDrag() {
+    if (_dragProgress != 0.0 || _currentDirection != null) {
+      setState(() {
+        _dragProgress = 0.0;
+        _currentDirection = null;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final small = Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 12);
+    final task = widget.task;
+    final isOwner = widget.isOwner;
     final hasDesc = (task.description ?? '').trim().isNotEmpty;
 
     final filledStarColor = Theme.of(context).colorScheme.secondary;
@@ -564,14 +620,41 @@ class _CompactTaskTile extends StatelessWidget {
 
     return Dismissible(
       key: ValueKey('proj-task-${task.id}'),
-      direction: DismissDirection.endToStart,
-      background: _dismissBackground(context),
-      confirmDismiss: (_) async {
-        final ok = await onCompleteSwipe();
+      direction: DismissDirection.horizontal,
+      dismissThresholds: const {
+        DismissDirection.startToEnd: _completeThreshold,
+        DismissDirection.endToStart: _deleteThreshold,
+      },
+      background: _buildSwipeBackground(context, isStartToEnd: true),
+      secondaryBackground: _buildSwipeBackground(context, isStartToEnd: false),
+      onUpdate: (details) {
+        final progress = details.progress.abs().clamp(0.0, 1.0);
+        final direction =
+            details.direction == DismissDirection.startToEnd ||
+                details.direction == DismissDirection.endToStart
+            ? details.direction
+            : null;
+        if (_dragProgress != progress || _currentDirection != direction) {
+          setState(() {
+            _dragProgress = progress;
+            _currentDirection = direction;
+          });
+        }
+      },
+      confirmDismiss: (direction) async {
+        final progress = _dragProgress;
+        _resetDrag();
+        if (direction == DismissDirection.startToEnd &&
+            progress >= _completeThreshold) {
+          await widget.onCompleteSwipe();
+        } else if (direction == DismissDirection.endToStart &&
+            progress >= _deleteThreshold) {
+          await widget.onDeleteSwipe();
+        }
         return false;
       },
       child: InkWell(
-        onTap: onTap,
+        onTap: widget.onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0.5),
           child: Row(
@@ -589,7 +672,7 @@ class _CompactTaskTile extends StatelessWidget {
                   ),
                   iconSize: 18,
                   splashRadius: 16,
-                  onPressed: onToggleStar,
+                  onPressed: widget.onToggleStar,
                   icon: Icon(
                     task.isStarred ? Icons.star : Icons.star_border,
                     color: task.isStarred ? filledStarColor : hollowStarColor,
@@ -631,7 +714,11 @@ class _CompactTaskTile extends StatelessWidget {
                                 )
                                 .toList(),
                             onChanged: isOwner
-                                ? (v) => v != null ? onChangeStatus(v) : null
+                                ? (v) {
+                                    if (v != null) {
+                                      widget.onChangeStatus(v);
+                                    }
+                                  }
                                 : null,
                             isDense: true,
                             icon: const SizedBox.shrink(),
@@ -659,19 +746,65 @@ class _CompactTaskTile extends StatelessWidget {
       ),
     );
   }
-}
 
-Widget _dismissBackground(BuildContext context) {
-  final color = Theme.of(context).colorScheme.primary;
-  return Container(
-    alignment: Alignment.centerRight,
-    padding: const EdgeInsets.symmetric(horizontal: 16),
-    color: color.withAlpha((0.2 * 255).round()),
-    child: Icon(Icons.check_circle, color: color),
-  );
-}
+  Widget _buildSwipeBackground(
+    BuildContext context, {
+    required bool isStartToEnd,
+  }) {
+    final theme = Theme.of(context);
+    final isActive =
+        _currentDirection ==
+        (isStartToEnd
+            ? DismissDirection.startToEnd
+            : DismissDirection.endToStart);
+    final progress = isActive ? _dragProgress : 0.0;
 
-// ------------------- Add/Edit task dialogs (simplified) -------------------
+    final baseColor = theme.colorScheme.surfaceContainerHighest.withValues(
+      alpha: 0.2,
+    );
+    final accentColor = isStartToEnd
+        ? theme.colorScheme.primary.withValues(alpha: 0.25)
+        : theme.colorScheme.error.withValues(alpha: 0.25);
+
+    final isArmed = isStartToEnd ? _completeArmed : _deleteArmed;
+    final bgColor = isActive && isArmed ? accentColor : baseColor;
+
+    final iconOpacity = isStartToEnd
+        ? (progress / _completeThreshold).clamp(0.0, 1.0)
+        : progress <= _completeThreshold
+        ? 0.0
+        : ((progress - _completeThreshold) /
+                  (_deleteThreshold - _completeThreshold))
+              .clamp(0.0, 1.0);
+
+    final alignment = isStartToEnd
+        ? Alignment.centerLeft
+        : Alignment.centerRight;
+    final rowAlignment = isStartToEnd
+        ? MainAxisAlignment.start
+        : MainAxisAlignment.end;
+
+    final icon = isStartToEnd ? Icons.check_circle : Icons.delete_forever;
+    final iconColor = isStartToEnd
+        ? theme.colorScheme.primary
+        : theme.colorScheme.error;
+
+    return Container(
+      alignment: alignment,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      color: bgColor,
+      child: Row(
+        mainAxisAlignment: rowAlignment,
+        children: [
+          Opacity(
+            opacity: iconOpacity,
+            child: Icon(icon, color: iconColor),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 Future<void> _showAddTaskDialog(
   BuildContext context,

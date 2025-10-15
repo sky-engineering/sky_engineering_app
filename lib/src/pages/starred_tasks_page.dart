@@ -331,6 +331,42 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
     }
   }
 
+  Future<bool> _deleteTask(TaskItem task) async {
+    final ok =
+        await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) {
+            return AlertDialog(
+              title: const Text('Delete task'),
+              content: const Text('Delete this task?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('Delete'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+    if (!ok) return false;
+    try {
+      await _repo.delete(task.id);
+      return true;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to delete task: $e')));
+      }
+      return false;
+    }
+  }
+
   Future<void> _togglePersonalItem(PersonalChecklistItem item, bool value) {
     return _personalService.setCompletion(item.id, value);
   }
@@ -377,30 +413,23 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
                 return ReorderableDelayedDragStartListener(
                   key: ValueKey(entry.key),
                   index: index,
-                  child: Dismissible(
-                    key: ValueKey('dismiss-${task.id}'),
-                    direction: DismissDirection.endToStart,
-                    background: _dismissBackground(context),
-                    confirmDismiss: (_) async {
-                      await _completeTask(task);
-                      return false;
+                  child: _SwipeableStarredTile(
+                    dismissibleKey: ValueKey('dismiss-${task.id}'),
+                    task: task,
+                    project: project,
+                    onOpenProject: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              ProjectDetailPage(projectId: task.projectId),
+                        ),
+                      );
                     },
-                    child: _StarredTile(
-                      task: task,
-                      project: project,
-                      onOpenProject: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                ProjectDetailPage(projectId: task.projectId),
-                          ),
-                        );
-                      },
-                      onToggleStar: () => _toggleStar(task),
-                      onTap: () =>
-                          showTaskEditDialog(context, task, canEdit: true),
-                      onComplete: () => _completeTask(task),
-                    ),
+                    onToggleStar: () => _toggleStar(task),
+                    onTap: () =>
+                        showTaskEditDialog(context, task, canEdit: true),
+                    onCompleteSwipe: () => _completeTask(task),
+                    onDeleteSwipe: () => _deleteTask(task),
                   ),
                 );
               }
@@ -492,21 +521,173 @@ class _StarredEntry {
       isTask ? 'starred-task-${task!.id}' : 'starred-personal-${personal!.id}';
 }
 
+class _SwipeableStarredTile extends StatefulWidget {
+  final Key dismissibleKey;
+  final TaskItem task;
+  final Project? project;
+  final VoidCallback onOpenProject;
+  final Future<void> Function() onToggleStar;
+  final VoidCallback onTap;
+  final Future<bool> Function() onCompleteSwipe;
+  final Future<bool> Function() onDeleteSwipe;
+
+  const _SwipeableStarredTile({
+    required this.dismissibleKey,
+    required this.task,
+    required this.project,
+    required this.onOpenProject,
+    required this.onToggleStar,
+    required this.onTap,
+    required this.onCompleteSwipe,
+    required this.onDeleteSwipe,
+  });
+
+  @override
+  State<_SwipeableStarredTile> createState() => _SwipeableStarredTileState();
+}
+
+class _SwipeableStarredTileState extends State<_SwipeableStarredTile> {
+  static const double _completeThreshold = 0.6;
+  static const double _deleteThreshold = 0.85;
+
+  double _dragProgress = 0.0;
+  DismissDirection? _currentDirection;
+
+  bool get _completeArmed =>
+      _currentDirection == DismissDirection.startToEnd &&
+      _dragProgress >= _completeThreshold;
+
+  bool get _deleteArmed =>
+      _currentDirection == DismissDirection.endToStart &&
+      _dragProgress >= _deleteThreshold;
+
+  void _resetDrag() {
+    if (_dragProgress != 0.0 || _currentDirection != null) {
+      setState(() {
+        _dragProgress = 0.0;
+        _currentDirection = null;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dismissible(
+      key: widget.dismissibleKey,
+      direction: DismissDirection.horizontal,
+      dismissThresholds: const {
+        DismissDirection.startToEnd: _completeThreshold,
+        DismissDirection.endToStart: _deleteThreshold,
+      },
+      background: _buildSwipeBackground(context, isStartToEnd: true),
+      secondaryBackground: _buildSwipeBackground(context, isStartToEnd: false),
+      onUpdate: (details) {
+        final progress = details.progress.abs().clamp(0.0, 1.0);
+        final direction =
+            (details.direction == DismissDirection.startToEnd ||
+                details.direction == DismissDirection.endToStart)
+            ? details.direction
+            : null;
+        if (_dragProgress != progress || _currentDirection != direction) {
+          setState(() {
+            _dragProgress = progress;
+            _currentDirection = direction;
+          });
+        }
+      },
+      confirmDismiss: (direction) async {
+        final progress = _dragProgress;
+        _resetDrag();
+        if (direction == DismissDirection.startToEnd &&
+            progress >= _completeThreshold) {
+          await widget.onCompleteSwipe();
+        } else if (direction == DismissDirection.endToStart &&
+            progress >= _deleteThreshold) {
+          await widget.onDeleteSwipe();
+        }
+        return false;
+      },
+      child: _StarredTile(
+        task: widget.task,
+        project: widget.project,
+        onOpenProject: widget.onOpenProject,
+        onToggleStar: widget.onToggleStar,
+        onTap: widget.onTap,
+      ),
+    );
+  }
+
+  Widget _buildSwipeBackground(
+    BuildContext context, {
+    required bool isStartToEnd,
+  }) {
+    final theme = Theme.of(context);
+    final isActive =
+        _currentDirection ==
+        (isStartToEnd
+            ? DismissDirection.startToEnd
+            : DismissDirection.endToStart);
+    final progress = isActive ? _dragProgress : 0.0;
+
+    final baseColor = theme.colorScheme.surfaceContainerHighest.withValues(
+      alpha: 0.2,
+    );
+    final accentColor = isStartToEnd
+        ? theme.colorScheme.primary.withValues(alpha: 0.25)
+        : theme.colorScheme.error.withValues(alpha: 0.25);
+
+    final isArmed = isStartToEnd ? _completeArmed : _deleteArmed;
+    final bgColor = isActive && isArmed ? accentColor : baseColor;
+
+    final iconOpacity = isStartToEnd
+        ? (progress / _completeThreshold).clamp(0.0, 1.0)
+        : progress <= _completeThreshold
+        ? 0.0
+        : ((progress - _completeThreshold) /
+                  (_deleteThreshold - _completeThreshold))
+              .clamp(0.0, 1.0);
+
+    final alignment = isStartToEnd
+        ? Alignment.centerLeft
+        : Alignment.centerRight;
+    final rowAlignment = isStartToEnd
+        ? MainAxisAlignment.start
+        : MainAxisAlignment.end;
+
+    final icon = isStartToEnd ? Icons.check_circle : Icons.delete_forever;
+    final iconColor = isStartToEnd
+        ? theme.colorScheme.primary
+        : theme.colorScheme.error;
+
+    return Container(
+      alignment: alignment,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      color: bgColor,
+      child: Row(
+        mainAxisAlignment: rowAlignment,
+        children: [
+          Opacity(
+            opacity: iconOpacity,
+            child: Icon(icon, color: iconColor),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _StarredTile extends StatelessWidget {
   final TaskItem task;
   final Project? project;
   final VoidCallback onOpenProject;
   final Future<void> Function() onToggleStar;
   final VoidCallback onTap;
-  final Future<bool> Function() onComplete;
-
   const _StarredTile({
     required this.task,
     this.project,
     required this.onOpenProject,
     required this.onToggleStar,
     required this.onTap,
-    required this.onComplete,
   });
 
   String? _projectSummary() {
@@ -680,16 +861,6 @@ class _PersonalStarredTile extends StatelessWidget {
       ),
     );
   }
-}
-
-Widget _dismissBackground(BuildContext context) {
-  final color = Theme.of(context).colorScheme.primary;
-  return Container(
-    alignment: Alignment.centerRight,
-    padding: const EdgeInsets.symmetric(horizontal: 16),
-    color: color.withAlpha((0.2 * 255).round()),
-    child: Icon(Icons.check_circle, color: color),
-  );
 }
 
 class _Empty extends StatelessWidget {

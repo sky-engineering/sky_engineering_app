@@ -1,6 +1,8 @@
 // lib/src/data/models/project.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'external_task.dart';
+
 const kProjectStatuses = <String>[
   'In Progress',
   'On Hold',
@@ -88,6 +90,18 @@ class Project {
   final String? contactEmail;
   final String? contactPhone;
 
+  final String? teamOwner;
+  final String? teamContractor;
+  final String? teamArchitect;
+  final String? teamMechanical;
+  final String? teamElectrical;
+  final String? teamPlumbing;
+  final String? teamLandscape;
+  final String? teamGeotechnical;
+  final String? teamSurveyor;
+  final String? teamEnvironmental;
+  final String? teamOther;
+
   final String? ownerUid;
   final String? projectNumber;
   final String? folderName;
@@ -101,6 +115,9 @@ class Project {
   /// Selected subphases for this project (with per-project status).
   final List<SelectedSubphase>? selectedSubphases;
 
+  /// External partner todos stored on the project doc.
+  final List<ExternalTask>? externalTasks;
+
   const Project({
     required this.id,
     required this.name,
@@ -110,12 +127,24 @@ class Project {
     this.contactName,
     this.contactEmail,
     this.contactPhone,
+    this.teamOwner,
+    this.teamContractor,
+    this.teamArchitect,
+    this.teamMechanical,
+    this.teamElectrical,
+    this.teamPlumbing,
+    this.teamLandscape,
+    this.teamGeotechnical,
+    this.teamSurveyor,
+    this.teamEnvironmental,
+    this.teamOther,
     this.ownerUid,
     this.projectNumber,
     this.folderName,
     this.createdAt,
     this.updatedAt,
     this.selectedSubphases,
+    this.externalTasks,
     this.isArchived = false,
   });
 
@@ -162,6 +191,20 @@ class Project {
       return null;
     }
 
+    List<ExternalTask>? _readExternalTasks(dynamic v) {
+      if (v is! List) return null;
+      final out = <ExternalTask>[];
+      for (final e in v) {
+        if (e is Map<String, dynamic>) {
+          final task = ExternalTask.fromMap(e);
+          if (task.id.isNotEmpty) {
+            out.add(task);
+          }
+        }
+      }
+      return out.isEmpty ? null : out;
+    }
+
     final rawStatus = _str(data['status']);
     final archivedFlag = _bool(data['isArchived'], fallback: false);
     final resolvedStatus = (rawStatus != null && rawStatus.isNotEmpty)
@@ -179,12 +222,24 @@ class Project {
       contactName: _str(data['contactName']),
       contactEmail: _str(data['contactEmail']),
       contactPhone: _str(data['contactPhone']),
+      teamOwner: _str(data['teamOwner']),
+      teamContractor: _str(data['teamContractor']),
+      teamArchitect: _str(data['teamArchitect']),
+      teamMechanical: _str(data['teamMechanical']),
+      teamElectrical: _str(data['teamElectrical']),
+      teamPlumbing: _str(data['teamPlumbing']),
+      teamLandscape: _str(data['teamLandscape']),
+      teamGeotechnical: _str(data['teamGeotechnical']),
+      teamSurveyor: _str(data['teamSurveyor']),
+      teamEnvironmental: _str(data['teamEnvironmental']),
+      teamOther: _str(data['teamOther']),
       ownerUid: _str(data['ownerUid']),
       projectNumber: _str(data['projectNumber']),
       folderName: _str(data['folderName']),
       createdAt: _toDate(data['createdAt']),
       updatedAt: _toDate(data['updatedAt']),
       selectedSubphases: _readSelected(data['selectedSubphases']),
+      externalTasks: _readExternalTasks(data['externalTasks']),
       isArchived: archivedFlag || resolvedStatus == 'Archive',
     );
   }
@@ -204,6 +259,26 @@ class Project {
         'contactEmail': contactEmail,
       if (contactPhone != null && contactPhone!.isNotEmpty)
         'contactPhone': contactPhone,
+      if (teamOwner != null && teamOwner!.isNotEmpty) 'teamOwner': teamOwner,
+      if (teamContractor != null && teamContractor!.isNotEmpty)
+        'teamContractor': teamContractor,
+      if (teamArchitect != null && teamArchitect!.isNotEmpty)
+        'teamArchitect': teamArchitect,
+      if (teamMechanical != null && teamMechanical!.isNotEmpty)
+        'teamMechanical': teamMechanical,
+      if (teamElectrical != null && teamElectrical!.isNotEmpty)
+        'teamElectrical': teamElectrical,
+      if (teamPlumbing != null && teamPlumbing!.isNotEmpty)
+        'teamPlumbing': teamPlumbing,
+      if (teamLandscape != null && teamLandscape!.isNotEmpty)
+        'teamLandscape': teamLandscape,
+      if (teamGeotechnical != null && teamGeotechnical!.isNotEmpty)
+        'teamGeotechnical': teamGeotechnical,
+      if (teamSurveyor != null && teamSurveyor!.isNotEmpty)
+        'teamSurveyor': teamSurveyor,
+      if (teamEnvironmental != null && teamEnvironmental!.isNotEmpty)
+        'teamEnvironmental': teamEnvironmental,
+      if (teamOther != null && teamOther!.isNotEmpty) 'teamOther': teamOther,
       if (ownerUid != null) 'ownerUid': ownerUid,
       if (projectNumber != null && projectNumber!.isNotEmpty)
         'projectNumber': projectNumber,
@@ -212,6 +287,8 @@ class Project {
 
       if (selectedSubphases != null)
         'selectedSubphases': selectedSubphases!.map((s) => s.toMap()).toList(),
+      if (externalTasks != null)
+        'externalTasks': externalTasks!.map((t) => t.toMap()).toList(),
 
       // Persist archived flag (always include so new docs default false explicitly)
       'isArchived': isArchived,
@@ -230,12 +307,24 @@ class Project {
     String? contactName,
     String? contactEmail,
     String? contactPhone,
+    String? teamOwner,
+    String? teamContractor,
+    String? teamArchitect,
+    String? teamMechanical,
+    String? teamElectrical,
+    String? teamPlumbing,
+    String? teamLandscape,
+    String? teamGeotechnical,
+    String? teamSurveyor,
+    String? teamEnvironmental,
+    String? teamOther,
     String? ownerUid,
     String? projectNumber,
     String? folderName,
     DateTime? createdAt,
     DateTime? updatedAt,
     List<SelectedSubphase>? selectedSubphases,
+    List<ExternalTask>? externalTasks,
     bool? isArchived,
   }) {
     final resolvedStatus = status ?? this.status;
@@ -250,12 +339,24 @@ class Project {
       contactName: contactName ?? this.contactName,
       contactEmail: contactEmail ?? this.contactEmail,
       contactPhone: contactPhone ?? this.contactPhone,
+      teamOwner: teamOwner ?? this.teamOwner,
+      teamContractor: teamContractor ?? this.teamContractor,
+      teamArchitect: teamArchitect ?? this.teamArchitect,
+      teamMechanical: teamMechanical ?? this.teamMechanical,
+      teamElectrical: teamElectrical ?? this.teamElectrical,
+      teamPlumbing: teamPlumbing ?? this.teamPlumbing,
+      teamLandscape: teamLandscape ?? this.teamLandscape,
+      teamGeotechnical: teamGeotechnical ?? this.teamGeotechnical,
+      teamSurveyor: teamSurveyor ?? this.teamSurveyor,
+      teamEnvironmental: teamEnvironmental ?? this.teamEnvironmental,
+      teamOther: teamOther ?? this.teamOther,
       ownerUid: ownerUid ?? this.ownerUid,
       projectNumber: projectNumber ?? this.projectNumber,
       folderName: folderName ?? this.folderName,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       selectedSubphases: selectedSubphases ?? this.selectedSubphases,
+      externalTasks: externalTasks ?? this.externalTasks,
       isArchived: resolvedIsArchived,
     );
   }

@@ -19,27 +19,31 @@ class TaskOverviewPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Task Overview')),
-      body: StreamBuilder<List<Project>>(
-        stream: _projectRepo.streamAll(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final projects = snapshot.data ?? const <Project>[];
-          if (projects.isEmpty) {
-            return const _EmptyState();
-          }
-          final sorted = [...projects]..sort(_compareProjects);
-          return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-            itemCount: sorted.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final project = sorted[index];
-              return _ProjectTaskCard(project: project, taskRepo: _taskRepo);
-            },
-          );
-        },
+      body: SafeArea(
+        top: false,
+        child: StreamBuilder<List<Project>>(
+          stream: _projectRepo.streamAll(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final projects = snapshot.data ?? const <Project>[];
+            if (projects.isEmpty) {
+              return const _EmptyState();
+            }
+            final sorted = [...projects]..sort(_compareProjects);
+            return ListView.separated(
+              physics: const ClampingScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+              itemCount: sorted.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final project = sorted[index];
+                return _ProjectTaskCard(project: project, taskRepo: _taskRepo);
+              },
+            );
+          },
+        ),
       ),
     );
   }

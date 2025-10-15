@@ -27,10 +27,19 @@ class _ProjectsPageState extends State<ProjectsPage> {
   Set<String>? _dropboxFolderNames;
   bool _dropboxChecked = false;
 
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
   @override
   void initState() {
     super.initState();
     _loadDropboxFolders();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -72,7 +81,27 @@ class _ProjectsPageState extends State<ProjectsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  labelText: 'Search projects',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          tooltip: 'Clear search',
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                          icon: const Icon(Icons.clear),
+                        )
+                      : null,
+                ),
+                onChanged: (value) => setState(() => _searchQuery = value),
+              ),
+            ),
             Expanded(
               child: StreamBuilder<List<Project>>(
                 // Show all projects; we'll filter by isArchived and sort client-side.
@@ -88,7 +117,40 @@ class _ProjectsPageState extends State<ProjectsPage> {
                     items = items.where((p) => !p.isArchived).toList();
                   }
 
+                  final query = _searchQuery.trim().toLowerCase();
+                  if (query.isNotEmpty) {
+                    items = items
+                        .where((p) => _matchesSearch(p, query))
+                        .toList();
+                  }
+
                   if (items.isEmpty) {
+                    if (query.isNotEmpty) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.search_off, size: 48),
+                              const SizedBox(height: 8),
+                              Text(
+                                'No projects match your search.',
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                              if (_searchQuery.isNotEmpty)
+                                TextButton(
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() => _searchQuery = '');
+                                  },
+                                  child: const Text('Clear search'),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
                     return _Empty(onAdd: () => _showAddDialog(context));
                   }
 
@@ -187,6 +249,36 @@ class _ProjectsPageState extends State<ProjectsPage> {
         foregroundColor: Colors.black87,
       ),
     );
+  }
+
+  bool _matchesSearch(Project project, String query) {
+    final number = project.projectNumber?.toLowerCase() ?? '';
+    final name = project.name.toLowerCase();
+    if (number.contains(query) || name.contains(query)) {
+      return true;
+    }
+
+    final teamValues = [
+      project.teamOwner,
+      project.teamContractor,
+      project.teamArchitect,
+      project.teamMechanical,
+      project.teamElectrical,
+      project.teamPlumbing,
+      project.teamLandscape,
+      project.teamGeotechnical,
+      project.teamSurveyor,
+      project.teamEnvironmental,
+      project.teamOther,
+    ];
+
+    for (final value in teamValues) {
+      if (value != null && value.toLowerCase().contains(query)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   Future<void> _loadDropboxFolders() async {
