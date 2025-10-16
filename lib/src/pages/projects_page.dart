@@ -176,6 +176,10 @@ class _ProjectsPageState extends State<ProjectsPage> {
                                 1,
                           );
                       final titleColor = _statusTextColor(context, p);
+                      final projectNumber = p.projectNumber?.trim();
+                      final displayTitle = (projectNumber?.isNotEmpty ?? false)
+                          ? '$projectNumber ${p.name}'
+                          : p.name;
                       return Card(
                         margin: EdgeInsets.zero, // tighter vertical rhythm
                         color: _subtleSurfaceTint(context),
@@ -191,10 +195,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  (p.projectNumber != null &&
-                                          p.projectNumber!.trim().isNotEmpty)
-                                      ? '${p.projectNumber} ${p.name}'
-                                      : p.name,
+                                  displayTitle,
                                   style: titleStyle?.copyWith(
                                     color: titleColor,
                                   ),
@@ -356,7 +357,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
     final color = hasMatch
         ? Colors.green
         : unavailable
-        ? theme.colorScheme.onSurfaceVariant.withOpacity(0.4)
+        ? theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4)
         : theme.colorScheme.error;
     final icon = Icon(
       hasMatch ? Icons.link : Icons.link_off,
@@ -480,15 +481,12 @@ class _ProjectsPageState extends State<ProjectsPage> {
     final pa = a.projectNumber?.trim();
     final pb = b.projectNumber?.trim();
 
-    final hasA = pa != null && pa.isNotEmpty;
-    final hasB = pb != null && pb.isNotEmpty;
-
-    if (hasA && hasB) {
-      final cmp = _naturalCompare(pa!, pb!);
+    if (pa != null && pa.isNotEmpty && pb != null && pb.isNotEmpty) {
+      final cmp = _naturalCompare(pa, pb);
       if (cmp != 0) return cmp;
-    } else if (hasA && !hasB) {
+    } else if (pa != null && pa.isNotEmpty && (pb == null || pb.isEmpty)) {
       return -1; // non-null first
-    } else if (!hasA && hasB) {
+    } else if ((pa == null || pa.isEmpty) && pb != null && pb.isNotEmpty) {
       return 1; // null/empty last
     }
 
@@ -723,7 +721,7 @@ Future<void> _showAddDialog(BuildContext context) async {
                         ),
                         const SizedBox(height: 10),
                         DropdownButtonFormField<String>(
-                          value: projectStatus,
+                          initialValue: projectStatus,
                           decoration: const InputDecoration(
                             labelText: 'Status',
                             border: OutlineInputBorder(),

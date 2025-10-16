@@ -73,7 +73,7 @@ List<_AssigneeOption> _buildExternalAssigneeOptions(
   if (owner != null) {
     final email = owner.email?.trim();
     final label = (email != null && email.isNotEmpty)
-        ? 'Owner (' + email + ')'
+        ? 'Owner ($email)'
         : 'Owner';
     options.add(_AssigneeOption(key: 'owner', label: label, value: label));
   }
@@ -84,7 +84,7 @@ List<_AssigneeOption> _buildExternalAssigneeOptions(
     if (value != null) {
       final trimmed = value.trim();
       if (trimmed.isNotEmpty) {
-        final label = field.label + ' - ' + trimmed;
+        final label = '${field.label} - $trimmed';
         options.add(
           _AssigneeOption(key: field.key, label: label, value: label),
         );
@@ -276,7 +276,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
             selectedSubphases: project.selectedSubphases,
           ),
           const SizedBox(height: 12),
-          ExternalTasksSection(
+          _ExternalTasksSection(
             projectId: project.id,
             isOwner: isOwner,
             assigneeOptions: assigneeOptions,
@@ -649,9 +649,8 @@ class _EditProjectTeamDialogState extends State<_EditProjectTeamDialog> {
   }
 }
 
-class ExternalTasksSection extends StatelessWidget {
-  ExternalTasksSection({
-    super.key,
+class _ExternalTasksSection extends StatelessWidget {
+  const _ExternalTasksSection({
     required this.projectId,
     required this.isOwner,
     required this.assigneeOptions,
@@ -737,18 +736,20 @@ class ExternalTasksSection extends StatelessWidget {
     ExternalTask task,
     bool value,
   ) async {
+    final messenger = ScaffoldMessenger.of(context);
     try {
       await _repo.update(projectId, task.id, {'isDone': value});
       return true;
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to update task: $e')));
+      messenger.showSnackBar(
+        SnackBar(content: Text('Failed to update task: $e')),
+      );
       return false;
     }
   }
 
   Future<bool> _delete(BuildContext context, ExternalTask task) async {
+    final messenger = ScaffoldMessenger.of(context);
     final confirmed =
         await showDialog<bool>(
           context: context,
@@ -776,9 +777,9 @@ class ExternalTasksSection extends StatelessWidget {
       await _repo.delete(projectId, task.id);
       return true;
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to delete task: $e')));
+      messenger.showSnackBar(
+        SnackBar(content: Text('Failed to delete task: $e')),
+      );
       return false;
     }
   }
@@ -789,6 +790,7 @@ class ExternalTasksSection extends StatelessWidget {
         ? assigneeOptions.first.key
         : null;
 
+    final messenger = ScaffoldMessenger.of(context);
     final result = await showDialog<Map<String, String>>(
       context: context,
       builder: (dialogContext) {
@@ -815,7 +817,7 @@ class ExternalTasksSection extends StatelessWidget {
                   SizedBox(
                     width: double.infinity,
                     child: DropdownButtonFormField<String>(
-                      value: selectedKey,
+                      initialValue: selectedKey,
                       isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Assigned to',
@@ -885,9 +887,7 @@ class ExternalTasksSection extends StatelessWidget {
         ),
       );
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to add task: $e')));
+      messenger.showSnackBar(SnackBar(content: Text('Failed to add task: $e')));
     }
   }
 }
@@ -943,7 +943,7 @@ class _ExternalTaskTileState extends State<_ExternalTaskTile> {
     final small = theme.textTheme.bodySmall?.copyWith(fontSize: 12);
     final assignee = task.assigneeName.trim();
     final baseColor = theme.textTheme.bodyMedium?.color;
-    final doneColor = baseColor?.withOpacity(0.6);
+    final doneColor = baseColor?.withValues(alpha: 0.6);
     const baseTitleStyle = TextStyle(fontWeight: FontWeight.w600, fontSize: 13);
     final titleStyle = task.isDone
         ? baseTitleStyle.copyWith(
@@ -994,7 +994,7 @@ class _ExternalTaskTileState extends State<_ExternalTaskTile> {
       },
       child: Material(
         color: task.isDone
-            ? theme.colorScheme.surfaceVariant.withOpacity(0.6)
+            ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6)
             : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
@@ -1062,12 +1062,12 @@ class _ExternalTaskTileState extends State<_ExternalTaskTile> {
             : DismissDirection.endToStart);
     final progress = isActive ? _dragProgress : 0.0;
 
-    final baseColor = theme.colorScheme.surfaceContainerHighest.withOpacity(
-      0.2,
+    final baseColor = theme.colorScheme.surfaceContainerHighest.withValues(
+      alpha: 0.2,
     );
     final accentColor = isStartToEnd
-        ? theme.colorScheme.primary.withOpacity(0.25)
-        : theme.colorScheme.error.withOpacity(0.25);
+        ? theme.colorScheme.primary.withValues(alpha: 0.25)
+        : theme.colorScheme.error.withValues(alpha: 0.25);
 
     final isArmed = isStartToEnd ? _completeArmed : _deleteArmed;
     final bgColor = isActive && isArmed ? accentColor : baseColor;
@@ -1231,7 +1231,7 @@ class _FinancialSummaryCard extends StatelessWidget {
   }) {
     final outline = Theme.of(
       context,
-    ).colorScheme.outlineVariant.withOpacity(0.6);
+    ).colorScheme.outlineVariant.withValues(alpha: 0.6);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(

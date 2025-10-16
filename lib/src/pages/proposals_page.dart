@@ -137,7 +137,7 @@ class _ProposalClientCard extends StatelessWidget {
       detailChildren.add(
         Flexible(
           child: Text(
-            proposals.map((proposal) => '• ' + proposal).join('\n'),
+            proposals.map((proposal) => '• $proposal').join('\n'),
             style: proposalStyle?.copyWith(color: textColor),
             maxLines: hasNotes ? 4 : 6,
             overflow: TextOverflow.ellipsis,

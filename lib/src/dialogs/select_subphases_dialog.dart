@@ -20,12 +20,14 @@ Future<void> showSelectSubphasesDialog(
   final templates = await tmplRepo.getAllForUser(ownerUid);
   final project = await projRepo.getById(projectId);
 
+  if (!context.mounted) return;
+
   if (templates.isEmpty) {
-    // ignore: use_build_context_synchronously
-    ScaffoldMessenger.of(context).showSnackBar(
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.showSnackBar(
       const SnackBar(
         content: Text(
-          'No subphases configured yet. Add them under “Project Subphases”.',
+          'No subphases configured yet. Add them under "Project Subphases".',
         ),
       ),
     );
@@ -55,16 +57,16 @@ Future<void> showSelectSubphasesDialog(
     grouped[k]!.sort((a, b) => a.subphaseCode.compareTo(b.subphaseCode));
   }
 
-  String _phaseLabel(String code) {
+  String phaseLabel(String code) {
     switch (code) {
       case '01':
-        return '01 — Land Use';
+        return '01 - Land Use';
       case '02':
-        return '02 — Preliminary Design';
+        return '02 - Preliminary Design';
       case '03':
-        return '03 — Construction Design';
+        return '03 - Construction Design';
       case '04':
-        return '04 — Construction Management';
+        return '04 - Construction Management';
       default:
         return 'Other / Unknown';
     }
@@ -75,6 +77,7 @@ Future<void> showSelectSubphasesDialog(
   // Pre-check existing selections
   final selected = <String>{...existing.map((s) => s.code)};
 
+  if (!context.mounted) return;
   await showDialog<void>(
     context: context,
     builder: (context) {
@@ -98,7 +101,7 @@ Future<void> showSelectSubphasesDialog(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _phaseLabel(phaseKey),
+                            phaseLabel(phaseKey),
                             style: Theme.of(context).textTheme.titleSmall,
                           ),
                           const SizedBox(height: 6),
@@ -120,7 +123,7 @@ Future<void> showSelectSubphasesDialog(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              _phaseLabel(phaseKey),
+                              phaseLabel(phaseKey),
                               style: Theme.of(context).textTheme.titleSmall,
                             ),
                             const SizedBox(height: 4),
@@ -164,6 +167,9 @@ Future<void> showSelectSubphasesDialog(
                 onPressed: selected.isEmpty
                     ? null
                     : () async {
+                        final navigator = Navigator.of(context);
+                        final messenger = ScaffoldMessenger.of(context);
+
                         // Build new list:
                         // - For codes in templates: use template snapshot + preserve existing status if any
                         // - For codes no longer in templates: if still selected and existed before, preserve as-is
@@ -189,20 +195,32 @@ Future<void> showSelectSubphasesDialog(
                           }
                         }
 
-                        await projRepo.update(projectId, {
-                          'selectedSubphases': picked,
-                        });
-
-                        // ignore: use_build_context_synchronously
-                        Navigator.pop(context);
-                        // ignore: use_build_context_synchronously
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Saved ${picked.length} subphase(s).',
-                            ),
-                          ),
-                        );
+                        try {
+                          await projRepo.update(projectId, {
+                            'selectedSubphases': picked,
+                          });
+                          if (navigator.mounted) {
+                            navigator.pop();
+                          }
+                          if (messenger.mounted) {
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Saved ${picked.length} subphase(s).',
+                                ),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (!navigator.mounted) return;
+                          if (messenger.mounted) {
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Text('Failed to save subphases: $e'),
+                              ),
+                            );
+                          }
+                        }
                       },
                 child: const Text('Save'),
               ),

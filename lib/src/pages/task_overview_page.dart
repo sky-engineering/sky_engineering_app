@@ -57,8 +57,9 @@ class _ProjectTaskCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = (project.projectNumber?.trim().isNotEmpty ?? false)
-        ? '${project.projectNumber} ${project.name}'
+    final projectNumber = project.projectNumber?.trim();
+    final title = (projectNumber?.isNotEmpty ?? false)
+        ? '$projectNumber ${project.name}'
         : project.name;
     final titleColor = _statusTextColor(context, project);
 
@@ -111,7 +112,7 @@ class _ProjectTaskCard extends StatelessWidget {
                                 size: task.isStarred ? 12 : 6,
                                 color: task.isStarred
                                     ? const Color(0xFFF1C400)
-                                    : titleColor.withOpacity(0.7),
+                                    : titleColor.withValues(alpha: 0.7),
                               ),
                             ),
                             const SizedBox(width: 6),
@@ -122,7 +123,7 @@ class _ProjectTaskCard extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: Theme.of(context).textTheme.bodySmall
                                     ?.copyWith(
-                                      color: titleColor.withOpacity(0.85),
+                                      color: titleColor.withValues(alpha: 0.85),
                                     ),
                               ),
                             ),
@@ -165,14 +166,12 @@ class _EmptyState extends StatelessWidget {
 int _compareProjects(Project a, Project b) {
   final pa = a.projectNumber?.trim();
   final pb = b.projectNumber?.trim();
-  final hasA = pa != null && pa.isNotEmpty;
-  final hasB = pb != null && pb.isNotEmpty;
-  if (hasA && hasB) {
-    final cmp = _naturalCompare(pa!, pb!);
+  if (pa != null && pa.isNotEmpty && pb != null && pb.isNotEmpty) {
+    final cmp = _naturalCompare(pa, pb);
     if (cmp != 0) return cmp;
-  } else if (hasA && !hasB) {
+  } else if (pa != null && pa.isNotEmpty && (pb == null || pb.isEmpty)) {
     return -1;
-  } else if (!hasA && hasB) {
+  } else if ((pa == null || pa.isEmpty) && pb != null && pb.isNotEmpty) {
     return 1;
   }
   return a.name.toLowerCase().compareTo(b.name.toLowerCase());

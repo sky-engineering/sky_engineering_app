@@ -82,7 +82,7 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
             }
 
             // Sort each list (dueDate asc, then title)
-            int _cmp(TaskItem a, TaskItem b) {
+            int compareTasks(TaskItem a, TaskItem b) {
               final ad = a.dueDate, bd = b.dueDate;
               if (ad != null && bd != null) {
                 final c = ad.compareTo(bd);
@@ -95,10 +95,12 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
               return a.title.toLowerCase().compareTo(b.title.toLowerCase());
             }
 
-            for (final list in byCode.values) list.sort(_cmp);
-            other.sort(_cmp);
+            for (final list in byCode.values) {
+              list.sort(compareTasks);
+            }
+            other.sort(compareTasks);
 
-            // Header row: Tasks + (Select Subphases icon) … clickable yellow text
+            // Header row: Tasks + (Select Subphases icon) ... clickable yellow text
             final header = Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -118,23 +120,23 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                           visualDensity: VisualDensity.compact,
                           iconSize: 20,
                           onPressed: () async {
+                            final messenger = ScaffoldMessenger.of(context);
                             final snap = await FirebaseFirestore.instance
                                 .collection('projects')
                                 .doc(widget.projectId)
                                 .get();
+                            if (!context.mounted) return;
                             final owner =
                                 (snap.data()?['ownerUid'] as String?) ?? '';
                             if (owner.isEmpty) {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Project has no ownerUid.'),
-                                  ),
-                                );
-                              }
+                              messenger.showSnackBar(
+                                const SnackBar(
+                                  content: Text('Project has no ownerUid.'),
+                                ),
+                              );
                               return;
                             }
-                            // ignore: use_build_context_synchronously
+                            if (!context.mounted) return;
                             await showSelectSubphasesDialog(
                               context,
                               projectId: widget.projectId,
@@ -167,7 +169,7 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
             );
 
             // Helper to filter a list by activeOnly (In Progress + Pending)
-            List<TaskItem> _maybeFilter(List<TaskItem> input) {
+            List<TaskItem> maybeFilter(List<TaskItem> input) {
               if (!_activeOnly) return input;
               return input.where((t) {
                 final s = t.taskStatus;
@@ -175,7 +177,7 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
               }).toList();
             }
 
-            final otherTasks = _maybeFilter(other);
+            final otherTasks = maybeFilter(other);
             final boxes = <Widget>[
               header,
               const SizedBox(height: 4),
@@ -199,7 +201,7 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                 return _SubphaseBox(
                   projectId: widget.projectId,
                   label: displayLabel,
-                  tasks: _maybeFilter(byCode[s.code] ?? const <TaskItem>[]),
+                  tasks: maybeFilter(byCode[s.code] ?? const <TaskItem>[]),
                   allSubphases: sel,
                   isOwner: widget.isOwner,
                   subphase: s,
@@ -297,7 +299,7 @@ class _SubphaseBox extends StatelessWidget {
   Widget build(BuildContext context) {
     final outline = Theme.of(
       context,
-    ).colorScheme.outlineVariant.withOpacity(0.4);
+    ).colorScheme.outlineVariant.withValues(alpha: 0.4);
     final statusLabel =
         (currentStatus != null && currentStatus!.trim().isNotEmpty)
         ? currentStatus!.trim()
@@ -529,7 +531,7 @@ class _SubphaseBox extends StatelessWidget {
             return AlertDialog(
               title: Text('Subphase $code Status'),
               content: DropdownButtonFormField<String>(
-                value: selected,
+                initialValue: selected,
                 items: _kSubphaseStatuses
                     .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                     .toList(),
@@ -855,7 +857,7 @@ Future<void> _showAddTaskDialog(
 
                       // Task Code (dropdown of selected subphases)
                       DropdownButtonFormField<String?>(
-                        value: selectedCode,
+                        initialValue: selectedCode,
                         isExpanded: true,
                         items: [
                           const DropdownMenuItem<String?>(
@@ -884,7 +886,7 @@ Future<void> _showAddTaskDialog(
 
                       // Task Status
                       DropdownButtonFormField<String>(
-                        value: taskStatus,
+                        initialValue: taskStatus,
                         isExpanded: true,
                         items: _kTaskStatuses
                             .map(
@@ -910,6 +912,7 @@ Future<void> _showAddTaskDialog(
               ),
               FilledButton(
                 onPressed: () async {
+                  final navigator = Navigator.of(context);
                   if (!(formKey.currentState?.validate() ?? false)) return;
 
                   final t = TaskItem(
@@ -929,8 +932,9 @@ Future<void> _showAddTaskDialog(
                     updatedAt: null,
                   );
                   await repo.add(t);
-                  // ignore: use_build_context_synchronously
-                  Navigator.pop(context);
+                  if (navigator.mounted) {
+                    navigator.pop();
+                  }
                 },
                 child: const Text('Create'),
               ),
@@ -982,7 +986,7 @@ Future<void> _showEditTaskDialog(
                       const SizedBox(height: 10),
 
                       DropdownButtonFormField<String?>(
-                        value: selectedCode,
+                        initialValue: selectedCode,
                         isExpanded: true,
                         items: () {
                           final seen = <String>{};
@@ -1034,7 +1038,7 @@ Future<void> _showEditTaskDialog(
                       const SizedBox(height: 10),
 
                       DropdownButtonFormField<String>(
-                        value: taskStatus,
+                        initialValue: taskStatus,
                         isExpanded: true,
                         items: _kTaskStatuses
                             .map(
@@ -1059,14 +1063,26 @@ Future<void> _showEditTaskDialog(
               if (canEdit)
                 TextButton(
                   onPressed: () async {
+                    final navigator = Navigator.of(context);
+                    final messenger = ScaffoldMessenger.of(context);
                     final ok = await confirmDialog(
                       context,
                       'Delete this task?',
                     );
                     if (!ok) return;
-                    await repo.delete(t.id);
-                    // ignore: use_build_context_synchronously
-                    Navigator.pop(context);
+                    try {
+                      await repo.delete(t.id);
+                      if (navigator.mounted) {
+                        navigator.pop();
+                      }
+                    } catch (e) {
+                      if (!navigator.mounted) return;
+                      if (messenger.mounted) {
+                        messenger.showSnackBar(
+                          SnackBar(content: Text('Failed to delete task: $e')),
+                        );
+                      }
+                    }
                   },
                   child: const Text('Delete'),
                 ),
@@ -1077,21 +1093,33 @@ Future<void> _showEditTaskDialog(
               if (canEdit)
                 FilledButton(
                   onPressed: () async {
+                    final navigator = Navigator.of(context);
+                    final messenger = ScaffoldMessenger.of(context);
                     if (!(formKey.currentState?.validate() ?? false)) return;
 
-                    await repo.update(t.id, {
-                      'title': titleCtl.text.trim(),
-                      'description': notesCtl.text.trim().isEmpty
-                          ? null
-                          : notesCtl.text.trim(),
-                      'taskCode': selectedCode,
-                      'taskStatus': taskStatus,
-                      'status': _SubphaseBox._legacyFromNew(
-                        taskStatus,
-                      ), // mirror
-                    });
-                    // ignore: use_build_context_synchronously
-                    Navigator.pop(context);
+                    try {
+                      await repo.update(t.id, {
+                        'title': titleCtl.text.trim(),
+                        'description': notesCtl.text.trim().isEmpty
+                            ? null
+                            : notesCtl.text.trim(),
+                        'taskCode': selectedCode,
+                        'taskStatus': taskStatus,
+                        'status': _SubphaseBox._legacyFromNew(
+                          taskStatus,
+                        ), // mirror
+                      });
+                      if (navigator.mounted) {
+                        navigator.pop();
+                      }
+                    } catch (e) {
+                      if (!navigator.mounted) return;
+                      if (messenger.mounted) {
+                        messenger.showSnackBar(
+                          SnackBar(content: Text('Failed to save task: $e')),
+                        );
+                      }
+                    }
                   },
                   child: const Text('Save'),
                 ),
@@ -1123,7 +1151,7 @@ Future<void> _insertDefaultsForSubphase(
   final messenger = ScaffoldMessenger.maybeOf(context);
 
   try {
-    LoadingOverlay.show(context, message: 'Adding tasks…');
+    LoadingOverlay.show(context, message: 'Adding tasks...');
     final tpl = await templatesRepo.getByOwnerAndCode(me.uid, subphaseCode);
     if (tpl == null || tpl.defaultTasks.isEmpty) {
       messenger?.showSnackBar(
@@ -1198,7 +1226,7 @@ Future<void> _insertDefaultsForSubphase(
       SnackBar(content: Text('Failed to insert defaults: $e')),
     );
   } finally {
-    LoadingOverlay.hide(context);
+    LoadingOverlay.hide();
   }
 }
 

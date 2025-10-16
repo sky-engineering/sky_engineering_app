@@ -352,10 +352,12 @@ Future<void> _showAddTaskDialog(BuildContext context, String projectId) async {
     return;
   }
 
-  String? _validateCode(String? v) {
-    final s = (v ?? '').trim();
-    if (s.isEmpty) return null; // optional
-    if (s.length != 4 || int.tryParse(s) == null) return 'Enter a 4-digit code';
+  String? validateTaskCode(String? value) {
+    final input = (value ?? '').trim();
+    if (input.isEmpty) return null; // optional
+    if (input.length != 4 || int.tryParse(input) == null) {
+      return 'Enter a 4-digit code';
+    }
     return null;
   }
 
@@ -407,13 +409,13 @@ Future<void> _showAddTaskDialog(BuildContext context, String projectId) async {
                                 border: OutlineInputBorder(),
                               ),
                               keyboardType: TextInputType.number,
-                              validator: _validateCode,
+                              validator: validateTaskCode,
                             ),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: DropdownButtonFormField<String>(
-                              value: taskStatus,
+                              initialValue: taskStatus,
                               items: _kTaskStatuses
                                   .map(
                                     (s) => DropdownMenuItem(

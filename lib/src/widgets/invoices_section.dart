@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../data/models/invoice.dart';
 import '../data/models/project.dart';
@@ -133,10 +132,6 @@ class InvoicesSection extends StatelessWidget {
                     separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (context, i) {
                       final inv = invoices[i];
-                      final dateBit = inv.invoiceDate != null
-                          ? fmtDate(inv.invoiceDate)
-                          : null;
-
                       return InkWell(
                         onTap: () => _showEditInvoiceDialog(
                           context,
@@ -161,27 +156,27 @@ class InvoicesSection extends StatelessWidget {
                                       children: [
                                         Row(
                                           children: [
-                                        Expanded(
-                                          child: Text(
-                                            inv.invoiceNumber.isNotEmpty
-                                                ? 'Invoice ${inv.invoiceNumber}'
-                                                : 'Invoice ${inv.id.substring(0, 6)}',
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 15,
+                                            Expanded(
+                                              child: Text(
+                                                inv.invoiceNumber.isNotEmpty
+                                                    ? 'Invoice ${inv.invoiceNumber}'
+                                                    : 'Invoice ${inv.id.substring(0, 6)}',
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 15,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
                                             ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
                                           ],
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
                                           'Original: ${currency.format(inv.invoiceAmount)}',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall,
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.bodySmall,
                                         ),
                                       ],
                                     ),
@@ -276,15 +271,6 @@ Future<bool> _projectNumberExists(String text) async {
   return false;
 }
 
-Future<void> _openLink(String url) async {
-  final uri = Uri.tryParse(url);
-  if (uri == null) return;
-  if (await canLaunchUrl(uri)) {
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
-}
-
-// ---------- dialog helpers (uses Amount Paid) ----------
 Future<void> _showAddInvoiceDialog(
   BuildContext context,
   String? projectId, {
@@ -377,6 +363,8 @@ Future<void> _showAddInvoiceDialog(
     }
   }
 
+  if (!context.mounted) return;
+
   await showDialog<void>(
     context: context,
     builder: (context) {
@@ -394,7 +382,7 @@ Future<void> _showAddInvoiceDialog(
                     children: [
                       if (projectMap.isNotEmpty) ...[
                         DropdownButtonFormField<String>(
-                          value: selectedProjectId,
+                          initialValue: selectedProjectId,
                           decoration: const InputDecoration(
                             labelText: 'Project',
                             border: OutlineInputBorder(),
@@ -498,7 +486,7 @@ Future<void> _showAddInvoiceDialog(
                       ),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
-                        value: invoiceType,
+                        initialValue: invoiceType,
                         items: const [
                           DropdownMenuItem(
                             value: 'Client',
@@ -534,12 +522,14 @@ Future<void> _showAddInvoiceDialog(
               ),
               FilledButton(
                 onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  final navigator = Navigator.of(context);
                   if (!(formKey.currentState?.validate() ?? false)) return;
 
                   // Validate that the project number exists before saving.
                   final pnText = projectNumberCtl.text.trim();
                   if (pnText.isEmpty || !(await _projectNumberExists(pnText))) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    messenger.showSnackBar(
                       const SnackBar(
                         content: Text('Project Number not found.'),
                       ),
@@ -558,7 +548,7 @@ Future<void> _showAddInvoiceDialog(
 
                   final targetProjectId = selectedProjectId ?? projectId;
                   if (targetProjectId == null || targetProjectId.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    messenger.showSnackBar(
                       const SnackBar(content: Text('Select a project.')),
                     );
                     return;
@@ -584,14 +574,16 @@ Future<void> _showAddInvoiceDialog(
 
                   try {
                     await repo.add(inv);
-                    if (context.mounted) {
-                      Navigator.pop(context);
+                    if (navigator.mounted) {
+                      navigator.pop();
                     }
                   } catch (e) {
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed to create invoice: $e')),
-                    );
+                    if (!navigator.mounted) return;
+                    if (messenger.mounted) {
+                      messenger.showSnackBar(
+                        SnackBar(content: Text('Failed to create invoice: $e')),
+                      );
+                    }
                   }
                 },
                 child: const Text('Create'),
@@ -621,6 +613,8 @@ Future<void> _showEditInvoiceDialog(
   } catch (_) {
     // fall back to digits
   }
+
+  if (!context.mounted) return;
 
   final projectNumberCtl = TextEditingController(
     text: initialProjectNumberText,
@@ -669,7 +663,7 @@ Future<void> _showEditInvoiceDialog(
     }
   }
 
-  void _viewOnlyTap() {
+  void viewOnlyTap() {
     if (!canEdit) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -735,7 +729,7 @@ Future<void> _showEditInvoiceDialog(
                               label: 'Invoice Date',
                               value: invoiceDate,
                               onPick: () async {
-                                if (!canEdit) return _viewOnlyTap();
+                                if (!canEdit) return viewOnlyTap();
                                 await pickDate('invoice');
                                 setState(() {});
                               },
@@ -747,7 +741,7 @@ Future<void> _showEditInvoiceDialog(
                               label: 'Due Date',
                               value: dueDate,
                               onPick: () async {
-                                if (!canEdit) return _viewOnlyTap();
+                                if (!canEdit) return viewOnlyTap();
                                 await pickDate('due');
                                 setState(() {});
                               },
@@ -760,14 +754,14 @@ Future<void> _showEditInvoiceDialog(
                         label: 'Paid Date',
                         value: paidDate,
                         onPick: () async {
-                          if (!canEdit) return _viewOnlyTap();
+                          if (!canEdit) return viewOnlyTap();
                           await pickDate('paid');
                           setState(() {});
                         },
                       ),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
-                        value: invoiceType,
+                        initialValue: invoiceType,
                         items: const [
                           DropdownMenuItem(
                             value: 'Client',
@@ -781,7 +775,7 @@ Future<void> _showEditInvoiceDialog(
                         onChanged: canEdit
                             ? (v) =>
                                   setState(() => invoiceType = v ?? invoiceType)
-                            : (v) => _viewOnlyTap(),
+                            : (v) => viewOnlyTap(),
                         decoration: const InputDecoration(
                           labelText: 'Invoice Type',
                           border: OutlineInputBorder(),
@@ -798,6 +792,8 @@ Future<void> _showEditInvoiceDialog(
               if (canEdit)
                 TextButton(
                   onPressed: () async {
+                    final navigator = Navigator.of(context);
+                    final messenger = ScaffoldMessenger.of(context);
                     final ok = await confirmDialog(
                       context,
                       'Delete this invoice?',
@@ -805,13 +801,16 @@ Future<void> _showEditInvoiceDialog(
                     if (!ok) return;
                     try {
                       await repo.delete(inv.id);
-                      // ignore: use_build_context_synchronously
-                      Navigator.pop(context);
+                      if (navigator.mounted) {
+                        navigator.pop();
+                      }
                     } catch (e) {
-                      // ignore: use_build_context_synchronously
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Failed to delete: $e')),
-                      );
+                      if (!navigator.mounted) return;
+                      if (messenger.mounted) {
+                        messenger.showSnackBar(
+                          SnackBar(content: Text('Failed to delete: $e')),
+                        );
+                      }
                     }
                   },
                   child: const Text('Delete'),
@@ -823,13 +822,15 @@ Future<void> _showEditInvoiceDialog(
               if (canEdit)
                 FilledButton(
                   onPressed: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final navigator = Navigator.of(context);
                     if (!(formKey.currentState?.validate() ?? false)) return;
 
                     // Validate that the project number exists before saving.
                     final pnText = projectNumberCtl.text.trim();
                     if (pnText.isEmpty ||
                         !(await _projectNumberExists(pnText))) {
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      messenger.showSnackBar(
                         const SnackBar(
                           content: Text('Project Number not found.'),
                         ),
@@ -870,13 +871,16 @@ Future<void> _showEditInvoiceDialog(
                             : null,
                         'invoiceType': invoiceType,
                       });
-                      // ignore: use_build_context_synchronously
-                      Navigator.pop(context);
+                      if (navigator.mounted) {
+                        navigator.pop();
+                      }
                     } catch (e) {
-                      // ignore: use_build_context_synchronously
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Failed to save: $e')),
-                      );
+                      if (!navigator.mounted) return;
+                      if (messenger.mounted) {
+                        messenger.showSnackBar(
+                          SnackBar(content: Text('Failed to save: $e')),
+                        );
+                      }
                     }
                   },
                   child: const Text('Save'),
