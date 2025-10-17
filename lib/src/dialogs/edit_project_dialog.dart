@@ -24,10 +24,10 @@ Future<void> showEditProjectDialog(BuildContext context, Project p) async {
       ? p.status
       : 'In Progress';
 
-  double? _parseMoney(String s) {
-    final t = s.trim();
-    if (t.isEmpty) return null;
-    return double.tryParse(t);
+  double? parseMoney(String value) {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) return null;
+    return double.tryParse(trimmed);
   }
 
   await showDialog<void>(
@@ -77,7 +77,7 @@ Future<void> showEditProjectDialog(BuildContext context, Project p) async {
                       ),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
-                        value: projectStatus,
+                        initialValue: projectStatus,
                         decoration: const InputDecoration(
                           labelText: 'Status',
                           border: OutlineInputBorder(),
@@ -150,7 +150,7 @@ Future<void> showEditProjectDialog(BuildContext context, Project p) async {
                                 return;
                               }
 
-                              final amt = _parseMoney(contractCtl.text);
+                              final amt = parseMoney(contractCtl.text);
                               String? nullIfEmpty(String s) =>
                                   s.trim().isEmpty ? null : s.trim();
 

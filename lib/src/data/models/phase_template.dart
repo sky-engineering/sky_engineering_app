@@ -1,6 +1,8 @@
 // lib/src/data/models/phase_template.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../utils/data_parsers.dart';
+
 class PhaseTemplate {
   final String id;
   final String ownerUid;
@@ -33,43 +35,27 @@ class PhaseTemplate {
     return s.length == 2 && int.tryParse(s) != null;
   }
 
-  // ---------- Mapping helpers ----------
-  static DateTime? _toDate(dynamic v) {
-    if (v is Timestamp) return v.toDate();
-    if (v is DateTime) return v;
-    return null;
-  }
-
-  static String _str(dynamic v) => (v is String) ? v.trim() : '';
-  static int _toInt(dynamic v, [int fallback = 0]) {
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    if (v is String) return int.tryParse(v) ?? fallback;
-    return fallback;
-  }
-
   static PhaseTemplate fromDoc(DocumentSnapshot doc) {
-    final data = (doc.data() as Map<String, dynamic>? ?? <String, dynamic>{});
+    final data = mapFrom(doc.data() as Map<String, dynamic>?);
     return PhaseTemplate(
       id: doc.id,
-      ownerUid: _str(data['ownerUid']),
-      phaseCode: _str(data['phaseCode']),
-      phaseName: _str(data['phaseName']),
-      sortOrder: _toInt(data['sortOrder'], 0),
-      createdAt: _toDate(data['createdAt']),
-      updatedAt: _toDate(data['updatedAt']),
+      ownerUid: readString(data, 'ownerUid'),
+      phaseCode: readString(data, 'phaseCode'),
+      phaseName: readString(data, 'phaseName'),
+      sortOrder: readIntOrNull(data, 'sortOrder') ?? 0,
+      createdAt: readDateTime(data, 'createdAt'),
+      updatedAt: readDateTime(data, 'updatedAt'),
     );
   }
 
   Map<String, dynamic> toMap() {
-    Timestamp? _ts(DateTime? d) => d != null ? Timestamp.fromDate(d) : null;
     return <String, dynamic>{
       'ownerUid': ownerUid,
       'phaseCode': phaseCode,
       'phaseName': phaseName,
       'sortOrder': sortOrder,
-      'createdAt': _ts(createdAt),
-      'updatedAt': _ts(updatedAt),
+      'createdAt': timestampFromDate(createdAt),
+      'updatedAt': timestampFromDate(updatedAt),
     };
   }
 

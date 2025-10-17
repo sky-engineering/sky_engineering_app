@@ -243,6 +243,7 @@ Future<void> _addPhaseDialog(BuildContext context) async {
         FilledButton(
           onPressed: () async {
             if (!(formKey.currentState?.validate() ?? false)) return;
+            final navigator = Navigator.of(context);
             await PhaseTemplateRepository().add(
               PhaseTemplate(
                 id: '',
@@ -254,7 +255,7 @@ Future<void> _addPhaseDialog(BuildContext context) async {
                 updatedAt: null,
               ),
             );
-            if (Navigator.of(context).canPop()) Navigator.pop(context);
+            navigator.pop();
           },
           child: const Text('Save'),
         ),
@@ -305,12 +306,13 @@ Future<void> _editPhaseDialog(BuildContext context, PhaseTemplate p) async {
         FilledButton(
           onPressed: () async {
             if (!(formKey.currentState?.validate() ?? false)) return;
+            final navigator = Navigator.of(context);
             await PhaseTemplateRepository().update(p.id, {
               'phaseCode': codeCtl.text.trim(),
               'phaseName': nameCtl.text.trim(),
               'updatedAt': DateTime.now(),
             });
-            if (Navigator.of(context).canPop()) Navigator.pop(context);
+            if (navigator.canPop()) navigator.pop();
           },
           child: const Text('Save'),
         ),
@@ -341,3 +343,4 @@ Future<void> _persistReorder(
     });
   }
 }
+

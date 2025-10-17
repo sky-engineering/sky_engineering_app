@@ -1,12 +1,14 @@
 // lib/src/data/models/phase.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../utils/data_parsers.dart';
+
 class Phase {
   final String id;
   final String ownerUid;
   final String phaseCode; // e.g., "01"
   final String phaseName; // e.g., "Land Use"
-  final int? order;       // optional explicit ordering
+  final int? order; // optional explicit ordering
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -41,28 +43,15 @@ class Phase {
   }
 
   static Phase fromDoc(DocumentSnapshot doc) {
-    final data = (doc.data() as Map<String, dynamic>? ?? {});
-    DateTime? _toDate(dynamic v) {
-      if (v is Timestamp) return v.toDate();
-      if (v is DateTime) return v;
-      return null;
-    }
-
-    int? _toInt(dynamic v) {
-      if (v == null) return null;
-      if (v is int) return v;
-      if (v is num) return v.toInt();
-      return int.tryParse('$v');
-    }
-
+    final data = mapFrom(doc.data() as Map<String, dynamic>?);
     return Phase(
       id: doc.id,
-      ownerUid: (data['ownerUid'] as String?) ?? '',
-      phaseCode: (data['phaseCode'] as String?) ?? '',
-      phaseName: (data['phaseName'] as String?) ?? '',
-      order: _toInt(data['order']),
-      createdAt: _toDate(data['createdAt']),
-      updatedAt: _toDate(data['updatedAt']),
+      ownerUid: readString(data, 'ownerUid'),
+      phaseCode: readString(data, 'phaseCode'),
+      phaseName: readString(data, 'phaseName'),
+      order: readIntOrNull(data, 'order'),
+      createdAt: readDateTime(data, 'createdAt'),
+      updatedAt: readDateTime(data, 'updatedAt'),
     );
   }
 

@@ -83,8 +83,35 @@ class TaskRepository {
       }
     }
 
+    if (encoded.containsKey('subtasks')) {
+      final value = encoded['subtasks'];
+      if (value is List<SubtaskItem>) {
+        encoded['subtasks'] = value.map((s) => s.toMap()).toList();
+      } else if (value is Iterable) {
+        encoded['subtasks'] = value
+            .map((item) {
+              if (item is SubtaskItem) return item.toMap();
+              if (item is Map<String, dynamic>) return item;
+              if (item is Map) return Map<String, dynamic>.from(item);
+              return null;
+            })
+            .whereType<Map<String, dynamic>>()
+            .toList();
+      } else if (value == null) {
+        encoded['subtasks'] = FieldValue.delete();
+      }
+    }
+
     encoded['updatedAt'] = FieldValue.serverTimestamp();
     await _col.doc(id).update(encoded);
+  }
+
+  Future<SubtaskItem> addSubtask(String taskId, SubtaskItem subtask) async {
+    await _col.doc(taskId).update({
+      'subtasks': FieldValue.arrayUnion([subtask.toMap()]),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    return subtask;
   }
 
   Future<void> setStarred(TaskItem task, bool value, {int? order}) async {

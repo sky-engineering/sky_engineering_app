@@ -10,6 +10,7 @@ import '../data/repositories/project_repository.dart';
 import '../data/repositories/subphase_template_repository.dart';
 import '../dialogs/select_subphases_dialog.dart';
 import 'form_helpers.dart';
+import '../dialogs/task_edit_dialog.dart';
 import '../ui/loading_overlay.dart';
 
 const _kTaskStatuses = <String>[
@@ -433,7 +434,7 @@ class _SubphaseBox extends StatelessWidget {
                         'status': _legacyFromNew(newStatus), // mirror
                       });
                     },
-                    onTap: () => _showEditTaskDialog(
+                    onTap: () => showTaskEditDialog(
                       context,
                       t,
                       canEdit: isOwner,
@@ -563,6 +564,7 @@ class _SubphaseBox extends StatelessWidget {
 }
 
 // ===== Compact task tile =====
+
 class _CompactTaskTile extends StatefulWidget {
   final TaskItem task;
   final bool isOwner;
@@ -590,6 +592,10 @@ class _CompactTaskTileState extends State<_CompactTaskTile> {
   static const double _completeThreshold = 0.6;
   static const double _deleteThreshold = 0.85;
 
+  late List<SubtaskItem> _subtasks;
+  bool _expanded = false;
+  bool _subtaskUpdateInProgress = false;
+
   double _dragProgress = 0.0;
   DismissDirection? _currentDirection;
 
@@ -601,6 +607,25 @@ class _CompactTaskTileState extends State<_CompactTaskTile> {
       _currentDirection == DismissDirection.endToStart &&
       _dragProgress >= _deleteThreshold;
 
+  bool get _hasSubtasks => _subtasks.isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    _subtasks = List<SubtaskItem>.from(widget.task.subtasks);
+  }
+
+  @override
+  void didUpdateWidget(covariant _CompactTaskTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_subtaskListsEqual(widget.task.subtasks, oldWidget.task.subtasks)) {
+      _subtasks = List<SubtaskItem>.from(widget.task.subtasks);
+      if (_subtasks.isEmpty) {
+        _expanded = false;
+      }
+    }
+  }
+
   void _resetDrag() {
     if (_dragProgress != 0.0 || _currentDirection != null) {
       setState(() {
@@ -610,15 +635,88 @@ class _CompactTaskTileState extends State<_CompactTaskTile> {
     }
   }
 
+  void _toggleExpansion() {
+    if (!_hasSubtasks) return;
+    setState(() {
+      _expanded = !_expanded;
+    });
+  }
+
+  Future<void> _handleSubtaskTap(int index) async {
+    if (!widget.isOwner) {
+      _showSnack('View-only: only the project owner can modify tasks.');
+      return;
+    }
+    if (_subtaskUpdateInProgress || index < 0 || index >= _subtasks.length) {
+      return;
+    }
+
+    final previous = List<SubtaskItem>.from(_subtasks);
+    final current = previous[index];
+    final toggled = current.copyWith(isDone: !current.isDone);
+    final updated = List<SubtaskItem>.from(previous)..[index] = toggled;
+
+    setState(() {
+      _subtaskUpdateInProgress = true;
+      _subtasks = updated;
+    });
+
+    try {
+      await TaskRepository().update(widget.task.id, {'subtasks': updated});
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _subtasks = previous;
+      });
+      _showSnack('Failed to update subtask: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _subtaskUpdateInProgress = false;
+        });
+      }
+    }
+  }
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  static bool _subtaskListsEqual(List<SubtaskItem> a, List<SubtaskItem> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      final left = a[i];
+      final right = b[i];
+      if (left.id != right.id ||
+          left.title != right.title ||
+          left.isDone != right.isDone) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final small = Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 12);
+    final theme = Theme.of(context);
+    final small = theme.textTheme.bodySmall?.copyWith(fontSize: 12);
     final task = widget.task;
     final isOwner = widget.isOwner;
     final hasDesc = (task.description ?? '').trim().isNotEmpty;
+    final hasSubtasks = _hasSubtasks;
 
-    final filledStarColor = Theme.of(context).colorScheme.secondary;
-    final hollowStarColor = Theme.of(context).colorScheme.onSurfaceVariant;
+    final filledStarColor = theme.colorScheme.secondary;
+    final hollowStarColor = theme.colorScheme.onSurfaceVariant;
+
+    final baseSubtaskColor =
+        theme.textTheme.bodySmall?.color ?? theme.colorScheme.onSurfaceVariant;
+    final TextStyle baseSubtaskStyle = (small ?? const TextStyle()).copyWith(
+      fontSize: 11,
+    );
 
     return Dismissible(
       key: ValueKey('proj-task-${task.id}'),
@@ -660,7 +758,7 @@ class _CompactTaskTileState extends State<_CompactTaskTile> {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0.5),
           child: Row(
-            crossAxisAlignment: hasDesc
+            crossAxisAlignment: hasDesc || (hasSubtasks && _expanded)
                 ? CrossAxisAlignment.start
                 : CrossAxisAlignment.center,
             children: [
@@ -701,6 +799,24 @@ class _CompactTaskTileState extends State<_CompactTaskTile> {
                             ),
                           ),
                         ),
+                        if (hasSubtasks)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 4),
+                            child: IconButton(
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 28,
+                                minHeight: 28,
+                              ),
+                              iconSize: 18,
+                              splashRadius: 18,
+                              onPressed: _toggleExpansion,
+                              icon: Icon(_expanded ? Icons.remove : Icons.add),
+                              tooltip: _expanded
+                                  ? 'Hide subtasks'
+                                  : 'Show subtasks',
+                            ),
+                          ),
                         const SizedBox(width: 6),
                         DropdownButtonHideUnderline(
                           child: DropdownButton<String>(
@@ -737,6 +853,34 @@ class _CompactTaskTileState extends State<_CompactTaskTile> {
                           maxLines: 3,
                           overflow: TextOverflow.ellipsis,
                           style: small,
+                        ),
+                      ),
+                    if (hasSubtasks && _expanded)
+                      Padding(
+                        padding: EdgeInsets.only(top: hasDesc ? 6 : 4),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: List.generate(_subtasks.length, (index) {
+                            final subtask = _subtasks[index];
+                            final color =
+                                baseSubtaskStyle.color ?? baseSubtaskColor;
+                            final displayColor = subtask.isDone
+                                ? color.withValues(alpha: 0.6)
+                                : color;
+                            final style = baseSubtaskStyle.copyWith(
+                              color: displayColor,
+                              decoration: subtask.isDone
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                            );
+                            return Padding(
+                              padding: EdgeInsets.only(top: index == 0 ? 0 : 4),
+                              child: InkWell(
+                                onTap: () => _handleSubtaskTap(index),
+                                child: Text('- ${subtask.title}', style: style),
+                              ),
+                            );
+                          }),
                         ),
                       ),
                   ],
@@ -938,191 +1082,6 @@ Future<void> _showAddTaskDialog(
                 },
                 child: const Text('Create'),
               ),
-            ],
-          );
-        },
-      );
-    },
-  );
-}
-
-Future<void> _showEditTaskDialog(
-  BuildContext context,
-  TaskItem t, {
-  required bool canEdit,
-  required List<SelectedSubphase> subphases,
-}) async {
-  final titleCtl = TextEditingController(text: t.title);
-  final notesCtl = TextEditingController(text: t.description ?? '');
-  String? selectedCode = (t.taskCode != null && t.taskCode!.trim().isNotEmpty)
-      ? t.taskCode!.trim()
-      : null;
-  String taskStatus = _kTaskStatuses.contains(t.taskStatus)
-      ? t.taskStatus
-      : 'In Progress';
-
-  final repo = TaskRepository();
-  final formKey = GlobalKey<FormState>();
-
-  await showDialog<void>(
-    context: context,
-    builder: (context) {
-      return StatefulBuilder(
-        builder: (context, setState) {
-          return AlertDialog(
-            title: Text('Task: ${t.title}'),
-            content: Form(
-              key: formKey,
-              child: SingleChildScrollView(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 520),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      appTextField('Title', titleCtl, required: true),
-                      const SizedBox(height: 10),
-                      appTextField('Notes', notesCtl),
-                      const SizedBox(height: 10),
-
-                      DropdownButtonFormField<String?>(
-                        initialValue: selectedCode,
-                        isExpanded: true,
-                        items: () {
-                          final seen = <String>{};
-                          final items = <DropdownMenuItem<String?>>[
-                            const DropdownMenuItem<String?>(
-                              value: null,
-                              child: Text('No Task Code'),
-                            ),
-                          ];
-                          for (final s in subphases) {
-                            if (!seen.add(s.code)) continue;
-                            items.add(
-                              DropdownMenuItem<String?>(
-                                value: s.code,
-                                child: Text(
-                                  '${s.code}  ${s.name}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  softWrap: false,
-                                ),
-                              ),
-                            );
-                          }
-                          if (selectedCode != null &&
-                              !seen.contains(selectedCode!)) {
-                            items.insert(
-                              1,
-                              DropdownMenuItem<String?>(
-                                value: selectedCode,
-                                child: Text(
-                                  '$selectedCode (inactive)',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  softWrap: false,
-                                ),
-                              ),
-                            );
-                          }
-                          return items;
-                        }(),
-                        onChanged: canEdit
-                            ? (v) => setState(() => selectedCode = v)
-                            : null,
-                        decoration: const InputDecoration(
-                          labelText: 'Task Code (optional)',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-
-                      DropdownButtonFormField<String>(
-                        initialValue: taskStatus,
-                        isExpanded: true,
-                        items: _kTaskStatuses
-                            .map(
-                              (s) => DropdownMenuItem(value: s, child: Text(s)),
-                            )
-                            .toList(),
-                        onChanged: canEdit
-                            ? (v) =>
-                                  setState(() => taskStatus = v ?? taskStatus)
-                            : null,
-                        decoration: const InputDecoration(
-                          labelText: 'Task Status',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            actions: [
-              if (canEdit)
-                TextButton(
-                  onPressed: () async {
-                    final navigator = Navigator.of(context);
-                    final messenger = ScaffoldMessenger.of(context);
-                    final ok = await confirmDialog(
-                      context,
-                      'Delete this task?',
-                    );
-                    if (!ok) return;
-                    try {
-                      await repo.delete(t.id);
-                      if (navigator.mounted) {
-                        navigator.pop();
-                      }
-                    } catch (e) {
-                      if (!navigator.mounted) return;
-                      if (messenger.mounted) {
-                        messenger.showSnackBar(
-                          SnackBar(content: Text('Failed to delete task: $e')),
-                        );
-                      }
-                    }
-                  },
-                  child: const Text('Delete'),
-                ),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(canEdit ? 'Cancel' : 'Close'),
-              ),
-              if (canEdit)
-                FilledButton(
-                  onPressed: () async {
-                    final navigator = Navigator.of(context);
-                    final messenger = ScaffoldMessenger.of(context);
-                    if (!(formKey.currentState?.validate() ?? false)) return;
-
-                    try {
-                      await repo.update(t.id, {
-                        'title': titleCtl.text.trim(),
-                        'description': notesCtl.text.trim().isEmpty
-                            ? null
-                            : notesCtl.text.trim(),
-                        'taskCode': selectedCode,
-                        'taskStatus': taskStatus,
-                        'status': _SubphaseBox._legacyFromNew(
-                          taskStatus,
-                        ), // mirror
-                      });
-                      if (navigator.mounted) {
-                        navigator.pop();
-                      }
-                    } catch (e) {
-                      if (!navigator.mounted) return;
-                      if (messenger.mounted) {
-                        messenger.showSnackBar(
-                          SnackBar(content: Text('Failed to save task: $e')),
-                        );
-                      }
-                    }
-                  },
-                  child: const Text('Save'),
-                ),
             ],
           );
         },

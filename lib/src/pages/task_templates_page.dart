@@ -67,7 +67,9 @@ class TaskTemplatesPage extends StatelessWidget {
               }
 
               final phase = orderedPhaseKeys[index];
-              final list = grouped[phase]!..sort((a, b) => a.taskCode.compareTo(b.taskCode));
+              final tasks = List<TaskTemplate>.from(
+                grouped[phase] ?? const <TaskTemplate>[],
+              )..sort((a, b) => a.taskCode.compareTo(b.taskCode));
 
               return Card(
                 child: Padding(
@@ -81,28 +83,31 @@ class TaskTemplatesPage extends StatelessWidget {
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         itemBuilder: (context, i) {
-                          final t = list![i];
-                          final subtitleBits = <String>[];
-                          subtitleBits.add('Code ${t.taskCode}');
-                          subtitleBits.add(t.taskResponsibility);
-                          if (t.isDeliverable) subtitleBits.add('Deliverable');
-                          if ((t.projectNumber ?? '').trim().isNotEmpty) {
-                            subtitleBits.add('Proj ${t.projectNumber!.trim()}');
+                          final task = tasks[i];
+                          final subtitleParts = <String>[
+                            'Code ${task.taskCode}',
+                            task.taskResponsibility,
+                            if (task.isDeliverable) 'Deliverable',
+                          ];
+                          final projectNumber = task.projectNumber?.trim();
+                          if (projectNumber != null && projectNumber.isNotEmpty) {
+                            subtitleParts.add('Proj $projectNumber');
                           }
+                          final note = task.taskNote?.trim();
 
                           return ListTile(
-                            title: Text(t.taskName),
+                            title: Text(task.taskName),
                             subtitle: Text([
-                              subtitleBits.join(' • '),
-                              if ((t.taskNote ?? '').isNotEmpty) t.taskNote!.trim(),
+                              subtitleParts.join(' • '),
+                              if (note != null && note.isNotEmpty) note,
                             ].where((e) => e.isNotEmpty).join('\n')),
-                            isThreeLine: (t.taskNote ?? '').isNotEmpty,
+                            isThreeLine: note != null && note.isNotEmpty,
                             trailing: const Icon(Icons.edit),
-                            onTap: () => _showEditDialog(context, t),
+                            onTap: () => _showEditDialog(context, task),
                           );
                         },
                         separatorBuilder: (_, __) => const SizedBox(height: 6),
-                        itemCount: list!.length,
+                        itemCount: tasks.length,
                       ),
                     ],
                   ),
@@ -176,8 +181,8 @@ Future<void> _showAddDialog(BuildContext context, String ownerUid) async {
   final formKey = GlobalKey<FormState>();
   final repo = TaskTemplateRepository();
 
-  String? _validateCode(String? v) {
-    final s = (v ?? '').trim();
+  String? validateCode(String? value) {
+    final s = (value ?? '').trim();
     if (s.length != 4 || int.tryParse(s) == null) return 'Enter a 4-digit code';
     final phase = s.substring(0, 2);
     if (!['01','02','03','04'].contains(phase)) return 'Phase must be 01, 02, 03, or 04';
@@ -203,7 +208,7 @@ Future<void> _showAddDialog(BuildContext context, String ownerUid) async {
                   appTextField('Task Note', noteCtl, hint: 'optional notes'),
                   const SizedBox(height: 10),
                   DropdownButtonFormField<String>(
-                    value: responsibility,
+                    initialValue: responsibility,
                     items: TaskTemplatesPage._roles.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
                     onChanged: (v) => setState(() => responsibility = v ?? 'Civil'),
                     decoration: const InputDecoration(labelText: 'Responsibility', border: OutlineInputBorder()),
@@ -233,8 +238,8 @@ Future<void> _showAddDialog(BuildContext context, String ownerUid) async {
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Code and Name are required.')));
                   return;
                 }
-                if (_validateCode(code) != null) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_validateCode(code)!)));
+                if (validateCode(code) != null) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(validateCode(code)!)));
                   return;
                 }
 
@@ -272,8 +277,8 @@ Future<void> _showEditDialog(BuildContext context, TaskTemplate t) async {
   final formKey = GlobalKey<FormState>();
   final repo = TaskTemplateRepository();
 
-  String? _validateCode(String? v) {
-    final s = (v ?? '').trim();
+  String? validateCode(String? value) {
+    final s = (value ?? '').trim();
     if (s.length != 4 || int.tryParse(s) == null) return 'Enter a 4-digit code';
     final phase = s.substring(0, 2);
     if (!['01','02','03','04'].contains(phase)) return 'Phase must be 01, 02, 03, or 04';
@@ -299,7 +304,7 @@ Future<void> _showEditDialog(BuildContext context, TaskTemplate t) async {
                   appTextField('Task Note', noteCtl),
                   const SizedBox(height: 10),
                   DropdownButtonFormField<String>(
-                    value: responsibility,
+                    initialValue: responsibility,
                     items: TaskTemplatesPage._roles.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
                     onChanged: (v) => setState(() => responsibility = v ?? 'Civil'),
                     decoration: const InputDecoration(labelText: 'Responsibility', border: OutlineInputBorder()),
@@ -337,7 +342,7 @@ Future<void> _showEditDialog(BuildContext context, TaskTemplate t) async {
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Code and Name are required.')));
                   return;
                 }
-                final err = _validateCode(code);
+                final err = validateCode(code);
                 if (err != null) {
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
                   return;
@@ -392,3 +397,4 @@ Future<void> _seedStarterList(BuildContext context, String ownerUid) async {
   // ignore: use_build_context_synchronously
   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Seeded starter templates.')));
 }
+

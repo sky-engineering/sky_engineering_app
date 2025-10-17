@@ -1,6 +1,8 @@
 // lib/src/data/models/task.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../utils/data_parsers.dart';
+
 /// TaskItem — upgraded to include:
 /// - taskStatus: 'In Progress' | 'On Hold' | 'Pending' | 'Completed'
 /// - isStarred: bool
@@ -29,6 +31,7 @@ class TaskItem {
   final bool isStarred; // star marker in lists
   final String? taskCode; // optional 4-digit code like '0101'
   final int? starredOrder; // manual sort index for starred lists
+  final List<SubtaskItem> subtasks;
 
   // Meta
   final DateTime? createdAt;
@@ -55,6 +58,7 @@ class TaskItem {
     bool? isStarred,
     this.taskCode,
     this.starredOrder,
+    List<SubtaskItem>? subtasks,
 
     // Legacy input (still accepted)
     String? status,
@@ -62,7 +66,8 @@ class TaskItem {
     this.createdAt,
     this.updatedAt,
   }) : taskStatus = taskStatus ?? _fromLegacyStatus(status) ?? 'Pending',
-       isStarred = isStarred ?? false;
+       isStarred = isStarred ?? false,
+       subtasks = List.unmodifiable(subtasks ?? const []);
 
   // ----------------- mapping helpers -----------------
   static String _toLegacyStatus(String taskStatus) {
@@ -94,60 +99,36 @@ class TaskItem {
     }
   }
 
-  static DateTime? _toDate(dynamic v) {
-    if (v is Timestamp) return v.toDate();
-    if (v is DateTime) return v;
-    return null;
-  }
-
-  static bool _toBool(dynamic v) {
-    if (v is bool) return v;
-    if (v is num) return v != 0;
-    if (v is String) {
-      final s = v.toLowerCase().trim();
-      return s == 'true' || s == 'yes' || s == '1';
-    }
-    return false;
-  }
-
-  static int? _toInt(dynamic v) {
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    if (v is String) return int.tryParse(v);
-    return null;
-  }
-
   // ----------------- fromDoc -----------------
   static TaskItem fromDoc(DocumentSnapshot doc) {
-    final data = (doc.data() as Map<String, dynamic>? ?? <String, dynamic>{});
+    final data = mapFrom(doc.data() as Map<String, dynamic>?);
 
-    final newStatus = (data['taskStatus'] as String?)?.trim();
-    final legacyStatus = (data['status'] as String?)?.trim();
+    final newStatus = parseStringOrNull(data['taskStatus']);
+    final legacyStatus = parseStringOrNull(data['status']);
     final resolvedTaskStatus = (newStatus != null && newStatus.isNotEmpty)
         ? newStatus
         : _fromLegacyStatus(legacyStatus) ?? 'Pending';
 
     return TaskItem(
       id: doc.id,
-      projectId: (data['projectId'] as String? ?? ''),
-      ownerUid: (data['ownerUid'] as String? ?? ''),
-      title: (data['title'] as String? ?? '').trim(),
-      description: (data['description'] as String?)?.trim(),
-      assigneeName: (data['assigneeName'] as String?)?.trim(),
-      dueDate: _toDate(data['dueDate']),
+      projectId: readString(data, 'projectId'),
+      ownerUid: readString(data, 'ownerUid'),
+      title: readString(data, 'title'),
+      description: readStringOrNull(data, 'description'),
+      assigneeName: readStringOrNull(data, 'assigneeName'),
+      dueDate: readDateTime(data, 'dueDate'),
       taskStatus: resolvedTaskStatus,
-      isStarred: _toBool(data['isStarred']),
-      taskCode: (data['taskCode'] as String?)?.trim(),
-      starredOrder: _toInt(data['starredOrder']),
-      createdAt: _toDate(data['createdAt']),
-      updatedAt: _toDate(data['updatedAt']),
+      isStarred: readBool(data, 'isStarred'),
+      taskCode: readStringOrNull(data, 'taskCode'),
+      starredOrder: readIntOrNull(data, 'starredOrder'),
+      subtasks: _parseSubtasks(data['subtasks']),
+      createdAt: readDateTime(data, 'createdAt'),
+      updatedAt: readDateTime(data, 'updatedAt'),
     );
   }
 
   // ----------------- toMap -----------------
   Map<String, dynamic> toMap() {
-    Timestamp? _ts(DateTime? d) => d != null ? Timestamp.fromDate(d) : null;
-
     final legacy = _toLegacyStatus(taskStatus);
 
     return <String, dynamic>{
@@ -156,13 +137,14 @@ class TaskItem {
       'title': title,
       'description': description,
       'assigneeName': assigneeName,
-      'dueDate': _ts(dueDate),
+      'dueDate': timestampFromDate(dueDate),
 
       // NEW schema
       'taskStatus': taskStatus,
       'isStarred': isStarred,
       'taskCode': taskCode,
       if (starredOrder != null) 'starredOrder': starredOrder,
+      'subtasks': subtasks.map((s) => s.toMap()).toList(),
 
       // Legacy mirror
       'status': legacy,
@@ -192,6 +174,7 @@ class TaskItem {
 
     // legacy input accepted but ignored for storage (we derive it)
     String? status,
+    List<SubtaskItem>? subtasks,
   }) {
     return TaskItem(
       id: id ?? this.id,
@@ -205,8 +188,82 @@ class TaskItem {
       isStarred: isStarred ?? this.isStarred,
       taskCode: taskCode ?? this.taskCode,
       starredOrder: starredOrder ?? this.starredOrder,
+      subtasks: subtasks ?? this.subtasks,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
+  }
+
+  static List<SubtaskItem> _parseSubtasks(Object? raw) {
+    if (raw is Iterable) {
+      return raw
+          .map((entry) {
+            if (entry is Map<String, dynamic>) return entry;
+            if (entry is Map) return Map<String, dynamic>.from(entry);
+            return null;
+          })
+          .whereType<Map<String, dynamic>>()
+          .map(SubtaskItem.fromMap)
+          .toList();
+    }
+    return const [];
+  }
+}
+
+class SubtaskItem {
+  SubtaskItem({
+    required this.id,
+    required this.title,
+    required this.isDone,
+    this.createdAt,
+    this.completedAt,
+  });
+
+  final String id;
+  final String title;
+  final bool isDone;
+  final DateTime? createdAt;
+  final DateTime? completedAt;
+
+  factory SubtaskItem.create({required String title}) {
+    final now = DateTime.now();
+    final id = FirebaseFirestore.instance.collection('tasks').doc().id;
+    return SubtaskItem(id: id, title: title, isDone: false, createdAt: now);
+  }
+
+  factory SubtaskItem.fromMap(Map<String, dynamic> data) {
+    return SubtaskItem(
+      id: parseString(data['id'], fallback: ''),
+      title: parseString(data['title'], fallback: ''),
+      isDone: parseBool(data['isDone'], fallback: false),
+      createdAt: parseDateTime(data['createdAt']),
+      completedAt: parseDateTime(data['completedAt']),
+    );
+  }
+
+  SubtaskItem copyWith({
+    String? id,
+    String? title,
+    bool? isDone,
+    DateTime? createdAt,
+    DateTime? completedAt,
+  }) {
+    return SubtaskItem(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      isDone: isDone ?? this.isDone,
+      createdAt: createdAt ?? this.createdAt,
+      completedAt: completedAt ?? this.completedAt,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return <String, dynamic>{
+      'id': id,
+      'title': title,
+      'isDone': isDone,
+      'createdAt': timestampFromDate(createdAt),
+      if (completedAt != null) 'completedAt': timestampFromDate(completedAt),
+    };
   }
 }

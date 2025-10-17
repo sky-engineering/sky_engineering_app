@@ -1,6 +1,8 @@
 // lib/src/data/models/invoice.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../utils/data_parsers.dart';
+
 /// Canonical invoice model (new schema), with legacy shims so the current UI
 /// continues to compile and run while we migrate screens.
 ///
@@ -67,7 +69,8 @@ class Invoice {
 
   String get status {
     // Prefer stored status if present; otherwise derive from paid.
-    if (_statusStored != null && _statusStored!.isNotEmpty) return _statusStored!;
+    final storedStatus = _statusStored;
+    if (storedStatus != null && storedStatus.isNotEmpty) return storedStatus;
     final fullyPaid = (paidDate != null) || (amountPaid >= invoiceAmount) || (balance <= 0);
     return fullyPaid ? 'Paid' : 'Unpaid';
   }
@@ -93,7 +96,7 @@ class Invoice {
 
     this.invoiceType = 'Client', // default
     String? projectNumber,
-    double? balanceDue,
+    this.balanceDue,
     this.dueDate,
     this.paidDate,
     this.documentLink,
@@ -106,112 +109,52 @@ class Invoice {
         invoiceDate = invoiceDate ?? issueDate,
         _statusStored = status,
   // Normalize amountPaid to [0, invoiceAmount]
-        amountPaid = _normalizePaid(amountPaid ?? _derivePaidFromBalance(balanceDue, (invoiceAmount ?? amount ?? 0.0)),
-            (invoiceAmount ?? amount ?? 0.0)),
-  // Keep legacy balanceDue field; may be null. If null, we compute a value for writing in toMap().
-        balanceDue = balanceDue;
+        amountPaid = _normalizePaid(
+          amountPaid ?? _derivePaidFromBalance(balanceDue, (invoiceAmount ?? amount ?? 0.0)),
+          (invoiceAmount ?? amount ?? 0.0),
+        );
 
   /// Backward-compatible factory from Firestore doc.
   static Invoice fromDoc(DocumentSnapshot doc) {
-    final data = (doc.data() as Map<String, dynamic>? ?? <String, dynamic>{});
+    final data = mapFrom(doc.data() as Map<String, dynamic>?);
 
-    double _toDouble(dynamic v) {
-      if (v == null) return 0.0;
-      if (v is num) return v.toDouble();
-      return double.tryParse('$v') ?? 0.0;
-    }
+    final invoiceNumberKey = data.containsKey('invoiceNumber') ? 'invoiceNumber' : 'number';
+    final invoiceAmountKey = data.containsKey('invoiceAmount') ? 'invoiceAmount' : 'amount';
 
-    double? _toDoubleOrNull(dynamic v) {
-      if (v == null) return null;
-      if (v is num) return v.toDouble();
-      return double.tryParse('$v');
-    }
-
-    String? _toProjectNumber(dynamic v) {
-      if (v == null) return null;
-      if (v is String) {
-        final trimmed = v.trim();
-        return trimmed.isEmpty ? null : trimmed;
-      }
-      if (v is num) {
-        final text = v.toString();
-        return text.isEmpty ? null : text;
-      }
-      final text = v.toString().trim();
-      return text.isEmpty ? null : text;
-    }
-
-    DateTime? _toDate(dynamic v) {
-      if (v is Timestamp) return v.toDate();
-      if (v is DateTime) return v;
-      if (v is String) {
-        final trimmed = v.trim();
-        if (trimmed.isEmpty) return null;
-        try {
-          return DateTime.parse(trimmed);
-        } catch (_) {
-          return null;
-        }
-      }
-      return null;
-    }
-
-    final createdAt = _toDate(data['createdAt']);
-    final updatedAt = _toDate(data['updatedAt']);
-
-    final String invNum = _stringOrEmpty(
-      data.containsKey('invoiceNumber')
-          ? data['invoiceNumber']
-          : data['number'],
+    final invoiceNumber = readString(data, invoiceNumberKey);
+    final invoiceAmount = readDouble(data, invoiceAmountKey);
+    final normalizedPaid = _normalizePaid(
+      readDoubleOrNull(data, 'amountPaid') ??
+          _derivePaidFromBalance(readDoubleOrNull(data, 'balanceDue'), invoiceAmount),
+      invoiceAmount,
     );
 
-    final double invAmt = data.containsKey('invoiceAmount')
-        ? _toDouble(data['invoiceAmount'])
-        : _toDouble(data['amount']);
-
-    final DateTime? invDate = _toDate(data['invoiceDate']) ?? _toDate(data['issueDate']);
-
-    final String type =
-        _stringOrEmpty(data['invoiceType']).toLowerCase() == 'vendor' ? 'Vendor' : 'Client';
-
-    // Prefer stored amountPaid; otherwise derive from legacy balanceDue.
-    final double? storedPaid = _toDoubleOrNull(data['amountPaid']);
-    final double? storedBalance = _toDoubleOrNull(data['balanceDue']);
-    final double derivedPaid =
-        storedPaid ?? _derivePaidFromBalance(storedBalance, invAmt);
-    final double normalizedPaid = _normalizePaid(derivedPaid, invAmt);
-
-    // Keep whatever was stored for balanceDue (may be null); UI can use `balance` getter.
-    final double? balField = storedBalance;
+    final invoiceTypeRaw = parseString(data['invoiceType'], fallback: 'Client');
+    final invoiceType = invoiceTypeRaw.toLowerCase() == 'vendor' ? 'Vendor' : 'Client';
 
     return Invoice(
       id: doc.id,
-      projectId: _stringOrEmpty(data['projectId']),
-      projectNumber: _toProjectNumber(data['projectNumber']),
-      invoiceNumber: invNum,
-      invoiceAmount: invAmt,
+      projectId: readString(data, 'projectId'),
+      projectNumber: readStringOrNull(data, 'projectNumber'),
+      invoiceNumber: invoiceNumber,
+      invoiceAmount: invoiceAmount,
       amountPaid: normalizedPaid,
-      balanceDue: balField,
-      invoiceDate: invDate,
-      dueDate: _toDate(data['dueDate']),
-      paidDate: _toDate(data['paidDate']),
-      documentLink: _stringOrNull(data['documentLink']),
-      invoiceType: type,
-      ownerUid: _stringOrNull(data['ownerUid']),
-      createdAt: createdAt,
-      updatedAt: updatedAt,
-
-      // Legacy fields (still persisted in many docs)
-      status: _stringOrNull(data['status']), // stored status if present
-      notes: _stringOrNull(data['notes']), // optional passthrough
+      balanceDue: readDoubleOrNull(data, 'balanceDue'),
+      invoiceDate: readDateTime(data, 'invoiceDate') ?? readDateTime(data, 'issueDate'),
+      dueDate: readDateTime(data, 'dueDate'),
+      paidDate: readDateTime(data, 'paidDate'),
+      documentLink: readStringOrNull(data, 'documentLink'),
+      invoiceType: invoiceType,
+      ownerUid: readStringOrNull(data, 'ownerUid'),
+      createdAt: readDateTime(data, 'createdAt'),
+      updatedAt: readDateTime(data, 'updatedAt'),
+      status: readStringOrNull(data, 'status'),
+      notes: readStringOrNull(data, 'notes'),
     );
   }
 
   /// Map to Firestore. Writes both new keys and legacy mirrors so old screens keep working.
   Map<String, dynamic> toMap() {
-    Timestamp? _ts(DateTime? d) => d != null ? Timestamp.fromDate(d) : null;
-
-    // Compute mirrored balanceDue from canonical paid.
     final computedBalance = (invoiceAmount - amountPaid).clamp(0, double.infinity).toDouble();
 
     final effectiveStatus = _statusStored ??
@@ -225,11 +168,11 @@ class Invoice {
       if (projectNumber != null) 'projectNumber': projectNumber,
       'invoiceNumber': invoiceNumber,
       'invoiceAmount': invoiceAmount,
-      'amountPaid': amountPaid,              // <-- canonical
-      'balanceDue': computedBalance,         // <-- legacy mirror, kept in sync
-      'invoiceDate': _ts(invoiceDate),
-      'dueDate': _ts(dueDate),
-      'paidDate': _ts(paidDate),
+      'amountPaid': amountPaid,
+      'balanceDue': computedBalance,
+      'invoiceDate': timestampFromDate(invoiceDate),
+      'dueDate': timestampFromDate(dueDate),
+      'paidDate': timestampFromDate(paidDate),
       'documentLink': documentLink,
       'invoiceType': invoiceType,
       'ownerUid': ownerUid,
@@ -237,7 +180,7 @@ class Invoice {
       // Legacy mirrors
       'number': invoiceNumber,
       'amount': invoiceAmount,
-      'issueDate': _ts(invoiceDate),
+      'issueDate': timestampFromDate(invoiceDate),
       'status': effectiveStatus,
       if (notes != null) 'notes': notes,
     };
@@ -368,17 +311,6 @@ class Invoice {
     return list;
   }
 
-  static String _stringOrEmpty(dynamic value) {
-    if (value == null) return '';
-    if (value is String) return value.trim();
-    return value.toString().trim();
-  }
-
-  static String? _stringOrNull(dynamic value) {
-    final text = _stringOrEmpty(value);
-    return text.isEmpty ? null : text;
-  }
-
   /// Canonical form for project numbers: letters/digits only, lowercase.
   static String canonicalProjectNumber(String? value) {
     final trimmed = value?.trim();
@@ -401,9 +333,9 @@ class Invoice {
   }
 
   // ---- helpers ----
-  static double _derivePaidFromBalance(double? balanceDue, double invoiceAmount) {
-    if (balanceDue == null) return 0.0;
-    final paid = invoiceAmount - balanceDue;
+  static double _derivePaidFromBalance(double? balanceDueParam, double invoiceAmount) {
+    if (balanceDueParam == null) return 0.0;
+    final paid = invoiceAmount - balanceDueParam;
     if (paid.isNaN) return 0.0;
     return paid;
   }

@@ -1,6 +1,7 @@
 // lib/src/data/repositories/invoice_repository.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/invoice.dart';
+import '../../utils/data_parsers.dart';
 
 class InvoiceRepository {
   final _col = FirebaseFirestore.instance.collection('invoices');
@@ -72,59 +73,45 @@ class InvoiceRepository {
   /// - Ensures `amountPaid` and `balanceDue` stay consistent even if caller only supplies one.
   /// - Derives legacy `status` (Paid/Unpaid) for backward compatibility.
   Future<void> update(String id, Map<String, dynamic> partial) async {
-    // Read existing to compute derived fields safely
     final snap = await _col.doc(id).get();
     if (!snap.exists) return;
 
-    final data = snap.data() as Map<String, dynamic>? ?? {};
+    final data = mapFrom(snap.data());
     final mutable = Map<String, dynamic>.from(partial);
-
-    double _toDouble(dynamic v, [double fallback = 0.0]) {
-      if (v == null) return fallback;
-      if (v is num) return v.toDouble();
-      return double.tryParse('$v') ?? fallback;
-    }
 
     if (mutable.containsKey('projectNumber')) {
       final raw = mutable['projectNumber'];
-      if (raw is FieldValue) {
-        // keep as-is
-      } else if (raw == null) {
-        mutable['projectNumber'] = null;
-      } else {
-        final cleaned = raw.toString().trim();
-        mutable['projectNumber'] = cleaned.isEmpty ? null : cleaned;
+      if (raw is! FieldValue) {
+        mutable['projectNumber'] = parseStringOrNull(raw);
       }
     }
 
-    // Current stored values (support legacy keys)
     final currentAmount = data.containsKey('invoiceAmount')
-        ? _toDouble(data['invoiceAmount'])
-        : _toDouble(data['amount']);
+        ? parseDouble(data['invoiceAmount'])
+        : parseDouble(data['amount']);
     final currentPaid = data.containsKey('amountPaid')
-        ? _toDouble(data['amountPaid'])
+        ? parseDouble(data['amountPaid'])
         : (data.containsKey('balanceDue')
-            ? (currentAmount - _toDouble(data['balanceDue']))
+            ? currentAmount - parseDouble(data['balanceDue'])
             : 0.0);
 
-    // Incoming candidates
     final incomingAmount = mutable.containsKey('invoiceAmount')
-        ? _toDouble(mutable['invoiceAmount'], currentAmount)
+        ? parseDouble(mutable['invoiceAmount'], fallback: currentAmount)
         : currentAmount;
 
-    // amountPaid can be provided directly OR inferred from incoming balanceDue
     double nextPaid;
     if (mutable.containsKey('amountPaid')) {
-      nextPaid = _toDouble(mutable['amountPaid'], currentPaid);
+      nextPaid = parseDouble(mutable['amountPaid'], fallback: currentPaid);
     } else if (mutable.containsKey('balanceDue')) {
-      final incomingBalance =
-          _toDouble(mutable['balanceDue'], (incomingAmount - currentPaid));
+      final incomingBalance = parseDouble(
+        mutable['balanceDue'],
+        fallback: incomingAmount - currentPaid,
+      );
       nextPaid = incomingAmount - incomingBalance;
     } else {
       nextPaid = currentPaid;
     }
 
-    // Normalize bounds: 0..invoiceAmount
     if (nextPaid.isNaN || nextPaid < 0) nextPaid = 0.0;
     if (incomingAmount <= 0) nextPaid = 0.0;
     if (nextPaid > incomingAmount) nextPaid = incomingAmount;
@@ -132,18 +119,15 @@ class InvoiceRepository {
     final computedBalance =
         (incomingAmount - nextPaid).clamp(0, double.infinity).toDouble();
 
-    // Mirror legacy status if not explicitly set by caller
-    String? status = mutable['status'] as String?;
+    var status = parseStringOrNull(mutable['status']);
     status ??= (computedBalance <= 0 ||
             mutable['paidDate'] != null ||
             data['paidDate'] != null)
         ? 'Paid'
         : 'Unpaid';
 
-    // Compose final update map
     final merged = {
       ...mutable,
-      // Always keep canonical + mirror in sync:
       'invoiceAmount': incomingAmount,
       'amountPaid': nextPaid,
       'balanceDue': computedBalance,

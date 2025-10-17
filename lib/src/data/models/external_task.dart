@@ -1,6 +1,8 @@
 // lib/src/data/models/external_task.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../utils/data_parsers.dart';
+
 class ExternalTask {
   final String id;
   final String projectId;
@@ -45,38 +47,26 @@ class ExternalTask {
   }
 
   factory ExternalTask.fromDoc(DocumentSnapshot doc) {
-    final data = (doc.data() as Map<String, dynamic>? ?? <String, dynamic>{});
-    return ExternalTask.fromMap({...data, 'id': doc.id});
+    final data = mapFrom(doc.data() as Map<String, dynamic>?);
+    data['id'] = doc.id;
+    return ExternalTask.fromMap(data);
   }
 
   factory ExternalTask.fromMap(Map<String, dynamic> data) {
-    DateTime? _toDate(dynamic value) {
-      if (value is Timestamp) return value.toDate();
-      if (value is DateTime) return value;
-      return null;
-    }
-
-    String _str(dynamic value) {
-      if (value == null) return '';
-      return value.toString().trim();
-    }
-
+    final map = mapFrom(data);
     return ExternalTask(
-      id: _str(data['id']),
-      projectId: _str(data['projectId']),
-      title: _str(data['title']),
-      assigneeKey: _str(data['assigneeKey']),
-      assigneeName: _str(data['assigneeName']),
-      isDone: data['isDone'] == true,
-      createdAt: _toDate(data['createdAt']),
-      updatedAt: _toDate(data['updatedAt']),
+      id: readString(map, 'id'),
+      projectId: readString(map, 'projectId'),
+      title: readString(map, 'title'),
+      assigneeKey: readString(map, 'assigneeKey'),
+      assigneeName: readString(map, 'assigneeName'),
+      isDone: readBool(map, 'isDone'),
+      createdAt: readDateTime(map, 'createdAt'),
+      updatedAt: readDateTime(map, 'updatedAt'),
     );
   }
 
   Map<String, dynamic> toMap() {
-    Timestamp? _ts(DateTime? value) =>
-        value != null ? Timestamp.fromDate(value) : null;
-
     return <String, dynamic>{
       'id': id,
       'projectId': projectId,
@@ -84,8 +74,8 @@ class ExternalTask {
       'assigneeKey': assigneeKey,
       'assigneeName': assigneeName,
       'isDone': isDone,
-      if (createdAt != null) 'createdAt': _ts(createdAt),
-      if (updatedAt != null) 'updatedAt': _ts(updatedAt),
+      if (createdAt != null) 'createdAt': timestampFromDate(createdAt),
+      if (updatedAt != null) 'updatedAt': timestampFromDate(updatedAt),
     };
   }
 }

@@ -1,6 +1,8 @@
 // lib/src/data/models/subphase_template.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../utils/data_parsers.dart';
+
 class SubphaseTemplate {
   final String id;
   final String ownerUid;
@@ -47,80 +49,49 @@ class SubphaseTemplate {
     return s.length == 4 && int.tryParse(s) != null;
   }
 
-  // -------- Mapping helpers --------
-  static DateTime? _toDate(dynamic v) {
-    if (v is Timestamp) return v.toDate();
-    if (v is DateTime) return v;
-    return null;
-  }
-
-  static bool _toBool(dynamic v) {
-    if (v is bool) return v;
-    if (v is num) return v != 0;
-    if (v is String) {
-      final s = v.toLowerCase().trim();
-      return s == 'true' || s == 'yes' || s == '1';
-    }
-    return false;
-  }
-
-  static String _str(dynamic v) => (v is String) ? v.trim() : '';
-
-  static List<String> _toStringList(dynamic v) {
-    if (v == null) return const <String>[];
-    if (v is List) {
-      return v
-          .map((e) => e is String ? e.trim() : (e?.toString() ?? ''))
-          .where((e) => e.isNotEmpty)
-          .toList();
-    }
-    return const <String>[];
-  }
-
   // Read with BC: accept both new keys and legacy keys
   static SubphaseTemplate fromDoc(DocumentSnapshot doc) {
-    final data = (doc.data() as Map<String, dynamic>? ?? <String, dynamic>{});
+    final data = mapFrom(doc.data() as Map<String, dynamic>?);
 
-    final code = _str(data['subphaseCode']).isNotEmpty
-        ? _str(data['subphaseCode'])
-        : _str(data['taskCode']);
+    final code = parseString(data['subphaseCode']).isNotEmpty
+        ? parseString(data['subphaseCode'])
+        : parseString(data['taskCode']);
 
-    final name = _str(data['subphaseName']).isNotEmpty
-        ? _str(data['subphaseName'])
-        : _str(data['taskName']);
+    final name = parseString(data['subphaseName']).isNotEmpty
+        ? parseString(data['subphaseName'])
+        : parseString(data['taskName']);
 
     // NEW: read phaseCode; if missing, derive from subphaseCode
-    final pc = _str(data['phaseCode']);
+    final storedPhase = parseString(data['phaseCode']);
     final derivedPhase = (code.length >= 2) ? code.substring(0, 2) : '';
-    final phaseCode = pc.isNotEmpty ? pc : derivedPhase;
+    final phaseCode = storedPhase.isNotEmpty ? storedPhase : derivedPhase;
 
     // NEW: defaultTasks list
-    final defaults = _toStringList(data['defaultTasks']);
+    final defaults = readStringListOrNull(data, 'defaultTasks') ?? const <String>[];
 
-    final note = (data['subphaseNote'] as String?) ?? (data['taskNote'] as String?);
-    final resp = (data['responsibility'] as String?) ??
-        (data['taskResponsibility'] as String?) ??
-        'Other';
+    final note = parseStringOrNull(data['subphaseNote']) ?? parseStringOrNull(data['taskNote']);
+    final responsibility = parseString(
+      data['responsibility'] ?? data['taskResponsibility'],
+      fallback: 'Other',
+    );
 
     return SubphaseTemplate(
       id: doc.id,
-      ownerUid: _str(data['ownerUid']),
+      ownerUid: parseString(data['ownerUid']),
       subphaseCode: code,
       subphaseName: name,
       phaseCode: phaseCode,
       defaultTasks: defaults,
-      subphaseNote: note?.trim().isEmpty == true ? null : note,
-      responsibility: resp,
-      isDeliverable: _toBool(data['isDeliverable']),
-      createdAt: _toDate(data['createdAt']),
-      updatedAt: _toDate(data['updatedAt']),
+      subphaseNote: note,
+      responsibility: responsibility,
+      isDeliverable: parseBool(data['isDeliverable'], fallback: false),
+      createdAt: parseDateTime(data['createdAt']),
+      updatedAt: parseDateTime(data['updatedAt']),
     );
   }
 
   // Write both new keys and legacy mirrors for BC.
   Map<String, dynamic> toMap() {
-    Timestamp? _ts(DateTime? d) => d != null ? Timestamp.fromDate(d) : null;
-
     return <String, dynamic>{
       'ownerUid': ownerUid,
       'subphaseCode': subphaseCode,
@@ -140,8 +111,8 @@ class SubphaseTemplate {
       'taskNote': subphaseNote,
       'taskResponsibility': responsibility,
 
-      'createdAt': _ts(createdAt),
-      'updatedAt': _ts(updatedAt),
+      'createdAt': timestampFromDate(createdAt),
+      'updatedAt': timestampFromDate(updatedAt),
     };
   }
 

@@ -49,11 +49,13 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   Widget build(BuildContext context) {
     return PopScope(
       canPop: !_hasChanges || _saving,
-      onPopInvoked: (didPop) async {
+      onPopInvokedWithResult: (didPop, _) async {
         if (didPop || _saving) return;
+        final navigator = Navigator.of(context);
         final shouldLeave = await _confirmDiscard();
-        if (shouldLeave && mounted) {
-          Navigator.of(context).pop();
+        if (!mounted) return;
+        if (shouldLeave) {
+          navigator.pop();
         }
       },
       child: Scaffold(
@@ -93,9 +95,11 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
   Future<void> _handleBack() async {
     if (_saving) return;
+    final navigator = Navigator.of(context);
     final shouldLeave = await _confirmDiscard();
-    if (shouldLeave && mounted) {
-      Navigator.of(context).pop();
+    if (!mounted) return;
+    if (shouldLeave) {
+      navigator.pop();
     }
   }
 
@@ -135,8 +139,11 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       return;
     }
 
+    final overlayNavigator = Navigator.of(context, rootNavigator: true);
+    final pageNavigator = Navigator.of(context);
+
     final selectedProject = await _promptForProject();
-    if (selectedProject == null || !mounted) {
+    if (!mounted || selectedProject == null) {
       return;
     }
 
@@ -146,10 +153,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     void closeProgress() {
       if (progressClosed) return;
       progressClosed = true;
-      Navigator.of(context, rootNavigator: true).pop();
+      overlayNavigator.pop();
     }
 
-    showDialog<void>(
+    await showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (_) => const _SavingNoteDialog(),
@@ -157,19 +164,22 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
     try {
       await _saveNoteToDropbox(selectedProject, content);
+      if (!mounted) {
+        closeProgress();
+        return;
+      }
       closeProgress();
-      if (!mounted) return;
       setState(() => _hasChanges = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Note saved to Dropbox.')));
-      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Note saved to Dropbox.')),
+      );
+      pageNavigator.pop();
     } catch (e) {
       closeProgress();
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to save note: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save note: $e')),
+      );
     } finally {
       if (mounted) {
         setState(() => _saving = false);
@@ -311,10 +321,14 @@ class _ProjectPickerDialogState extends State<_ProjectPickerDialog> {
             itemBuilder: (context, index) {
               final project = widget.projects[index];
               final label = _projectLabel(project);
-              return RadioListTile<String>(
-                value: project.id,
-                groupValue: _selectedId,
-                onChanged: (value) => setState(() => _selectedId = value),
+              final selected = project.id == _selectedId;
+              return ListTile(
+                onTap: () => setState(() => _selectedId = project.id),
+                leading: Icon(
+                  selected
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_off,
+                ),
                 title: Text(label),
                 subtitle: project.folderName != null
                     ? Text(
@@ -323,6 +337,7 @@ class _ProjectPickerDialogState extends State<_ProjectPickerDialog> {
                         overflow: TextOverflow.ellipsis,
                       )
                     : null,
+                selected: selected,
               );
             },
           ),
@@ -377,3 +392,5 @@ class _SavingNoteDialog extends StatelessWidget {
     );
   }
 }
+
+

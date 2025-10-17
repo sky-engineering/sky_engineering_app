@@ -1,6 +1,8 @@
 // lib/src/data/models/task_template.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../utils/data_parsers.dart';
+
 class TaskTemplate {
   final String id;
   final String taskCode;            // 4 digits: "0101" etc.
@@ -27,24 +29,19 @@ class TaskTemplate {
   });
 
   static TaskTemplate fromDoc(DocumentSnapshot doc) {
-    final data = (doc.data() as Map<String, dynamic>? ?? {});
-    DateTime? _toDate(dynamic v) {
-      if (v is Timestamp) return v.toDate();
-      if (v is DateTime) return v;
-      return null;
-    }
+    final data = mapFrom(doc.data() as Map<String, dynamic>?);
 
     return TaskTemplate(
       id: doc.id,
-      taskCode: (data['taskCode'] as String? ?? '').trim(),
-      projectNumber: (data['projectNumber'] as String?)?.trim(),
-      taskName: (data['taskName'] as String? ?? '').trim(),
-      taskNote: (data['taskNote'] as String?)?.trim(),
-      taskResponsibility: (data['taskResponsibility'] as String? ?? 'Civil'),
-      isDeliverable: (data['isDeliverable'] as bool?) ?? false,
-      ownerUid: data['ownerUid'] as String?,
-      createdAt: _toDate(data['createdAt']),
-      updatedAt: _toDate(data['updatedAt']),
+      taskCode: readString(data, 'taskCode'),
+      projectNumber: readStringOrNull(data, 'projectNumber'),
+      taskName: readString(data, 'taskName'),
+      taskNote: readStringOrNull(data, 'taskNote'),
+      taskResponsibility: readString(data, 'taskResponsibility', fallback: 'Civil'),
+      isDeliverable: readBool(data, 'isDeliverable'),
+      ownerUid: readStringOrNull(data, 'ownerUid'),
+      createdAt: readDateTime(data, 'createdAt'),
+      updatedAt: readDateTime(data, 'updatedAt'),
     );
   }
 

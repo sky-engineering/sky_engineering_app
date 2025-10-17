@@ -21,8 +21,8 @@ class LoadingOverlay {
         _dialogContext = dialogContext;
         final theme = Theme.of(dialogContext);
 
-        return WillPopScope(
-          onWillPop: () async => false,
+        return PopScope(
+          canPop: false,
           child: Center(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -81,3 +81,4 @@ class LoadingOverlay {
     _showing = false;
   }
 }
+

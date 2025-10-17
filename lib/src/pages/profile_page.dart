@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // FirebaseException
 import '../data/models/user_profile.dart';
 import '../data/repositories/user_repository.dart';
 import '../utils/phone_utils.dart';
@@ -162,7 +161,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           context,
                           label: 'User Type',
                           child: DropdownButtonFormField<String>(
-                            value:
+                            initialValue:
                                 UserProfile.allowedUserTypes.contains(_userType)
                                 ? _userType
                                 : null,

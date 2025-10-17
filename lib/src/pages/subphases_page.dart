@@ -1,6 +1,5 @@
 // lib/src/pages/subphases_page.dart
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../data/models/subphase_template.dart';
@@ -43,7 +42,9 @@ class SubphasesPage extends StatelessWidget {
                 return const Center(child: CircularProgressIndicator());
               }
               final items = snap.data ?? const <SubphaseTemplate>[];
-              if (items.isEmpty) return const _Empty();
+              if (items.isEmpty) {
+                return const _Empty();
+              }
 
               // Group subphases by phaseCode
               final grouped = <String, List<SubphaseTemplate>>{};
@@ -60,7 +61,9 @@ class SubphasesPage extends StatelessWidget {
                   // If phases exist, use their sortOrder; else sort by code
                   final ai = phases.indexWhere((p) => p.phaseCode == a);
                   final bi = phases.indexWhere((p) => p.phaseCode == b);
-                  if (ai >= 0 && bi >= 0) return ai.compareTo(bi);
+                  if (ai >= 0 && bi >= 0) {
+                    return ai.compareTo(bi);
+                  }
                   return a.compareTo(b);
                 });
 
@@ -195,18 +198,21 @@ Future<void> _showAddDialog(BuildContext context, String ownerUid) async {
   final formKey = GlobalKey<FormState>();
   final subRepo = SubphaseTemplateRepository();
 
-  String? _validateCode(String? v) {
-    final s = (v ?? '').trim();
-    if (s.length != 4 || int.tryParse(s) == null)
+  String? validateCode(String? value) {
+    final s = (value ?? '').trim();
+    if (s.length != 4 || int.tryParse(s) == null) {
       return 'Enter a 4-digit code (e.g., 0201)';
+    }
     return null;
   }
 
-  List<String> _parseDefaults(String raw) {
+  List<String> parseDefaults(String raw) {
     final set = <String>{};
     for (final line in raw.split('\n')) {
       final s = line.trim();
-      if (s.isNotEmpty) set.add(s);
+      if (s.isNotEmpty) {
+        set.add(s);
+      }
     }
     return set.toList();
   }
@@ -234,7 +240,7 @@ Future<void> _showAddDialog(BuildContext context, String ownerUid) async {
                           border: OutlineInputBorder(),
                         ),
                         keyboardType: TextInputType.number,
-                        validator: _validateCode,
+                        validator: validateCode,
                       ),
                       const SizedBox(height: 10),
                       TextFormField(
@@ -270,13 +276,15 @@ Future<void> _showAddDialog(BuildContext context, String ownerUid) async {
               ),
               FilledButton(
                 onPressed: () async {
-                  if (!(formKey.currentState?.validate() ?? false)) return;
+                  if (!(formKey.currentState?.validate() ?? false)) {
+                    return;
+                  }
 
                   final code = codeCtl.text.trim();
                   final phaseCode = (code.length >= 2)
                       ? code.substring(0, 2)
                       : '';
-                  final defaults = _parseDefaults(defaultsCtl.text);
+                  final defaults = parseDefaults(defaultsCtl.text);
 
                   final t = SubphaseTemplate(
                     id: '_',
@@ -287,7 +295,9 @@ Future<void> _showAddDialog(BuildContext context, String ownerUid) async {
                     defaultTasks: defaults,
                   );
                   await subRepo.add(t);
-                  // ignore: use_build_context_synchronously
+                  if (!context.mounted) {
+                    return;
+                  }
                   Navigator.pop(context);
                 },
                 child: const Text('Create'),
@@ -312,18 +322,21 @@ Future<void> _showEditDialog(
   final formKey = GlobalKey<FormState>();
   final repo = SubphaseTemplateRepository();
 
-  String? _validateCode(String? v) {
-    final s = (v ?? '').trim();
-    if (s.length != 4 || int.tryParse(s) == null)
+  String? validateCode(String? value) {
+    final s = (value ?? '').trim();
+    if (s.length != 4 || int.tryParse(s) == null) {
       return 'Enter a 4-digit code (e.g., 0201)';
+    }
     return null;
   }
 
-  List<String> _parseDefaults(String raw) {
+  List<String> parseDefaults(String raw) {
     final set = <String>{};
     for (final line in raw.split('\n')) {
       final s = line.trim();
-      if (s.isNotEmpty) set.add(s);
+      if (s.isNotEmpty) {
+        set.add(s);
+      }
     }
     return set.toList();
   }
@@ -351,7 +364,7 @@ Future<void> _showEditDialog(
                           border: OutlineInputBorder(),
                         ),
                         keyboardType: TextInputType.number,
-                        validator: _validateCode,
+                        validator: validateCode,
                       ),
                       const SizedBox(height: 10),
                       TextFormField(
@@ -401,7 +414,9 @@ Future<void> _showEditDialog(
                   );
                   if (ok == true) {
                     await repo.delete(t.id);
-                    // ignore: use_build_context_synchronously
+                                        if (!context.mounted) {
+                    return;
+                  }
                     Navigator.pop(context);
                   }
                 },
@@ -413,13 +428,15 @@ Future<void> _showEditDialog(
               ),
               FilledButton(
                 onPressed: () async {
-                  if (!(formKey.currentState?.validate() ?? false)) return;
+                  if (!(formKey.currentState?.validate() ?? false)) {
+                    return;
+                  }
 
                   final newCode = codeCtl.text.trim();
                   final newPhaseCode = (newCode.length >= 2)
                       ? newCode.substring(0, 2)
                       : '';
-                  final defaults = _parseDefaults(defaultsCtl.text);
+                  final defaults = parseDefaults(defaultsCtl.text);
 
                   await repo.update(t.id, {
                     'subphaseCode': newCode,
@@ -429,7 +446,9 @@ Future<void> _showEditDialog(
                     'phaseCode': newPhaseCode,
                     'defaultTasks': defaults,
                   });
-                  // ignore: use_build_context_synchronously
+                                    if (!context.mounted) {
+                    return;
+                  }
                   Navigator.pop(context);
                 },
                 child: const Text('Save'),
@@ -451,7 +470,9 @@ Future<void> _showManagePhasesDialog(
   try {
     list = await repo.getAllForUser(ownerUid);
   } on FirebaseException catch (e) {
-    if (!context.mounted) return;
+    if (!context.mounted) {
+    return;
+  }
     final message = (e.message != null && e.message!.trim().isNotEmpty)
         ? e.message!.trim()
         : e.code;
@@ -460,13 +481,17 @@ Future<void> _showManagePhasesDialog(
     ).showSnackBar(SnackBar(content: Text('Could not load phases: $message')));
     return;
   } catch (_) {
-    if (!context.mounted) return;
+    if (!context.mounted) {
+    return;
+  }
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Could not load phases')));
     return;
   }
-  if (!context.mounted) return;
+  if (!context.mounted) {
+    return;
+  }
   final phases = [...list]; // mutable
 
   await showDialog<void>(
@@ -474,15 +499,16 @@ Future<void> _showManagePhasesDialog(
     builder: (context) {
       return StatefulBuilder(
         builder: (context, setState) {
-          Future<void> _addPhase() async {
+          Future<void> addPhase() async {
             final codeCtl = TextEditingController();
             final nameCtl = TextEditingController();
             final formKey = GlobalKey<FormState>();
 
-            String? _validateCode(String? v) {
-              final s = (v ?? '').trim();
-              if (s.length != 2 || int.tryParse(s) == null)
+            String? validateCode(String? value) {
+              final s = (value ?? '').trim();
+              if (s.length != 2 || int.tryParse(s) == null) {
                 return 'Enter 2-digit code, e.g., 02';
+              }
               return null;
             }
 
@@ -505,7 +531,7 @@ Future<void> _showManagePhasesDialog(
                             border: OutlineInputBorder(),
                           ),
                           keyboardType: TextInputType.number,
-                          validator: _validateCode,
+                          validator: validateCode,
                         ),
                         const SizedBox(height: 10),
                         TextFormField(
@@ -530,7 +556,9 @@ Future<void> _showManagePhasesDialog(
                   ),
                   FilledButton(
                     onPressed: () async {
-                      if (!(formKey.currentState?.validate() ?? false)) return;
+                      if (!(formKey.currentState?.validate() ?? false)) {
+                    return;
+                  }
                       final p = PhaseTemplate(
                         id: '_',
                         ownerUid: ownerUid,
@@ -540,8 +568,10 @@ Future<void> _showManagePhasesDialog(
                       );
                       final newId = await repo.add(p);
                       setState(() => phases.add(p.copyWith(id: newId)));
-                      // ignore: use_build_context_synchronously
-                      Navigator.pop(ctx);
+                      if (!context.mounted) {
+                    return;
+                  }
+                      Navigator.of(context).pop();
                     },
                     child: const Text('Create'),
                   ),
@@ -550,7 +580,7 @@ Future<void> _showManagePhasesDialog(
             );
           }
 
-          Future<void> _deletePhase(PhaseTemplate p) async {
+          Future<void> deletePhase(PhaseTemplate p) async {
             final ok = await showDialog<bool>(
               context: context,
               builder: (ctx) => AlertDialog(
@@ -582,7 +612,9 @@ Future<void> _showManagePhasesDialog(
                 shrinkWrap: true,
                 itemCount: phases.length,
                 onReorder: (oldIndex, newIndex) async {
-                  if (newIndex > oldIndex) newIndex -= 1;
+                  if (newIndex > oldIndex) {
+                    newIndex -= 1;
+                  }
                   final moved = phases.removeAt(oldIndex);
                   phases.insert(newIndex, moved);
                   setState(() {});
@@ -604,7 +636,7 @@ Future<void> _showManagePhasesDialog(
                     trailing: IconButton(
                       tooltip: 'Delete phase',
                       icon: const Icon(Icons.delete_outline),
-                      onPressed: () => _deletePhase(p),
+                      onPressed: () => deletePhase(p),
                     ),
                   );
                 },
@@ -612,7 +644,7 @@ Future<void> _showManagePhasesDialog(
             ),
             actions: [
               FilledButton.icon(
-                onPressed: _addPhase,
+                onPressed: addPhase,
                 icon: const Icon(Icons.add),
                 label: const Text('Add Phase'),
               ),

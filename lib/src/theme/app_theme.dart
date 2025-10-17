@@ -47,7 +47,7 @@ class AppTheme {
       listTileTheme: ListTileThemeData(
         textColor: cs.onSurface,
         iconColor: cs.onSurface,
-        subtitleTextStyle: TextStyle(color: cs.onSurface.withOpacity(0.85)),
+        subtitleTextStyle: TextStyle(color: cs.onSurface.withValues(alpha: 0.85)),
       ),
 
       textButtonTheme: TextButtonThemeData(
@@ -94,7 +94,7 @@ class AppTheme {
 
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: cs.surface.withOpacity(0.25),
+        fillColor: cs.surface.withValues(alpha: 0.25),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: cs.outlineVariant),
@@ -107,12 +107,12 @@ class AppTheme {
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: cs.secondary, width: 1.5),
         ),
-        labelStyle: TextStyle(color: cs.onSurface.withOpacity(0.9)),
-        hintStyle: TextStyle(color: cs.onSurface.withOpacity(0.7)),
+        labelStyle: TextStyle(color: cs.onSurface.withValues(alpha: 0.9)),
+        hintStyle: TextStyle(color: cs.onSurface.withValues(alpha: 0.7)),
       ),
 
       dividerTheme: DividerThemeData(
-        color: cs.onSurface.withOpacity(0.2),
+        color: cs.onSurface.withValues(alpha: 0.2),
         thickness: 1,
       ),
     );

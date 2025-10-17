@@ -186,7 +186,7 @@ class _ActiveTile extends StatelessWidget {
       direction: DismissDirection.endToStart,
       background: _dismissBackground(context),
       confirmDismiss: (_) async {
-        final ok = await onComplete();
+        await onComplete();
         return false;
       },
       child: Card(

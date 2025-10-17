@@ -40,6 +40,7 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
   bool _showPersonal = false;
 
   List<_StarredEntry> _entries = const [];
+  final Set<String> _subtaskUpdates = <String>{};
 
   @override
   void initState() {
@@ -371,6 +372,61 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
     }
   }
 
+  Future<void> _toggleSubtask(TaskItem task, int index) async {
+    if (_subtaskUpdates.contains(task.id)) return;
+    final entryIndex = _entries.indexWhere(
+      (entry) => entry.task?.id == task.id,
+    );
+    if (entryIndex == -1) return;
+
+    final currentEntry = _entries[entryIndex];
+    final currentTask = currentEntry.task!;
+    if (index < 0 || index >= currentTask.subtasks.length) return;
+
+    final updatedSubtasks = List<SubtaskItem>.from(currentTask.subtasks);
+    final toggled = updatedSubtasks[index].copyWith(
+      isDone: !updatedSubtasks[index].isDone,
+    );
+    updatedSubtasks[index] = toggled;
+    final updatedTask = currentTask.copyWith(subtasks: updatedSubtasks);
+
+    setState(() {
+      _subtaskUpdates.add(task.id);
+      _entries = List<_StarredEntry>.from(_entries)
+        ..[entryIndex] = _StarredEntry.task(updatedTask);
+      _tasks = _tasks
+          .map((t) => t.id == updatedTask.id ? updatedTask : t)
+          .toList();
+    });
+
+    try {
+      await _repo.update(task.id, {'subtasks': updatedSubtasks});
+    } catch (e) {
+      if (!mounted) {
+        _subtaskUpdates.remove(task.id);
+        return;
+      }
+      setState(() {
+        _entries = List<_StarredEntry>.from(_entries)
+          ..[entryIndex] = _StarredEntry.task(currentTask);
+        _tasks = _tasks
+            .map((t) => t.id == currentTask.id ? currentTask : t)
+            .toList();
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to update subtask: $e')));
+    } finally {
+      if (!mounted) {
+        _subtaskUpdates.remove(task.id);
+      } else {
+        setState(() {
+          _subtaskUpdates.remove(task.id);
+        });
+      }
+    }
+  }
+
   Future<void> _togglePersonalItem(PersonalChecklistItem item, bool value) {
     return _personalService.setCompletion(item.id, value);
   }
@@ -430,10 +486,16 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
                       );
                     },
                     onToggleStar: () => _toggleStar(task),
-                    onTap: () =>
-                        showTaskEditDialog(context, task, canEdit: true),
+                    onTap: () => showTaskEditDialog(
+                      context,
+                      task,
+                      canEdit: true,
+                      subphases: project?.selectedSubphases ?? const [],
+                    ),
                     onCompleteSwipe: () => _toggleTaskDone(task),
                     onDeleteSwipe: () => _deleteTask(task),
+                    onToggleSubtask: (index) => _toggleSubtask(task, index),
+                    isSubtaskUpdating: _subtaskUpdates.contains(task.id),
                   ),
                 );
               }
@@ -534,6 +596,8 @@ class _SwipeableStarredTile extends StatefulWidget {
   final VoidCallback onTap;
   final Future<bool> Function() onCompleteSwipe;
   final Future<bool> Function() onDeleteSwipe;
+  final Future<void> Function(int index) onToggleSubtask;
+  final bool isSubtaskUpdating;
 
   const _SwipeableStarredTile({
     required this.dismissibleKey,
@@ -544,6 +608,8 @@ class _SwipeableStarredTile extends StatefulWidget {
     required this.onTap,
     required this.onCompleteSwipe,
     required this.onDeleteSwipe,
+    required this.onToggleSubtask,
+    required this.isSubtaskUpdating,
   });
 
   @override
@@ -617,6 +683,8 @@ class _SwipeableStarredTileState extends State<_SwipeableStarredTile> {
         onOpenProject: widget.onOpenProject,
         onToggleStar: widget.onToggleStar,
         onTap: widget.onTap,
+        onToggleSubtask: widget.onToggleSubtask,
+        isSubtaskUpdating: widget.isSubtaskUpdating,
       ),
     );
   }
@@ -680,60 +748,106 @@ class _SwipeableStarredTileState extends State<_SwipeableStarredTile> {
   }
 }
 
-class _StarredTile extends StatelessWidget {
+class _StarredTile extends StatefulWidget {
   final TaskItem task;
   final Project? project;
   final VoidCallback onOpenProject;
   final Future<void> Function() onToggleStar;
   final VoidCallback onTap;
+  final Future<void> Function(int index) onToggleSubtask;
+  final bool isSubtaskUpdating;
+
   const _StarredTile({
     required this.task,
     this.project,
     required this.onOpenProject,
     required this.onToggleStar,
     required this.onTap,
+    required this.onToggleSubtask,
+    required this.isSubtaskUpdating,
   });
 
+  @override
+  State<_StarredTile> createState() => _StarredTileState();
+}
+
+class _StarredTileState extends State<_StarredTile> {
+  bool _expanded = false;
+
+  @override
+  void didUpdateWidget(covariant _StarredTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.task.subtasks.isEmpty && _expanded) {
+      _expanded = false;
+    }
+  }
+
   String? _projectSummary() {
-    final number = project?.projectNumber?.trim() ?? '';
-    final name = project?.name.trim() ?? '';
+    final number = widget.project?.projectNumber?.trim() ?? '';
+    final name = widget.project?.name.trim() ?? '';
     final parts = <String>[];
     if (number.isNotEmpty) parts.add(number);
     if (name.isNotEmpty) parts.add(name);
     if (parts.isNotEmpty) return parts.join(' - ');
-    if (task.projectId.isNotEmpty) return 'Project ${task.projectId}';
+    if (widget.task.projectId.isNotEmpty) {
+      return 'Project ${widget.task.projectId}';
+    }
     return null;
+  }
+
+  void _toggleExpansion() {
+    if (widget.task.subtasks.isEmpty) return;
+    setState(() {
+      _expanded = !_expanded;
+    });
+  }
+
+  Future<void> _handleSubtaskTap(int index) async {
+    if (widget.isSubtaskUpdating) return;
+    await widget.onToggleSubtask(index);
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final task = widget.task;
     final hasDesc = (task.description ?? '').trim().isNotEmpty;
     final projectLabel = _projectSummary();
     final small = theme.textTheme.bodySmall;
     final Color? baseProjectColor = small?.color;
     final projectStyle = small?.copyWith(
-      color: baseProjectColor?.withOpacity(0.8),
+      color: baseProjectColor?.withValues(alpha: 0.8),
     );
     final filledStar = theme.colorScheme.secondary;
     final hollowStar = theme.colorScheme.onSurfaceVariant;
-    final hasMultiLine = hasDesc || projectLabel != null;
-    final isCompleted = task.taskStatus.trim().toLowerCase() == 'completed';
-    final cardColor = isCompleted ? theme.colorScheme.surfaceVariant : null;
+
+    final hasSubtasks = task.subtasks.isNotEmpty;
+    final showMultiLine = hasDesc || projectLabel != null;
+    final showExpanded = hasSubtasks && _expanded;
+    final crossAxis = (showMultiLine || showExpanded)
+        ? CrossAxisAlignment.start
+        : CrossAxisAlignment.center;
+
+    final cardColor = task.taskStatus.trim().toLowerCase() == 'completed'
+        ? theme.colorScheme.surfaceContainerHighest
+        : null;
+
+    final baseSubtaskColor = small?.color ?? theme.colorScheme.onSurfaceVariant;
+    final TextStyle baseSubtaskStyle = (small ?? const TextStyle()).copyWith(
+      fontSize: 11,
+    );
 
     return Card(
       color: cardColor,
       child: InkWell(
-        onTap: onTap,
+        onTap: widget.onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: Row(
-            crossAxisAlignment: hasMultiLine
-                ? CrossAxisAlignment.start
-                : CrossAxisAlignment.center,
+            crossAxisAlignment: crossAxis,
             children: [
               Padding(
-                padding: EdgeInsets.only(top: hasMultiLine ? 2 : 0),
+                padding: EdgeInsets.only(top: showMultiLine ? 2 : 0),
                 child: IconButton(
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(
@@ -743,7 +857,7 @@ class _StarredTile extends StatelessWidget {
                   iconSize: 20,
                   splashRadius: 18,
                   onPressed: () {
-                    onToggleStar();
+                    widget.onToggleStar();
                   },
                   icon: Icon(
                     task.isStarred ? Icons.star : Icons.star_border,
@@ -785,13 +899,61 @@ class _StarredTile extends StatelessWidget {
                           style: small,
                         ),
                       ),
+                    if (hasSubtasks && _expanded)
+                      Padding(
+                        padding: EdgeInsets.only(
+                          top: (hasDesc || projectLabel != null) ? 6 : 4,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: List.generate(task.subtasks.length, (
+                            index,
+                          ) {
+                            final subtask = task.subtasks[index];
+                            final color =
+                                baseSubtaskStyle.color ?? baseSubtaskColor;
+                            final displayColor = subtask.isDone
+                                ? color.withValues(alpha: 0.6)
+                                : color;
+                            final style = baseSubtaskStyle.copyWith(
+                              color: displayColor,
+                              decoration: subtask.isDone
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                            );
+                            return Padding(
+                              padding: EdgeInsets.only(top: index == 0 ? 0 : 4),
+                              child: InkWell(
+                                onTap: () => _handleSubtaskTap(index),
+                                child: Text('- ${subtask.title}', style: style),
+                              ),
+                            );
+                          }),
+                        ),
+                      ),
                   ],
                 ),
               ),
+              if (hasSubtasks)
+                Padding(
+                  padding: const EdgeInsets.only(left: 6),
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 28,
+                      minHeight: 28,
+                    ),
+                    iconSize: 20,
+                    splashRadius: 20,
+                    onPressed: _toggleExpansion,
+                    icon: Icon(_expanded ? Icons.remove : Icons.add),
+                    tooltip: _expanded ? 'Hide subtasks' : 'Show subtasks',
+                  ),
+                ),
               const SizedBox(width: 4),
               IconButton(
                 tooltip: 'Open project',
-                onPressed: onOpenProject,
+                onPressed: widget.onOpenProject,
                 icon: const Icon(Icons.open_in_new),
               ),
             ],
@@ -826,7 +988,7 @@ class _PersonalStarredTile extends StatelessWidget {
         : baseTitleStyle;
     final labelTemplate = textTheme.bodySmall ?? const TextStyle();
     final labelStyle = labelTemplate.copyWith(
-      color: personalColor.withOpacity(0.8),
+      color: personalColor.withValues(alpha: 0.8),
     );
 
     return Card(

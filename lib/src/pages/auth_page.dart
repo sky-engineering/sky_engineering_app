@@ -144,8 +144,9 @@ class _AuthPageState extends State<AuthPage> {
                         textInputAction: TextInputAction.done,
                         onFieldSubmitted: (_) => _loading ? null : _signIn(),
                         validator: (v) {
-                          if (v == null || v.isEmpty)
+                          if (v == null || v.isEmpty) {
                             return 'Password required';
+                          }
                           if (v.length < 6) return 'Min 6 characters';
                           return null;
                         },

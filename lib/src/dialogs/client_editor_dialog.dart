@@ -29,7 +29,7 @@ Future<void> showClientEditorDialog(
   final repo = ClientRepository();
   final auth = FirebaseAuth.instance;
 
-  List<String>? _parseCommaSeparated(String value) {
+  List<String>? parseCommaSeparated(String value) {
     final cleaned = value
         .split(',')
         .map((entry) => entry.trim())
@@ -89,7 +89,7 @@ Future<void> showClientEditorDialog(
                           const SizedBox(width: 12),
                           Expanded(
                             child: DropdownButtonFormField<int>(
-                              value: priority,
+                              initialValue: priority,
                               decoration: const InputDecoration(
                                 labelText: 'Priority',
                                 border: OutlineInputBorder(),
@@ -259,7 +259,7 @@ Future<void> showClientEditorDialog(
                   final contactName = nullIfEmpty(contactNameCtl.text);
                   final contactEmail = nullIfEmpty(contactEmailCtl.text);
                   final contactPhone = normalizePhone(contactPhoneCtl.text);
-                  final currentProposals = _parseCommaSeparated(
+                  final currentProposals = parseCommaSeparated(
                     currentProposalsCtl.text,
                   );
                   final notes = nullIfEmpty(notesCtl.text);

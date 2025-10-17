@@ -146,7 +146,7 @@ class _ExternalTasksOverviewPageState extends State<ExternalTasksOverviewPage> {
         if (contains(project.projectNumber)) return true;
         if (contains(project.name)) return true;
 
-        final assigneeKey = task.assigneeKey?.toLowerCase() ?? '';
+        final assigneeKey = task.assigneeKey.toLowerCase();
         final memberLabel = _teamLabelForKey(assigneeKey);
         final memberName = _teamValueForKey(project, assigneeKey);
 
@@ -366,12 +366,12 @@ class _OverviewExternalTaskTileState extends State<_OverviewExternalTaskTile> {
       fontWeight: FontWeight.w600,
       decoration: _isDone ? TextDecoration.lineThrough : null,
       color: _isDone
-          ? theme.textTheme.bodyLarge?.color?.withOpacity(0.6)
+          ? theme.textTheme.bodyLarge?.color?.withValues(alpha: 0.6)
           : null,
     );
     final subStyle = theme.textTheme.bodySmall?.copyWith(
       color: _isDone
-          ? theme.textTheme.bodySmall?.color?.withOpacity(0.6)
+          ? theme.textTheme.bodySmall?.color?.withValues(alpha: 0.6)
           : null,
     );
 
@@ -417,7 +417,7 @@ class _OverviewExternalTaskTileState extends State<_OverviewExternalTaskTile> {
         width: double.infinity,
         child: Material(
           color: _isDone
-              ? theme.colorScheme.surfaceVariant.withOpacity(0.6)
+              ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6)
               : theme.colorScheme.surface,
           elevation: 2,
           borderRadius: BorderRadius.circular(12),
@@ -476,7 +476,7 @@ class _OverviewExternalTaskTileState extends State<_OverviewExternalTaskTile> {
       await widget.repo.update(widget.project.id, widget.task.id, {
         'isDone': value,
       });
-      if (!mounted) return;
+      if (!context.mounted) return;
       setState(() => _isDone = value);
       final message = value
           ? 'External task marked complete'
@@ -485,13 +485,13 @@ class _OverviewExternalTaskTileState extends State<_OverviewExternalTaskTile> {
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
     } catch (e) {
-      if (!mounted) return;
+      if (!context.mounted) return;
       final action = value ? 'mark complete' : 'reopen';
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Failed to $action: $e')));
     } finally {
-      if (mounted) {
+      if (context.mounted) {
         setState(() => _processing = false);
       }
     }
@@ -526,17 +526,17 @@ class _OverviewExternalTaskTileState extends State<_OverviewExternalTaskTile> {
     setState(() => _processing = true);
     try {
       await widget.repo.delete(widget.project.id, widget.task.id);
-      if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('External task deleted')));
     } catch (e) {
-      if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Failed to delete: $e')));
     } finally {
-      if (mounted) {
+      if (context.mounted) {
         setState(() => _processing = false);
       }
     }
@@ -554,10 +554,10 @@ class _OverviewExternalTaskTileState extends State<_OverviewExternalTaskTile> {
             : DismissDirection.endToStart);
     final isArmed = isStartToEnd ? _completeArmed : _deleteArmed;
     final color = isStartToEnd
-        ? theme.colorScheme.primary.withOpacity(
+        ? theme.colorScheme.primary.withValues(alpha: 
             isActive && isArmed ? 0.25 : 0.12,
           )
-        : theme.colorScheme.error.withOpacity(
+        : theme.colorScheme.error.withValues(alpha: 
             isActive && isArmed ? 0.25 : 0.12,
           );
 
@@ -573,7 +573,7 @@ class _OverviewExternalTaskTileState extends State<_OverviewExternalTaskTile> {
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16),
       alignment: alignment,
-      child: Icon(icon, color: theme.colorScheme.onSurface.withOpacity(0.7)),
+      child: Icon(icon, color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
     );
   }
 }
@@ -602,14 +602,12 @@ class _EmptyState extends StatelessWidget {
 int _compareProjects(Project a, Project b) {
   final pa = a.projectNumber?.trim();
   final pb = b.projectNumber?.trim();
-  final hasA = pa != null && pa.isNotEmpty;
-  final hasB = pb != null && pb.isNotEmpty;
-  if (hasA && hasB) {
-    final cmp = _naturalCompare(pa!, pb!);
+  if (pa != null && pa.isNotEmpty && pb != null && pb.isNotEmpty) {
+    final cmp = _naturalCompare(pa, pb);
     if (cmp != 0) return cmp;
-  } else if (hasA && !hasB) {
+  } else if (pa != null && pa.isNotEmpty && (pb == null || pb.isEmpty)) {
     return -1;
-  } else if (!hasA && hasB) {
+  } else if ((pa == null || pa.isEmpty) && pb != null && pb.isNotEmpty) {
     return 1;
   }
   return a.name.toLowerCase().compareTo(b.name.toLowerCase());

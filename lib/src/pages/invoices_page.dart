@@ -1,7 +1,6 @@
 // lib/src/pages/invoices_page.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../data/models/invoice.dart';
@@ -203,7 +202,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
                     // ---- NEW summary of total unpaid for currently listed invoices
                     final totalUnpaid = invoices.fold<double>(
                       0.0,
-                      (sum, inv) => sum + (inv.balance > 0 ? inv.balance : 0.0),
+                      (total, inv) => total + (inv.balance > 0 ? inv.balance : 0.0),
                     );
                     final summaryLabel = (_typeFilter == 'Client')
                         ? 'Total Unpaid (Clients)'
@@ -378,17 +377,12 @@ class _InvoicesPageState extends State<InvoicesPage> {
   }
 
   int _compareInvoices(Invoice a, Invoice b) {
-    switch (_sortMode) {
-      case _InvoiceSort.numberDesc:
-        return _compareByNumberDesc(a, b);
-      case _InvoiceSort.numberAsc:
-        return _compareByNumberAsc(a, b);
-      case _InvoiceSort.amountDesc:
-        return _compareByAmountDesc(a, b);
-      case _InvoiceSort.amountAsc:
-        return _compareByAmountAsc(a, b);
-    }
-    return 0;
+    return switch (_sortMode) {
+      _InvoiceSort.numberDesc => _compareByNumberDesc(a, b),
+      _InvoiceSort.numberAsc => _compareByNumberAsc(a, b),
+      _InvoiceSort.amountDesc => _compareByAmountDesc(a, b),
+      _InvoiceSort.amountAsc => _compareByAmountAsc(a, b),
+    };
   }
 
   int _compareByNumberDesc(Invoice a, Invoice b) {
@@ -488,24 +482,6 @@ class _InvoicesPageState extends State<InvoicesPage> {
     return int.tryParse(digits);
   }
 
-  Future<void> _openLink(String urlStr) async {
-    final uri = Uri.tryParse(urlStr);
-    if (uri == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Invalid document link')));
-      return;
-    }
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Could not open link')));
-    }
-  }
-
-  // -------- Inline Edit Dialog (matches your amountPaid flow) --------
   Future<void> _showEditInvoiceDialogInline(
     BuildContext context,
     Invoice inv,
@@ -662,7 +638,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
                         ),
                         const SizedBox(height: 10),
                         DropdownButtonFormField<String>(
-                          value: invoiceType,
+                          initialValue: invoiceType,
                           items: const [
                             DropdownMenuItem(
                               value: 'Client',
@@ -830,3 +806,12 @@ class _InvoicesPageState extends State<InvoicesPage> {
     );
   }
 }
+
+
+
+
+
+
+
+
+

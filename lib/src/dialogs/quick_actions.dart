@@ -187,7 +187,7 @@ Future<void> showQuickAddTaskDialog(BuildContext context) async {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   DropdownButtonFormField<String>(
-                    value: selectedProjectId,
+                    initialValue: selectedProjectId,
                     isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'Project',
@@ -220,7 +220,7 @@ Future<void> showQuickAddTaskDialog(BuildContext context) async {
                   const SizedBox(height: 10),
                   if (subphases.isNotEmpty) ...[
                     DropdownButtonFormField<String?>(
-                      value: selectedTaskCode,
+                      initialValue: selectedTaskCode,
                       isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Project code',
