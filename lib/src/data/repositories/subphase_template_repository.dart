@@ -26,7 +26,10 @@ class SubphaseTemplateRepository {
 
   /// Convenience: fetch a single template for a given owner + 4-digit code.
   /// Tries the canonical key `subphaseCode` first, then falls back to legacy `taskCode`.
-  Future<SubphaseTemplate?> getByOwnerAndCode(String ownerUid, String subphaseCode) async {
+  Future<SubphaseTemplate?> getByOwnerAndCode(
+    String ownerUid,
+    String subphaseCode,
+  ) async {
     // Try new schema key
     var qs = await _col
         .where('ownerUid', isEqualTo: ownerUid)

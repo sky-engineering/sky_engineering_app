@@ -554,11 +554,11 @@ class _OverviewExternalTaskTileState extends State<_OverviewExternalTaskTile> {
             : DismissDirection.endToStart);
     final isArmed = isStartToEnd ? _completeArmed : _deleteArmed;
     final color = isStartToEnd
-        ? theme.colorScheme.primary.withValues(alpha: 
-            isActive && isArmed ? 0.25 : 0.12,
+        ? theme.colorScheme.primary.withValues(
+            alpha: isActive && isArmed ? 0.25 : 0.12,
           )
-        : theme.colorScheme.error.withValues(alpha: 
-            isActive && isArmed ? 0.25 : 0.12,
+        : theme.colorScheme.error.withValues(
+            alpha: isActive && isArmed ? 0.25 : 0.12,
           );
 
     final icon = isStartToEnd ? Icons.check : Icons.delete;
@@ -573,7 +573,10 @@ class _OverviewExternalTaskTileState extends State<_OverviewExternalTaskTile> {
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16),
       alignment: alignment,
-      child: Icon(icon, color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
+      child: Icon(
+        icon,
+        color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+      ),
     );
   }
 }

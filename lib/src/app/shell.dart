@@ -21,7 +21,6 @@ class Shell extends StatefulWidget {
 class _ShellState extends State<Shell> {
   int _index = 0;
   bool _ready = false;
-  String? _error;
 
   final _pages = <Widget>[];
 
@@ -41,12 +40,10 @@ class _ShellState extends State<Shell> {
   }
 
   Future<void> _init() async {
-    try {
-      await UserService.ensureUserDoc(widget.user);
-      if (mounted) setState(() => _ready = true);
-    } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
-    }
+    UserService.ensureUserDoc(widget.user).catchError((e) {
+      debugPrint('ensureUserDoc failed: $e');
+    });
+    if (mounted) setState(() => _ready = true);
   }
 
   void _showQuickActionSheet() {
@@ -101,12 +98,6 @@ class _ShellState extends State<Shell> {
 
   @override
   Widget build(BuildContext context) {
-    if (_error != null) {
-      return Scaffold(
-        appBar: AppBar(title: _logoTitle()),
-        body: Center(child: Text('Error: $_error')),
-      );
-    }
     if (!_ready) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }

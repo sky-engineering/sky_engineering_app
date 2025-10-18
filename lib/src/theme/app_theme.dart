@@ -47,7 +47,9 @@ class AppTheme {
       listTileTheme: ListTileThemeData(
         textColor: cs.onSurface,
         iconColor: cs.onSurface,
-        subtitleTextStyle: TextStyle(color: cs.onSurface.withValues(alpha: 0.85)),
+        subtitleTextStyle: TextStyle(
+          color: cs.onSurface.withValues(alpha: 0.85),
+        ),
       ),
 
       textButtonTheme: TextButtonThemeData(

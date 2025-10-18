@@ -7,10 +7,7 @@ class PhaseRepository {
 
   /// Stream phases for a user, ordered by `order` then `phaseCode`.
   Stream<List<Phase>> streamForUser(String ownerUid) {
-    return _col
-        .where('ownerUid', isEqualTo: ownerUid)
-        .snapshots()
-        .map((snap) {
+    return _col.where('ownerUid', isEqualTo: ownerUid).snapshots().map((snap) {
       final list = snap.docs.map(Phase.fromDoc).toList();
       list.sort((a, b) {
         final ao = a.order ?? 9999;

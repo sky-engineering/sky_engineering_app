@@ -63,22 +63,33 @@ class _ProjectTaskCard extends StatelessWidget {
         : project.name;
     final titleColor = _statusTextColor(context, project);
 
+    Future<void> toggleStar(TaskItem task) async {
+      try {
+        await taskRepo.setStarred(task, !task.isStarred);
+      } catch (e) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to update task: $e')));
+      }
+    }
+
     return Card(
       margin: EdgeInsets.zero,
-      child: InkWell(
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => ProjectDetailPage(projectId: project.id),
-            ),
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InkWell(
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ProjectDetailPage(projectId: project.id),
+                  ),
+                );
+              },
+              child: Text(
                 title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -87,20 +98,23 @@ class _ProjectTaskCard extends StatelessWidget {
                   color: titleColor,
                 ),
               ),
-              const SizedBox(height: 8),
-              StreamBuilder<List<TaskItem>>(
-                stream: taskRepo.streamByProject(project.id),
-                builder: (context, snapshot) {
-                  final tasks = (snapshot.data ?? const <TaskItem>[])
-                      .where((t) => _kWatchedStatuses.contains(t.taskStatus))
-                      .toList();
-                  if (tasks.isEmpty) {
-                    return const SizedBox.shrink();
-                  }
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: tasks.take(6).map((task) {
-                      return Padding(
+            ),
+            const SizedBox(height: 8),
+            StreamBuilder<List<TaskItem>>(
+              stream: taskRepo.streamByProject(project.id),
+              builder: (context, snapshot) {
+                final tasks = (snapshot.data ?? const <TaskItem>[])
+                    .where((t) => _kWatchedStatuses.contains(t.taskStatus))
+                    .toList();
+                if (tasks.isEmpty) {
+                  return const SizedBox.shrink();
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: tasks.take(6).map((task) {
+                    return InkWell(
+                      onTap: () => toggleStar(task),
+                      child: Padding(
                         padding: const EdgeInsets.only(bottom: 4),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -129,13 +143,13 @@ class _ProjectTaskCard extends StatelessWidget {
                             ),
                           ],
                         ),
-                      );
-                    }).toList(),
-                  );
-                },
-              ),
-            ],
-          ),
+                      ),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
+          ],
         ),
       ),
     );

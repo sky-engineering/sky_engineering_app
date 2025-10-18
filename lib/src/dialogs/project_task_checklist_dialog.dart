@@ -110,6 +110,7 @@ class _ProjectTaskChecklistDialogState
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 initialValue: _selectedChecklistId,
+                isExpanded: true,
                 decoration: const InputDecoration(
                   labelText: 'Source checklist',
                 ),
@@ -138,6 +139,7 @@ class _ProjectTaskChecklistDialogState
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 initialValue: _selectedProjectId,
+                isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Project'),
                 items: projects
                     .map(

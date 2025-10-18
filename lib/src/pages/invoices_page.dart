@@ -202,7 +202,8 @@ class _InvoicesPageState extends State<InvoicesPage> {
                     // ---- NEW summary of total unpaid for currently listed invoices
                     final totalUnpaid = invoices.fold<double>(
                       0.0,
-                      (total, inv) => total + (inv.balance > 0 ? inv.balance : 0.0),
+                      (total, inv) =>
+                          total + (inv.balance > 0 ? inv.balance : 0.0),
                     );
                     final summaryLabel = (_typeFilter == 'Client')
                         ? 'Total Unpaid (Clients)'
@@ -806,12 +807,3 @@ class _InvoicesPageState extends State<InvoicesPage> {
     );
   }
 }
-
-
-
-
-
-
-
-
-

@@ -6,18 +6,16 @@ class UserService {
 
   static Future<void> ensureUserDoc(User user) async {
     final docRef = _db.collection('users').doc(user.uid);
-    final snap = await docRef.get();
-    if (!snap.exists) {
+
+    try {
       await docRef.set({
         'uid': user.uid,
         'email': user.email,
-        'createdAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    } else {
-      await docRef.set({
-        'email': user.email,
         'lastLoginAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
+    } on FirebaseException catch (e) {
+      // ignore: avoid_print
+      print('ensureUserDoc set failed: $e');
     }
   }
 }

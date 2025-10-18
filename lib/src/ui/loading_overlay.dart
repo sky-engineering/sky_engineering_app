@@ -81,4 +81,3 @@ class LoadingOverlay {
     _showing = false;
   }
 }
-

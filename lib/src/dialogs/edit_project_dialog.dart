@@ -25,8 +25,8 @@ Future<void> showEditProjectDialog(BuildContext context, Project p) async {
       : 'In Progress';
 
   double? parseMoney(String value) {
-      final trimmed = value.trim();
-      if (trimmed.isEmpty) return null;
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
     return double.tryParse(trimmed);
   }
 
@@ -100,8 +100,9 @@ Future<void> showEditProjectDialog(BuildContext context, Project p) async {
                         'Contract Amount',
                         contractCtl,
                         hint: 'e.g., 150000.00',
-                        keyboardType:
-                            const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
                       ),
                       const SizedBox(height: 16),
                       Text(

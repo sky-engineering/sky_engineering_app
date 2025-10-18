@@ -38,9 +38,7 @@ class _HomePageState extends State<HomePage> {
       );
     }
     if (!_ready) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     return Scaffold(
       appBar: AppBar(
@@ -61,7 +59,10 @@ class _HomePageState extends State<HomePage> {
           children: [
             const Icon(Icons.engineering, size: 64),
             const SizedBox(height: 12),
-            Text('Signed in as:', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Signed in as:',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             Text(widget.user.email ?? '(no email)'),
             const SizedBox(height: 24),
             const Text('Firestore user document ensured ✅'),

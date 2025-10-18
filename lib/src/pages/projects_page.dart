@@ -575,21 +575,24 @@ class _ProjectListSubtitle extends StatelessWidget {
   Widget build(BuildContext context) {
     final client = project.clientName.trim();
     final status = project.status.trim();
-    final baseLine = [
+    final baseParts = <String>[
       if (client.isNotEmpty) client,
       if (status.isNotEmpty) status,
-    ].join(' â€¢ ');
+    ];
 
-    String buildText(String progress) {
-      final parts = <String>[if (baseLine.isNotEmpty) baseLine, progress];
-      return parts.join('\n');
+    String buildLine(String progress) {
+      final parts = <String>[...baseParts];
+      if (progress.isNotEmpty) parts.add(progress);
+      if (parts.isEmpty) return '';
+      return parts.join(' • ');
     }
 
     final contract = project.contractAmount ?? 0;
     if (contract <= 0) {
+      final line = buildLine('');
       return Text(
-        buildText('Contract Progress: â€”'),
-        maxLines: 2,
+        line.isEmpty ? '—' : line,
+        maxLines: 1,
         overflow: TextOverflow.ellipsis,
       );
     }
@@ -600,28 +603,27 @@ class _ProjectListSubtitle extends StatelessWidget {
         projectNumber: project.projectNumber,
       ),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return Text(
-            buildText('Contract Progress: â€”'),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          );
-        }
-
-        double clientInvoiced = 0;
-        for (final invoice in snapshot.data!) {
-          if (invoice.invoiceType == 'Client') {
-            clientInvoiced += invoice.invoiceAmount;
+        double? pct;
+        if (snapshot.hasData) {
+          double clientInvoiced = 0;
+          for (final invoice in snapshot.data!) {
+            if (invoice.invoiceType == 'Client') {
+              clientInvoiced += invoice.invoiceAmount;
+            }
           }
+          pct = contract > 0 ? (clientInvoiced / contract) * 100 : null;
         }
 
-        final pct = contract > 0 ? (clientInvoiced / contract) * 100 : 0;
-        final display = pct.isFinite ? pct.clamp(0, 999).round() : 0;
-        final progress = 'Contract Progress: ${display.toString()}%';
+        final safePct = pct;
+        final progress = (safePct != null && safePct.isFinite)
+            ? '${safePct.clamp(0, 999).round()}%'
+            : '';
+
+        final line = buildLine(progress);
 
         return Text(
-          buildText(progress),
-          maxLines: 2,
+          line.isEmpty ? '—' : line,
+          maxLines: 1,
           overflow: TextOverflow.ellipsis,
         );
       },

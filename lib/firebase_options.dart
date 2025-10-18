@@ -65,5 +65,4 @@ class DefaultFirebaseOptions {
     storageBucket: 'sky-eng-app-18242.firebasestorage.app',
     iosBundleId: 'com.skyengineering.skyengineeringapp',
   );
-
 }

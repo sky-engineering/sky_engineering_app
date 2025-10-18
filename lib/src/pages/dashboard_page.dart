@@ -130,7 +130,7 @@ class DashboardPage extends StatelessWidget {
                   'https://www.dropbox.com/scl/fo/qb19djm48m3ko65x8ua1n/ADxAvonvBPlx5uVypAWlQ6A?rlkey=e9brozwr2qpq9k1b0t256kt56&dl=0',
                 );
               }),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
 
               linkButton('City Inspect Links', () {
                 showCityInspectLinksDialog(context);

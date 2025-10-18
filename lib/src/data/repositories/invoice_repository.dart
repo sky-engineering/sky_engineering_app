@@ -16,8 +16,14 @@ class InvoiceRepository {
     return _col.where('ownerUid', isEqualTo: ownerUid).snapshots().map((snap) {
       final list = snap.docs.map((d) => Invoice.fromDoc(d)).toList();
       list.sort((a, b) {
-        final ad = a.invoiceDate ?? a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bd = b.invoiceDate ?? b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final ad =
+            a.invoiceDate ??
+            a.createdAt ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        final bd =
+            b.invoiceDate ??
+            b.createdAt ??
+            DateTime.fromMillisecondsSinceEpoch(0);
         return bd.compareTo(ad);
       });
       return list;
@@ -92,8 +98,8 @@ class InvoiceRepository {
     final currentPaid = data.containsKey('amountPaid')
         ? parseDouble(data['amountPaid'])
         : (data.containsKey('balanceDue')
-            ? currentAmount - parseDouble(data['balanceDue'])
-            : 0.0);
+              ? currentAmount - parseDouble(data['balanceDue'])
+              : 0.0);
 
     final incomingAmount = mutable.containsKey('invoiceAmount')
         ? parseDouble(mutable['invoiceAmount'], fallback: currentAmount)
@@ -116,11 +122,13 @@ class InvoiceRepository {
     if (incomingAmount <= 0) nextPaid = 0.0;
     if (nextPaid > incomingAmount) nextPaid = incomingAmount;
 
-    final computedBalance =
-        (incomingAmount - nextPaid).clamp(0, double.infinity).toDouble();
+    final computedBalance = (incomingAmount - nextPaid)
+        .clamp(0, double.infinity)
+        .toDouble();
 
     var status = parseStringOrNull(mutable['status']);
-    status ??= (computedBalance <= 0 ||
+    status ??=
+        (computedBalance <= 0 ||
             mutable['paidDate'] != null ||
             data['paidDate'] != null)
         ? 'Paid'
@@ -140,11 +148,19 @@ class InvoiceRepository {
 
   Future<void> delete(String id) => _col.doc(id).delete();
 
-  List<Invoice> _docsToSortedInvoices(QuerySnapshot<Map<String, dynamic>> snap) {
+  List<Invoice> _docsToSortedInvoices(
+    QuerySnapshot<Map<String, dynamic>> snap,
+  ) {
     final list = snap.docs.map((d) => Invoice.fromDoc(d)).toList();
     list.sort((a, b) {
-      final ad = a.invoiceDate ?? a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final bd = b.invoiceDate ?? b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final ad =
+          a.invoiceDate ??
+          a.createdAt ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      final bd =
+          b.invoiceDate ??
+          b.createdAt ??
+          DateTime.fromMillisecondsSinceEpoch(0);
       return bd.compareTo(ad);
     });
     return list;

@@ -196,9 +196,9 @@ class _ErrorBox extends StatelessWidget {
 Future<void> _addPhaseDialog(BuildContext context) async {
   final me = FirebaseAuth.instance.currentUser;
   if (me == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Please sign in')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Please sign in')));
     return;
   }
 
@@ -224,8 +224,9 @@ Future<void> _addPhaseDialog(BuildContext context) async {
           children: [
             TextFormField(
               controller: codeCtl,
-              decoration:
-              const InputDecoration(labelText: 'Phase Code (2 digits, e.g., 02)'),
+              decoration: const InputDecoration(
+                labelText: 'Phase Code (2 digits, e.g., 02)',
+              ),
               validator: (v) => validateCode((v ?? '').trim()),
             ),
             const SizedBox(height: 8),
@@ -233,13 +234,16 @@ Future<void> _addPhaseDialog(BuildContext context) async {
               controller: nameCtl,
               decoration: const InputDecoration(labelText: 'Phase Name'),
               validator: (v) =>
-              (v ?? '').trim().isEmpty ? 'Enter a name' : null,
+                  (v ?? '').trim().isEmpty ? 'Enter a name' : null,
             ),
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
         FilledButton(
           onPressed: () async {
             if (!(formKey.currentState?.validate() ?? false)) return;
@@ -287,8 +291,9 @@ Future<void> _editPhaseDialog(BuildContext context, PhaseTemplate p) async {
           children: [
             TextFormField(
               controller: codeCtl,
-              decoration:
-              const InputDecoration(labelText: 'Phase Code (2 digits, e.g., 02)'),
+              decoration: const InputDecoration(
+                labelText: 'Phase Code (2 digits, e.g., 02)',
+              ),
               validator: (v) => validateCode((v ?? '').trim()),
             ),
             const SizedBox(height: 8),
@@ -296,13 +301,16 @@ Future<void> _editPhaseDialog(BuildContext context, PhaseTemplate p) async {
               controller: nameCtl,
               decoration: const InputDecoration(labelText: 'Phase Name'),
               validator: (v) =>
-              (v ?? '').trim().isEmpty ? 'Enter a name' : null,
+                  (v ?? '').trim().isEmpty ? 'Enter a name' : null,
             ),
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
         FilledButton(
           onPressed: () async {
             if (!(formKey.currentState?.validate() ?? false)) return;
@@ -326,11 +334,11 @@ Future<void> _editPhaseDialog(BuildContext context, PhaseTemplate p) async {
 // =====================
 
 Future<void> _persistReorder(
-    BuildContext context,
-    List<PhaseTemplate> phases,
-    int oldIndex,
-    int newIndex,
-    ) async {
+  BuildContext context,
+  List<PhaseTemplate> phases,
+  int oldIndex,
+  int newIndex,
+) async {
   if (newIndex > oldIndex) newIndex -= 1;
   final moved = phases.removeAt(oldIndex);
   phases.insert(newIndex, moved);
@@ -343,4 +351,3 @@ Future<void> _persistReorder(
     });
   }
 }
-

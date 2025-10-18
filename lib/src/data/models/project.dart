@@ -34,7 +34,9 @@ class SelectedSubphase {
   factory SelectedSubphase.fromMap(Map<String, dynamic> data) {
     final map = mapFrom(data);
     final status = parseString(map['status'], fallback: 'In Progress');
-    final normalizedStatus = kSubphaseStatuses.contains(status) ? status : 'In Progress';
+    final normalizedStatus = kSubphaseStatuses.contains(status)
+        ? status
+        : 'In Progress';
 
     return SelectedSubphase(
       code: parseString(map['code']),
@@ -156,7 +158,10 @@ class Project {
     final data = mapFrom(doc.data() as Map<String, dynamic>?);
 
     final archivedFlag = parseBool(data['isArchived'], fallback: false);
-    final resolvedStatus = _resolveStatus(parseStringOrNull(data['status']), archivedFlag);
+    final resolvedStatus = _resolveStatus(
+      parseStringOrNull(data['status']),
+      archivedFlag,
+    );
 
     final selectedList = readListOrNull<SelectedSubphase>(
       data,
@@ -168,22 +173,22 @@ class Project {
         return null;
       },
     );
-    final selectedSubphases =
-        (selectedList == null || selectedList.isEmpty) ? null : selectedList;
+    final selectedSubphases = (selectedList == null || selectedList.isEmpty)
+        ? null
+        : selectedList;
 
-    final externalList = readListOrNull<ExternalTask>(
-      data,
-      'externalTasks',
-      (value) {
-        if (value is Map<String, dynamic>) {
-          final task = ExternalTask.fromMap(value);
-          return task.id.isEmpty ? null : task;
-        }
-        return null;
-      },
-    );
-    final externalTasks =
-        (externalList == null || externalList.isEmpty) ? null : externalList;
+    final externalList = readListOrNull<ExternalTask>(data, 'externalTasks', (
+      value,
+    ) {
+      if (value is Map<String, dynamic>) {
+        final task = ExternalTask.fromMap(value);
+        return task.id.isEmpty ? null : task;
+      }
+      return null;
+    });
+    final externalTasks = (externalList == null || externalList.isEmpty)
+        ? null
+        : externalList;
 
     return Project(
       id: doc.id,

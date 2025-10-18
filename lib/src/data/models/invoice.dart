@@ -39,8 +39,10 @@ class Invoice {
   final String invoiceNumber;
   final String? projectNumber;
   final double invoiceAmount;
+
   /// Canonical paid amount. Defaults to 0.0 when absent.
   final double amountPaid;
+
   /// Legacy/interop: stored if present on disk; we also derive & write it.
   final double? balanceDue;
   final DateTime? invoiceDate;
@@ -71,7 +73,8 @@ class Invoice {
     // Prefer stored status if present; otherwise derive from paid.
     final storedStatus = _statusStored;
     if (storedStatus != null && storedStatus.isNotEmpty) return storedStatus;
-    final fullyPaid = (paidDate != null) || (amountPaid >= invoiceAmount) || (balance <= 0);
+    final fullyPaid =
+        (paidDate != null) || (amountPaid >= invoiceAmount) || (balance <= 0);
     return fullyPaid ? 'Paid' : 'Unpaid';
   }
 
@@ -103,34 +106,47 @@ class Invoice {
     this.ownerUid,
     this.createdAt,
     this.updatedAt,
-  })  : projectNumber = _normalizeProjectNumber(projectNumber),
-        invoiceNumber = invoiceNumber ?? number ?? '',
-        invoiceAmount = (invoiceAmount ?? amount ?? 0.0),
-        invoiceDate = invoiceDate ?? issueDate,
-        _statusStored = status,
-  // Normalize amountPaid to [0, invoiceAmount]
-        amountPaid = _normalizePaid(
-          amountPaid ?? _derivePaidFromBalance(balanceDue, (invoiceAmount ?? amount ?? 0.0)),
-          (invoiceAmount ?? amount ?? 0.0),
-        );
+  }) : projectNumber = _normalizeProjectNumber(projectNumber),
+       invoiceNumber = invoiceNumber ?? number ?? '',
+       invoiceAmount = (invoiceAmount ?? amount ?? 0.0),
+       invoiceDate = invoiceDate ?? issueDate,
+       _statusStored = status,
+       // Normalize amountPaid to [0, invoiceAmount]
+       amountPaid = _normalizePaid(
+         amountPaid ??
+             _derivePaidFromBalance(
+               balanceDue,
+               (invoiceAmount ?? amount ?? 0.0),
+             ),
+         (invoiceAmount ?? amount ?? 0.0),
+       );
 
   /// Backward-compatible factory from Firestore doc.
   static Invoice fromDoc(DocumentSnapshot doc) {
     final data = mapFrom(doc.data() as Map<String, dynamic>?);
 
-    final invoiceNumberKey = data.containsKey('invoiceNumber') ? 'invoiceNumber' : 'number';
-    final invoiceAmountKey = data.containsKey('invoiceAmount') ? 'invoiceAmount' : 'amount';
+    final invoiceNumberKey = data.containsKey('invoiceNumber')
+        ? 'invoiceNumber'
+        : 'number';
+    final invoiceAmountKey = data.containsKey('invoiceAmount')
+        ? 'invoiceAmount'
+        : 'amount';
 
     final invoiceNumber = readString(data, invoiceNumberKey);
     final invoiceAmount = readDouble(data, invoiceAmountKey);
     final normalizedPaid = _normalizePaid(
       readDoubleOrNull(data, 'amountPaid') ??
-          _derivePaidFromBalance(readDoubleOrNull(data, 'balanceDue'), invoiceAmount),
+          _derivePaidFromBalance(
+            readDoubleOrNull(data, 'balanceDue'),
+            invoiceAmount,
+          ),
       invoiceAmount,
     );
 
     final invoiceTypeRaw = parseString(data['invoiceType'], fallback: 'Client');
-    final invoiceType = invoiceTypeRaw.toLowerCase() == 'vendor' ? 'Vendor' : 'Client';
+    final invoiceType = invoiceTypeRaw.toLowerCase() == 'vendor'
+        ? 'Vendor'
+        : 'Client';
 
     return Invoice(
       id: doc.id,
@@ -140,7 +156,8 @@ class Invoice {
       invoiceAmount: invoiceAmount,
       amountPaid: normalizedPaid,
       balanceDue: readDoubleOrNull(data, 'balanceDue'),
-      invoiceDate: readDateTime(data, 'invoiceDate') ?? readDateTime(data, 'issueDate'),
+      invoiceDate:
+          readDateTime(data, 'invoiceDate') ?? readDateTime(data, 'issueDate'),
       dueDate: readDateTime(data, 'dueDate'),
       paidDate: readDateTime(data, 'paidDate'),
       documentLink: readStringOrNull(data, 'documentLink'),
@@ -155,10 +172,15 @@ class Invoice {
 
   /// Map to Firestore. Writes both new keys and legacy mirrors so old screens keep working.
   Map<String, dynamic> toMap() {
-    final computedBalance = (invoiceAmount - amountPaid).clamp(0, double.infinity).toDouble();
+    final computedBalance = (invoiceAmount - amountPaid)
+        .clamp(0, double.infinity)
+        .toDouble();
 
-    final effectiveStatus = _statusStored ??
-        ((paidDate != null || amountPaid >= invoiceAmount || computedBalance <= 0)
+    final effectiveStatus =
+        _statusStored ??
+        ((paidDate != null ||
+                amountPaid >= invoiceAmount ||
+                computedBalance <= 0)
             ? 'Paid'
             : 'Unpaid');
 
@@ -234,10 +256,7 @@ class Invoice {
 
   /// Returns true when this invoice should be considered part of the project
   /// identified by [projectId] and/or [projectNumber].
-  bool matchesProjectKey({
-    required String projectId,
-    String? projectNumber,
-  }) {
+  bool matchesProjectKey({required String projectId, String? projectNumber}) {
     if (projectId.isNotEmpty && this.projectId == projectId) {
       return true;
     }
@@ -333,7 +352,10 @@ class Invoice {
   }
 
   // ---- helpers ----
-  static double _derivePaidFromBalance(double? balanceDueParam, double invoiceAmount) {
+  static double _derivePaidFromBalance(
+    double? balanceDueParam,
+    double invoiceAmount,
+  ) {
     if (balanceDueParam == null) return 0.0;
     final paid = invoiceAmount - balanceDueParam;
     if (paid.isNaN) return 0.0;

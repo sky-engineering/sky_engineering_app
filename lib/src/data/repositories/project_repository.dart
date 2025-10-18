@@ -22,7 +22,10 @@ class ProjectRepository {
 
   /// Stream a single project by id (null if deleted/missing).
   Stream<Project?> streamById(String id) {
-    return _col.doc(id).snapshots().map((d) => d.exists ? Project.fromDoc(d) : null);
+    return _col
+        .doc(id)
+        .snapshots()
+        .map((d) => d.exists ? Project.fromDoc(d) : null);
   }
 
   /// NEW: Fetch a single project once by id.

@@ -36,11 +36,7 @@ int? readIntOrNull(Map<String, dynamic> data, String key) {
   return parseIntOrNull(data[key]);
 }
 
-bool readBool(
-  Map<String, dynamic> data,
-  String key, {
-  bool fallback = false,
-}) {
+bool readBool(Map<String, dynamic> data, String key, {bool fallback = false}) {
   return parseBool(data[key], fallback: fallback);
 }
 
@@ -52,10 +48,7 @@ DateTime? readDateTime(Map<String, dynamic> data, String key) {
   return parseDateTime(data[key]);
 }
 
-Map<String, dynamic>? readMapOrNull(
-  Map<String, dynamic> data,
-  String key,
-) {
+Map<String, dynamic>? readMapOrNull(Map<String, dynamic> data, String key) {
   final value = data[key];
   if (value is Map<String, dynamic>) {
     return Map<String, dynamic>.from(value);
@@ -82,10 +75,7 @@ List<T>? readListOrNull<T>(
   return null;
 }
 
-List<String>? readStringListOrNull(
-  Map<String, dynamic> data,
-  String key,
-) {
+List<String>? readStringListOrNull(Map<String, dynamic> data, String key) {
   final value = data[key];
   if (value == null) {
     return null;
@@ -108,10 +98,7 @@ List<String>? readStringListOrNull(
       .toList();
 }
 
-String parseString(
-  Object? value, {
-  String fallback = '',
-}) {
+String parseString(Object? value, {String fallback = ''}) {
   return parseStringOrNull(value) ?? fallback;
 }
 
@@ -122,10 +109,7 @@ String? parseStringOrNull(Object? value) {
   return trimmed.isEmpty ? null : trimmed;
 }
 
-double parseDouble(
-  Object? value, {
-  double fallback = 0,
-}) {
+double parseDouble(Object? value, {double fallback = 0}) {
   return parseDoubleOrNull(value) ?? fallback;
 }
 
@@ -144,10 +128,7 @@ int? parseIntOrNull(Object? value) {
   return parsed;
 }
 
-bool parseBool(
-  Object? value, {
-  bool fallback = false,
-}) {
+bool parseBool(Object? value, {bool fallback = false}) {
   return parseBoolOrNull(value) ?? fallback;
 }
 

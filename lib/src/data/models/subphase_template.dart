@@ -8,8 +8,8 @@ class SubphaseTemplate {
   final String ownerUid;
 
   /// Canonical codes/names
-  final String subphaseCode;   // "0101", "0204", ...
-  final String subphaseName;   // display name
+  final String subphaseCode; // "0101", "0204", ...
+  final String subphaseName; // display name
 
   /// NEW: explicit parent phase code (e.g., "01")
   /// If absent on disk, we derive from the first 2 digits of subphaseCode.
@@ -21,7 +21,7 @@ class SubphaseTemplate {
   // Legacy/optional (kept for BC, not used in UI):
   final String? subphaseNote;
   final String responsibility; // default 'Other'
-  final bool isDeliverable;    // default false
+  final bool isDeliverable; // default false
 
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -41,7 +41,8 @@ class SubphaseTemplate {
   });
 
   // -------- Derived helpers (keep for convenience) --------
-  String get subCode   => subphaseCode.length == 4 ? subphaseCode.substring(2, 4) : '';
+  String get subCode =>
+      subphaseCode.length == 4 ? subphaseCode.substring(2, 4) : '';
 
   static bool isValidCode(String? code) {
     if (code == null) return false;
@@ -67,9 +68,12 @@ class SubphaseTemplate {
     final phaseCode = storedPhase.isNotEmpty ? storedPhase : derivedPhase;
 
     // NEW: defaultTasks list
-    final defaults = readStringListOrNull(data, 'defaultTasks') ?? const <String>[];
+    final defaults =
+        readStringListOrNull(data, 'defaultTasks') ?? const <String>[];
 
-    final note = parseStringOrNull(data['subphaseNote']) ?? parseStringOrNull(data['taskNote']);
+    final note =
+        parseStringOrNull(data['subphaseNote']) ??
+        parseStringOrNull(data['taskNote']);
     final responsibility = parseString(
       data['responsibility'] ?? data['taskResponsibility'],
       fallback: 'Other',

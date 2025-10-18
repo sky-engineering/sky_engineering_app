@@ -414,9 +414,9 @@ Future<void> _showEditDialog(
                   );
                   if (ok == true) {
                     await repo.delete(t.id);
-                                        if (!context.mounted) {
-                    return;
-                  }
+                    if (!context.mounted) {
+                      return;
+                    }
                     Navigator.pop(context);
                   }
                 },
@@ -446,7 +446,7 @@ Future<void> _showEditDialog(
                     'phaseCode': newPhaseCode,
                     'defaultTasks': defaults,
                   });
-                                    if (!context.mounted) {
+                  if (!context.mounted) {
                     return;
                   }
                   Navigator.pop(context);
@@ -471,8 +471,8 @@ Future<void> _showManagePhasesDialog(
     list = await repo.getAllForUser(ownerUid);
   } on FirebaseException catch (e) {
     if (!context.mounted) {
-    return;
-  }
+      return;
+    }
     final message = (e.message != null && e.message!.trim().isNotEmpty)
         ? e.message!.trim()
         : e.code;
@@ -482,8 +482,8 @@ Future<void> _showManagePhasesDialog(
     return;
   } catch (_) {
     if (!context.mounted) {
-    return;
-  }
+      return;
+    }
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Could not load phases')));
@@ -557,8 +557,8 @@ Future<void> _showManagePhasesDialog(
                   FilledButton(
                     onPressed: () async {
                       if (!(formKey.currentState?.validate() ?? false)) {
-                    return;
-                  }
+                        return;
+                      }
                       final p = PhaseTemplate(
                         id: '_',
                         ownerUid: ownerUid,
@@ -569,8 +569,8 @@ Future<void> _showManagePhasesDialog(
                       final newId = await repo.add(p);
                       setState(() => phases.add(p.copyWith(id: newId)));
                       if (!context.mounted) {
-                    return;
-                  }
+                        return;
+                      }
                       Navigator.of(context).pop();
                     },
                     child: const Text('Create'),

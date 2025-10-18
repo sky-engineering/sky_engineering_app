@@ -5,13 +5,14 @@ import '../../utils/data_parsers.dart';
 
 class TaskTemplate {
   final String id;
-  final String taskCode;            // 4 digits: "0101" etc.
-  final String? projectNumber;      // optional default
+  final String taskCode; // 4 digits: "0101" etc.
+  final String? projectNumber; // optional default
   final String taskName;
   final String? taskNote;
-  final String taskResponsibility;  // Civil, Owner, Surveyor, Architect, MEP, Structural, Geotechnical, Landscape, Other
+  final String
+  taskResponsibility; // Civil, Owner, Surveyor, Architect, MEP, Structural, Geotechnical, Landscape, Other
   final bool isDeliverable;
-  final String? ownerUid;           // who owns/edits this template
+  final String? ownerUid; // who owns/edits this template
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -37,7 +38,11 @@ class TaskTemplate {
       projectNumber: readStringOrNull(data, 'projectNumber'),
       taskName: readString(data, 'taskName'),
       taskNote: readStringOrNull(data, 'taskNote'),
-      taskResponsibility: readString(data, 'taskResponsibility', fallback: 'Civil'),
+      taskResponsibility: readString(
+        data,
+        'taskResponsibility',
+        fallback: 'Civil',
+      ),
       isDeliverable: readBool(data, 'isDeliverable'),
       ownerUid: readStringOrNull(data, 'ownerUid'),
       createdAt: readDateTime(data, 'createdAt'),

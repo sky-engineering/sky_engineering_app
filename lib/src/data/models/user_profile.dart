@@ -2,7 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class UserProfile {
   final String uid;
-  final String userType; // Admin, Civil, Owner, Surveyor, Architect, MEP, Structural, Geotechnical, Landscape, Other
+  final String
+  userType; // Admin, Civil, Owner, Surveyor, Architect, MEP, Structural, Geotechnical, Landscape, Other
   final String? clientNumber;
   final String? userName;
   final String? userPhone;
@@ -42,8 +43,12 @@ class UserProfile {
       userName: data['userName'] as String?,
       userPhone: data['userPhone'] as String?,
       userAddress: data['userAddress'] as String?,
-      createdAt: data['createdAt'] is Timestamp ? (data['createdAt'] as Timestamp).toDate() : null,
-      updatedAt: data['updatedAt'] is Timestamp ? (data['updatedAt'] as Timestamp).toDate() : null,
+      createdAt: data['createdAt'] is Timestamp
+          ? (data['createdAt'] as Timestamp).toDate()
+          : null,
+      updatedAt: data['updatedAt'] is Timestamp
+          ? (data['updatedAt'] as Timestamp).toDate()
+          : null,
     );
   }
 

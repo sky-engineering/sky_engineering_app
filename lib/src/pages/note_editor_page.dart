@@ -170,16 +170,16 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       }
       closeProgress();
       setState(() => _hasChanges = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Note saved to Dropbox.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Note saved to Dropbox.')));
       pageNavigator.pop();
     } catch (e) {
       closeProgress();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save note: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to save note: $e')));
     } finally {
       if (mounted) {
         setState(() => _saving = false);
@@ -392,5 +392,3 @@ class _SavingNoteDialog extends StatelessWidget {
     );
   }
 }
-
-
