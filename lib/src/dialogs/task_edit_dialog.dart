@@ -215,17 +215,24 @@ Future<void> showTaskEditDialog(
                           ),
                           FilledButton(
                             onPressed: () {
+                              final trimmed = <SubtaskItem>[];
+                              for (final entry in editable) {
+                                final title = entry.controller.text.trim();
+                                if (title.isEmpty) continue;
+                                trimmed.add(entry.item.copyWith(title: title));
+                              }
+
+                              if (trimmed.isEmpty) {
+                                Navigator.of(innerContext).pop(trimmed);
+                                return;
+                              }
+
                               if (!(subtaskFormKey.currentState?.validate() ??
                                   false)) {
                                 return;
                               }
-                              final items = <SubtaskItem>[];
-                              for (final entry in editable) {
-                                final title = entry.controller.text.trim();
-                                if (title.isEmpty) continue;
-                                items.add(entry.item.copyWith(title: title));
-                              }
-                              Navigator.of(innerContext).pop(items);
+
+                              Navigator.of(innerContext).pop(trimmed);
                             },
                             child: const Text('Save'),
                           ),

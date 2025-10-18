@@ -1,0 +1,200 @@
+// lib/src/dialogs/project_task_checklist_dialog.dart
+import 'package:flutter/material.dart';
+
+import '../data/models/checklist.dart';
+import '../data/models/project.dart';
+
+Future<ProjectTaskChecklistDialogResult?> showProjectTaskChecklistDialog(
+  BuildContext context, {
+  required List<Checklist> templates,
+  required List<Project> projects,
+}) {
+  return showDialog<ProjectTaskChecklistDialogResult?>(
+    context: context,
+    barrierDismissible: false,
+    builder: (dialogContext) {
+      return _ProjectTaskChecklistDialog(
+        templates: templates,
+        projects: projects,
+      );
+    },
+  );
+}
+
+class ProjectTaskChecklistDialogResult {
+  ProjectTaskChecklistDialogResult({
+    required this.name,
+    required this.checklistId,
+    required this.projectId,
+  });
+
+  final String name;
+  final String checklistId;
+  final String projectId;
+}
+
+class _ProjectTaskChecklistDialog extends StatefulWidget {
+  const _ProjectTaskChecklistDialog({
+    required this.templates,
+    required this.projects,
+  });
+
+  final List<Checklist> templates;
+  final List<Project> projects;
+
+  @override
+  State<_ProjectTaskChecklistDialog> createState() =>
+      _ProjectTaskChecklistDialogState();
+}
+
+class _ProjectTaskChecklistDialogState
+    extends State<_ProjectTaskChecklistDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameController;
+  String? _selectedChecklistId;
+  String? _selectedProjectId;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController();
+    if (widget.templates.isNotEmpty) {
+      _selectedChecklistId = widget.templates.first.id;
+    }
+    if (widget.projects.isNotEmpty) {
+      _selectedProjectId = widget.projects.first.id;
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  bool get _canSubmit {
+    return (_formKey.currentState?.validate() ?? false) &&
+        _selectedChecklistId != null &&
+        _selectedProjectId != null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final templates = widget.templates;
+    final projects = widget.projects;
+    final theme = Theme.of(context);
+
+    return AlertDialog(
+      title: const Text('Create Project Task Checklist'),
+      content: SizedBox(
+        width: 520,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextFormField(
+                controller: _nameController,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'Project task checklist name',
+                ),
+                validator: (value) {
+                  if ((value ?? '').trim().isEmpty) {
+                    return 'Enter a name';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: _selectedChecklistId,
+                decoration: const InputDecoration(
+                  labelText: 'Source checklist',
+                ),
+                items: templates
+                    .map(
+                      (template) => DropdownMenuItem<String>(
+                        value: template.id,
+                        child: Text(template.title),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: templates.isEmpty
+                    ? null
+                    : (value) => setState(() {
+                        _selectedChecklistId = value;
+                      }),
+              ),
+              if (templates.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    'Create a checklist first before making a project task checklist.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: _selectedProjectId,
+                decoration: const InputDecoration(labelText: 'Project'),
+                items: projects
+                    .map(
+                      (project) => DropdownMenuItem<String>(
+                        value: project.id,
+                        child: Text(_projectLabel(project)),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: projects.isEmpty
+                    ? null
+                    : (value) => setState(() {
+                        _selectedProjectId = value;
+                      }),
+              ),
+              if (projects.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    'No projects available. Add a project before continuing.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            if (!_canSubmit) {
+              _formKey.currentState?.validate();
+              return;
+            }
+            Navigator.of(context).pop(
+              ProjectTaskChecklistDialogResult(
+                name: _nameController.text.trim(),
+                checklistId: _selectedChecklistId!,
+                projectId: _selectedProjectId!,
+              ),
+            );
+          },
+          child: const Text('Create'),
+        ),
+      ],
+    );
+  }
+}
+
+String _projectLabel(Project project) {
+  final number = project.projectNumber;
+  if (number != null && number.trim().isNotEmpty) {
+    return '$number Ã¢â‚¬â€ ${project.name}';
+  }
+  return project.name;
+}

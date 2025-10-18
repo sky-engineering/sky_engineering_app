@@ -5,6 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/models/project.dart';
 import '../data/models/client.dart';
+import '../data/models/invoice.dart';
+import '../data/repositories/invoice_repository.dart';
 import '../data/repositories/project_repository.dart';
 import '../data/repositories/client_repository.dart';
 import '../utils/phone_utils.dart';
@@ -24,6 +26,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
   static const _accentYellow = Color(0xFFF1C400);
 
   final DropboxAuth _dropboxAuth = DropboxAuth();
+  final InvoiceRepository _invoiceRepo = InvoiceRepository();
   Set<String>? _dropboxFolderNames;
   bool _dropboxChecked = false;
 
@@ -206,12 +209,9 @@ class _ProjectsPageState extends State<ProjectsPage> {
                               _buildLinkStatusIcon(p, context, titleColor),
                             ],
                           ),
-                          subtitle: Text(
-                            [p.clientName, p.status]
-                                .where((s) => s.toString().trim().isNotEmpty)
-                                .join(' • '),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          subtitle: _ProjectListSubtitle(
+                            project: p,
+                            invoiceRepository: _invoiceRepo,
                           ),
                           trailing: p.isArchived
                               ? Padding(
@@ -277,6 +277,10 @@ class _ProjectsPageState extends State<ProjectsPage> {
       if (value != null && value.toLowerCase().contains(query)) {
         return true;
       }
+    }
+
+    if (project.clientName.toLowerCase().contains(query)) {
+      return true;
     }
 
     return false;
@@ -490,7 +494,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
       return 1; // null/empty last
     }
 
-    // tie-breaker: name Aâ†’Z
+    // tie-breaker: name AÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢Z
     return a.name.toLowerCase().compareTo(b.name.toLowerCase());
   }
 
@@ -555,6 +559,73 @@ class _ProjectsPageState extends State<ProjectsPage> {
     }
     // If all shared tokens equal, shorter token list comes first.
     return ta.length.compareTo(tb.length);
+  }
+}
+
+class _ProjectListSubtitle extends StatelessWidget {
+  const _ProjectListSubtitle({
+    required this.project,
+    required this.invoiceRepository,
+  });
+
+  final Project project;
+  final InvoiceRepository invoiceRepository;
+
+  @override
+  Widget build(BuildContext context) {
+    final client = project.clientName.trim();
+    final status = project.status.trim();
+    final baseLine = [
+      if (client.isNotEmpty) client,
+      if (status.isNotEmpty) status,
+    ].join(' â€¢ ');
+
+    String buildText(String progress) {
+      final parts = <String>[if (baseLine.isNotEmpty) baseLine, progress];
+      return parts.join('\n');
+    }
+
+    final contract = project.contractAmount ?? 0;
+    if (contract <= 0) {
+      return Text(
+        buildText('Contract Progress: â€”'),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+
+    return StreamBuilder<List<Invoice>>(
+      stream: invoiceRepository.streamForProject(
+        projectId: project.id,
+        projectNumber: project.projectNumber,
+      ),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return Text(
+            buildText('Contract Progress: â€”'),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          );
+        }
+
+        double clientInvoiced = 0;
+        for (final invoice in snapshot.data!) {
+          if (invoice.invoiceType == 'Client') {
+            clientInvoiced += invoice.invoiceAmount;
+          }
+        }
+
+        final pct = contract > 0 ? (clientInvoiced / contract) * 100 : 0;
+        final display = pct.isFinite ? pct.clamp(0, 999).round() : 0;
+        final progress = 'Contract Progress: ${display.toString()}%';
+
+        return Text(
+          buildText(progress),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        );
+      },
+    );
   }
 }
 

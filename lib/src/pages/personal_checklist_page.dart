@@ -102,7 +102,7 @@ class _PersonalChecklistPageState extends State<PersonalChecklistPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Personal Checklist'),
+        title: const Text('Personal Tasks'),
         actions: [
           if (!_loading && hasCompleted)
             IconButton(
@@ -122,9 +122,6 @@ class _PersonalChecklistPageState extends State<PersonalChecklistPage> {
                     margin: EdgeInsets.zero,
                     child: SwitchListTile.adaptive(
                       title: const Text('Show on Starred Tasks'),
-                      subtitle: const Text(
-                        'Mirror these personal reminders on your Starred Tasks page.',
-                      ),
                       value: showInStarred,
                       onChanged: _handleShowInStarred,
                     ),
@@ -181,9 +178,10 @@ class _EmptyState extends StatelessWidget {
           children: const [
             Icon(Icons.fact_check_outlined, size: 48),
             SizedBox(height: 12),
-            Text('Nothing on your checklist yet.'),
-            SizedBox(height: 6),
-            Text('Use the add button to capture a quick reminder.'),
+            Text(
+              'Nothing on your personal task list yet. Use the add button to add a personal task.',
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       ),

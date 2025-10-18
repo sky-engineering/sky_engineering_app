@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'subphases_page.dart';
 import 'starred_tasks_page.dart';
+import 'checklists_page.dart';
 import 'task_overview_page.dart';
 import 'proposals_page.dart';
 import 'external_tasks_overview_page.dart';
@@ -72,13 +73,6 @@ class DashboardPage extends StatelessWidget {
               Center(child: Text(_user?.email ?? '(no email)')),
               const SizedBox(height: 28),
 
-              linkButton('Starred Tasks', () {
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => StarredTasksPage()));
-              }),
-              const SizedBox(height: 16),
-
               linkButton('Tasks Overview', () {
                 Navigator.of(
                   context,
@@ -86,7 +80,14 @@ class DashboardPage extends StatelessWidget {
               }),
               const SizedBox(height: 16),
 
-              linkButton('External Tasks Overview', () {
+              linkButton('Starred Tasks', () {
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => StarredTasksPage()));
+              }),
+              const SizedBox(height: 16),
+
+              linkButton('External Tasks', () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => ExternalTasksOverviewPage(),
@@ -102,6 +103,13 @@ class DashboardPage extends StatelessWidget {
               }),
               const SizedBox(height: 16),
 
+              linkButton('Checklists', () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const ChecklistsPage()),
+                );
+              }),
+              const SizedBox(height: 16),
+
               linkButton('Clients', () {
                 Navigator.of(
                   context,
@@ -114,9 +122,9 @@ class DashboardPage extends StatelessWidget {
                   context,
                 ).push(MaterialPageRoute(builder: (_) => SubphasesPage()));
               }),
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
 
-              linkButton('Dropbox', () {
+              linkButton('Sky Engineering Dropbox', () {
                 _launchExternal(
                   context,
                   'https://www.dropbox.com/scl/fo/qb19djm48m3ko65x8ua1n/ADxAvonvBPlx5uVypAWlQ6A?rlkey=e9brozwr2qpq9k1b0t256kt56&dl=0',
