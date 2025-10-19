@@ -22,8 +22,25 @@ class ProjectsPage extends StatefulWidget {
 }
 
 class _ProjectsPageState extends State<ProjectsPage> {
-  bool _showArchived = false; // default OFF
   static const _accentYellow = Color(0xFFF1C400);
+
+  static const List<MapEntry<String, String>> _statusOptions =
+      <MapEntry<String, String>>[
+        MapEntry('In Progress', 'IP'),
+        MapEntry('On Hold', 'OH'),
+        MapEntry('Under Construction', 'UC'),
+        MapEntry('Close When Paid', 'CWP'),
+        MapEntry('Archive', 'Arch'),
+      ];
+
+  static const Set<String> _defaultStatusFilters = <String>{
+    'In Progress',
+    'On Hold',
+    'Under Construction',
+    'Close When Paid',
+  };
+
+  Set<String> _statusFilters = {..._defaultStatusFilters};
 
   final DropboxAuth _dropboxAuth = DropboxAuth();
   final InvoiceRepository _invoiceRepo = InvoiceRepository();
@@ -50,40 +67,54 @@ class _ProjectsPageState extends State<ProjectsPage> {
     final repo = ProjectRepository();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Projects'),
-        actions: [
-          // Yellow text toggle (tiny, tappable)
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: TextButton(
-                onPressed: () => setState(() => _showArchived = !_showArchived),
-                style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  foregroundColor: _accentYellow,
-                ),
-                child: Text(
-                  _showArchived
-                      ? 'Hide Archived Tasks'
-                      : 'Show Archived Projects',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: _accentYellow,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+      appBar: AppBar(title: const Text('Projects')),
+      body: StreamBuilder<List<Project>>(
+        stream: repo.streamAll(),
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          var items = snap.data ?? const <Project>[];
+
+          items = items.where(_includeProject).toList();
+
+          final query = _searchQuery.trim().toLowerCase();
+          if (query.isNotEmpty) {
+            items = items.where((p) => _matchesSearch(p, query)).toList();
+          }
+
+          final children = <Widget>[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: SegmentedButton<String>(
+                segments: _statusOptions
+                    .map(
+                      (entry) => ButtonSegment<String>(
+                        value: entry.key,
+                        label: SizedBox(
+                          width: 56,
+                          child: Center(
+                            child: Text(
+                              entry.value,
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(growable: false),
+                selected: _statusFilters,
+                multiSelectionEnabled: true,
+                emptySelectionAllowed: true,
+                showSelectedIcon: false,
+                onSelectionChanged: (newSelection) {
+                  setState(() {
+                    _statusFilters = Set<String>.from(newSelection);
+                  });
+                },
               ),
             ),
-          ),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+            const SizedBox(height: 6),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: TextField(
@@ -105,142 +136,128 @@ class _ProjectsPageState extends State<ProjectsPage> {
                 onChanged: (value) => setState(() => _searchQuery = value),
               ),
             ),
-            Expanded(
-              child: StreamBuilder<List<Project>>(
-                // Show all projects; we'll filter by isArchived and sort client-side.
-                stream: repo.streamAll(),
-                builder: (context, snap) {
-                  if (snap.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  var items = snap.data ?? const <Project>[];
+          ];
 
-                  // Filter by archived state unless toggle is ON
-                  if (!_showArchived) {
-                    items = items.where((p) => !p.isArchived).toList();
-                  }
-
-                  final query = _searchQuery.trim().toLowerCase();
-                  if (query.isNotEmpty) {
-                    items = items
-                        .where((p) => _matchesSearch(p, query))
-                        .toList();
-                  }
-
-                  if (items.isEmpty) {
-                    if (query.isNotEmpty) {
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.search_off, size: 48),
-                              const SizedBox(height: 8),
-                              Text(
-                                'No projects match your search.',
-                                style: Theme.of(context).textTheme.bodyMedium,
-                              ),
-                              if (_searchQuery.isNotEmpty)
-                                TextButton(
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    setState(() => _searchQuery = '');
-                                  },
-                                  child: const Text('Clear search'),
-                                ),
-                            ],
-                          ),
+          if (items.isEmpty) {
+            if (query.isNotEmpty) {
+              children.add(
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.search_off, size: 48),
+                        const SizedBox(height: 8),
+                        Text(
+                          'No projects match your search.',
+                          style: Theme.of(context).textTheme.bodyMedium,
                         ),
-                      );
-                    }
-                    return _Empty(onAdd: () => _showAddDialog(context));
-                  }
-
-                  // Natural sort by project number ascending, nulls last; tie-break by name
-                  final sorted = [...items]
-                    ..sort(_byProjectNumberNaturalAscThenName);
-
-                  return ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(10, 6, 10, 100),
-                    itemCount: sorted.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 4),
-                    itemBuilder: (context, i) {
-                      final p = sorted[i];
-
-                      final titleStyle = Theme.of(context).textTheme.titleMedium
-                          ?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            fontSize:
-                                (Theme.of(
-                                      context,
-                                    ).textTheme.titleMedium?.fontSize ??
-                                    16) +
-                                1,
-                          );
-                      final titleColor = _statusTextColor(context, p);
-                      final projectNumber = p.projectNumber?.trim();
-                      final displayTitle = (projectNumber?.isNotEmpty ?? false)
-                          ? '$projectNumber ${p.name}'
-                          : p.name;
-                      return Card(
-                        margin: EdgeInsets.zero, // tighter vertical rhythm
-                        color: _subtleSurfaceTint(context),
-                        child: ListTile(
-                          dense: true,
-                          visualDensity: const VisualDensity(vertical: -2),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 4,
+                        if (_searchQuery.isNotEmpty)
+                          TextButton(
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                            },
+                            child: const Text('Clear search'),
                           ),
-                          // No leading avatar
-                          title: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  displayTitle,
-                                  style: titleStyle?.copyWith(
-                                    color: titleColor,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              _buildLinkStatusIcon(p, context, titleColor),
-                            ],
-                          ),
-                          subtitle: _ProjectListSubtitle(
-                            project: p,
-                            invoiceRepository: _invoiceRepo,
-                          ),
-                          trailing: p.isArchived
-                              ? Padding(
-                                  padding: const EdgeInsets.only(left: 6),
-                                  child: Icon(
-                                    Icons.archive,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
-                                  ),
-                                )
-                              : null,
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    ProjectDetailPage(projectId: p.id),
-                              ),
-                            );
-                          },
-                        ),
-                      );
-                    },
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            } else {
+              children.add(
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: _Empty(onAdd: () => _showAddDialog(context)),
+                ),
+              );
+            }
+          } else {
+            children.add(const SizedBox(height: 8));
+            final sorted = [...items]..sort(_byProjectNumberNaturalAscThenName);
+            for (var i = 0; i < sorted.length; i++) {
+              final p = sorted[i];
+
+              final titleStyle = Theme.of(context).textTheme.titleMedium
+                  ?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize:
+                        (Theme.of(context).textTheme.titleMedium?.fontSize ??
+                            16) +
+                        1,
                   );
-                },
-              ),
-            ),
-          ],
-        ),
+              final titleColor = _statusTextColor(context, p);
+              final projectNumber = p.projectNumber?.trim();
+              final displayTitle = (projectNumber?.isNotEmpty ?? false)
+                  ? '$projectNumber ${p.name}'
+                  : p.name;
+
+              children.add(
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Card(
+                    margin: EdgeInsets.zero,
+                    color: _subtleSurfaceTint(context),
+                    child: ListTile(
+                      dense: true,
+                      visualDensity: const VisualDensity(vertical: -2),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
+                      title: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              displayTitle,
+                              style: titleStyle?.copyWith(color: titleColor),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          _buildLinkStatusIcon(p, context, titleColor),
+                        ],
+                      ),
+                      subtitle: _ProjectListSubtitle(
+                        project: p,
+                        invoiceRepository: _invoiceRepo,
+                      ),
+                      trailing: p.isArchived
+                          ? Padding(
+                              padding: const EdgeInsets.only(left: 6),
+                              child: Icon(
+                                Icons.archive,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
+                            )
+                          : null,
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ProjectDetailPage(projectId: p.id),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              );
+
+              if (i != sorted.length - 1) {
+                children.add(const SizedBox(height: 4));
+              }
+            }
+          }
+
+          return ListView(
+            padding: const EdgeInsets.only(top: 8, bottom: 100),
+            children: children,
+          );
+        },
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showAddDialog(context),
@@ -250,6 +267,24 @@ class _ProjectsPageState extends State<ProjectsPage> {
         foregroundColor: Colors.black87,
       ),
     );
+  }
+
+  bool _includeProject(Project project) {
+    if (_statusFilters.isEmpty) {
+      return false;
+    }
+
+    final status = project.status.trim();
+    if (_statusFilters.contains(status)) {
+      return true;
+    }
+
+    if (_statusFilters.contains('Archive') &&
+        (project.isArchived || status == 'Archive')) {
+      return true;
+    }
+
+    return false;
   }
 
   bool _matchesSearch(Project project, String query) {

@@ -62,7 +62,10 @@ class ChecklistsService extends ChangeNotifier {
 
     await _maybeMigrateLegacy(user.uid);
 
-    _subscription = _collection(user.uid)
+    final collection = _collection();
+
+    _subscription = collection
+        .where('ownerUid', isEqualTo: user.uid)
         .orderBy('title')
         .snapshots()
         .listen(
@@ -106,11 +109,8 @@ class ChecklistsService extends ChangeNotifier {
     return Checklist.fromMap(map);
   }
 
-  CollectionReference<Map<String, dynamic>> _collection(String uid) {
-    return FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('checklistTemplates');
+  CollectionReference<Map<String, dynamic>> _collection() {
+    return FirebaseFirestore.instance.collection('checklistTemplates');
   }
 
   Future<void> _maybeMigrateLegacy(String uid) async {
@@ -120,16 +120,18 @@ class ChecklistsService extends ChangeNotifier {
       return;
     }
 
-    final hasExisting = await _collection(
-      uid,
-    ).limit(1).get().then((value) => value.docs.isNotEmpty);
+    final collection = _collection();
+    final hasExisting = await collection
+        .where('ownerUid', isEqualTo: uid)
+        .limit(1)
+        .get()
+        .then((value) => value.docs.isNotEmpty);
     if (hasExisting) {
       await prefs.remove(_storageKey);
       return;
     }
 
     final batch = FirebaseFirestore.instance.batch();
-    final collection = _collection(uid);
     for (final entry in stored) {
       try {
         final map = jsonDecode(entry) as Map<String, Object?>;
@@ -138,6 +140,7 @@ class ChecklistsService extends ChangeNotifier {
         final docId = parsed.id.isNotEmpty ? parsed.id : collection.doc().id;
         final docRef = collection.doc(docId);
         batch.set(docRef, {
+          'ownerUid': uid,
           'title': parsed.title.trim(),
           'items': sanitizedItems.map((item) => item.toMap()).toList(),
           'createdAt': FieldValue.serverTimestamp(),
@@ -177,8 +180,9 @@ class ChecklistsService extends ChangeNotifier {
     }
 
     final sanitizedItems = _sanitizeItems(items);
-    final doc = _collection(user.uid).doc();
+    final doc = _collection().doc();
     await doc.set({
+      'ownerUid': user.uid,
       'title': trimmedTitle,
       'items': sanitizedItems.map((item) => item.toMap()).toList(),
       'createdAt': FieldValue.serverTimestamp(),
@@ -194,7 +198,8 @@ class ChecklistsService extends ChangeNotifier {
       throw StateError('User must be signed in to update a checklist');
     }
     final sanitizedItems = _sanitizeItems(updated.items);
-    await _collection(user.uid).doc(updated.id).set({
+    await _collection().doc(updated.id).set({
+      'ownerUid': user.uid,
       'title': updated.title.trim(),
       'items': sanitizedItems.map((item) => item.toMap()).toList(),
       'updatedAt': FieldValue.serverTimestamp(),
@@ -210,7 +215,8 @@ class ChecklistsService extends ChangeNotifier {
     if (user == null) {
       throw StateError('User must be signed in to rename a checklist');
     }
-    await _collection(user.uid).doc(id).set({
+    await _collection().doc(id).set({
+      'ownerUid': user.uid,
       'title': trimmedTitle,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
@@ -221,7 +227,7 @@ class ChecklistsService extends ChangeNotifier {
     if (user == null) {
       throw StateError('User must be signed in to delete a checklist');
     }
-    await _collection(user.uid).doc(id).delete();
+    await _collection().doc(id).delete();
   }
 
   Future<void> setItemCompletion(
@@ -247,7 +253,8 @@ class ChecklistsService extends ChangeNotifier {
     }).toList();
 
     final sanitizedItems = _sanitizeItems(updatedItems);
-    await _collection(user.uid).doc(checklistId).set({
+    await _collection().doc(checklistId).set({
+      'ownerUid': user.uid,
       'items': sanitizedItems.map((item) => item.toMap()).toList(),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
@@ -263,7 +270,8 @@ class ChecklistsService extends ChangeNotifier {
     }
 
     final sanitizedItems = _sanitizeItems(items);
-    await _collection(user.uid).doc(checklistId).set({
+    await _collection().doc(checklistId).set({
+      'ownerUid': user.uid,
       'items': sanitizedItems.map((item) => item.toMap()).toList(),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
