@@ -1,14 +1,21 @@
 // lib/src/services/checklists_service.dart
+import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/models/checklist.dart';
 
 class ChecklistsService extends ChangeNotifier {
-  ChecklistsService._();
+  ChecklistsService._() {
+    _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
+      unawaited(_onAuthChanged(user));
+    });
+  }
 
   static final ChecklistsService instance = ChecklistsService._();
 
@@ -19,6 +26,8 @@ class ChecklistsService extends ChangeNotifier {
   final List<Checklist> _checklists = <Checklist>[];
   Future<void>? _loadFuture;
   SharedPreferences? _prefs;
+  StreamSubscription<User?>? _authSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _subscription;
 
   UnmodifiableListView<Checklist> get checklists =>
       UnmodifiableListView(_checklists);
@@ -27,22 +36,120 @@ class ChecklistsService extends ChangeNotifier {
     return _loadFuture ??= _load();
   }
 
+  Future<void> _onAuthChanged(User? user) async {
+    await _subscription?.cancel();
+    _subscription = null;
+    _loadFuture = null;
+
+    if (user == null) {
+      _checklists.clear();
+      notifyListeners();
+      return;
+    }
+
+    await _load();
+  }
+
   Future<void> _load() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _checklists.clear();
+      notifyListeners();
+      return;
+    }
+
+    await _subscription?.cancel();
+
+    await _maybeMigrateLegacy(user.uid);
+
+    _subscription = _collection(user.uid)
+        .orderBy('title')
+        .snapshots()
+        .listen(
+          (snapshot) {
+            final next = snapshot.docs.map(_checklistFromDoc).toList();
+            _checklists
+              ..clear()
+              ..addAll(next);
+            notifyListeners();
+          },
+          onError: (error, stackTrace) {
+            debugPrint('Failed to load reusable checklists: $error');
+          },
+        );
+  }
+
+  Checklist _checklistFromDoc(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data();
+    final normalizedItems = <Map<String, Object?>>[];
+    final rawItems = data['items'];
+    if (rawItems is List) {
+      for (final entry in rawItems) {
+        if (entry is Map<String, dynamic>) {
+          normalizedItems.add(Map<String, Object?>.from(entry));
+        } else if (entry is Map) {
+          final typed = <String, Object?>{};
+          entry.forEach((key, value) {
+            typed[key.toString()] = value;
+          });
+          normalizedItems.add(typed);
+        }
+      }
+    }
+
+    final map = <String, Object?>{
+      'id': doc.id,
+      'title': data['title'],
+      'items': normalizedItems,
+    };
+
+    return Checklist.fromMap(map);
+  }
+
+  CollectionReference<Map<String, dynamic>> _collection(String uid) {
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('checklistTemplates');
+  }
+
+  Future<void> _maybeMigrateLegacy(String uid) async {
     final prefs = await _ensurePrefs();
-    final stored = prefs.getStringList(_storageKey) ?? const <String>[];
-    final decoded = <Checklist>[];
+    final stored = prefs.getStringList(_storageKey);
+    if (stored == null || stored.isEmpty) {
+      return;
+    }
+
+    final hasExisting = await _collection(
+      uid,
+    ).limit(1).get().then((value) => value.docs.isNotEmpty);
+    if (hasExisting) {
+      await prefs.remove(_storageKey);
+      return;
+    }
+
+    final batch = FirebaseFirestore.instance.batch();
+    final collection = _collection(uid);
     for (final entry in stored) {
       try {
         final map = jsonDecode(entry) as Map<String, Object?>;
-        decoded.add(Checklist.fromMap(map));
-      } catch (_) {
-        // ignore malformed entries
+        final parsed = Checklist.fromMap(map);
+        final sanitizedItems = _sanitizeItems(parsed.items);
+        final docId = parsed.id.isNotEmpty ? parsed.id : collection.doc().id;
+        final docRef = collection.doc(docId);
+        batch.set(docRef, {
+          'title': parsed.title.trim(),
+          'items': sanitizedItems.map((item) => item.toMap()).toList(),
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      } catch (error) {
+        debugPrint('Failed to migrate checklist: $error');
       }
     }
-    _checklists
-      ..clear()
-      ..addAll(decoded);
-    notifyListeners();
+
+    await batch.commit();
+    await prefs.remove(_storageKey);
   }
 
   Future<SharedPreferences> _ensurePrefs() async {
@@ -63,29 +170,35 @@ class ChecklistsService extends ChangeNotifier {
         'Checklist title cannot be empty',
       );
     }
-    await ensureLoaded();
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw StateError('User must be signed in to create a checklist');
+    }
+
     final sanitizedItems = _sanitizeItems(items);
-    final checklist = Checklist(
-      id: _nextId(),
-      title: trimmedTitle,
-      items: sanitizedItems,
-    );
-    _checklists.add(checklist);
-    await _persist();
-    notifyListeners();
-    return checklist;
+    final doc = _collection(user.uid).doc();
+    await doc.set({
+      'title': trimmedTitle,
+      'items': sanitizedItems.map((item) => item.toMap()).toList(),
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    return Checklist(id: doc.id, title: trimmedTitle, items: sanitizedItems);
   }
 
   Future<void> updateChecklist(Checklist updated) async {
-    await ensureLoaded();
-    final index = _checklists.indexWhere((item) => item.id == updated.id);
-    if (index == -1) {
-      throw ArgumentError('Checklist not found: ${updated.id}');
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw StateError('User must be signed in to update a checklist');
     }
     final sanitizedItems = _sanitizeItems(updated.items);
-    _checklists[index] = updated.copyWith(items: sanitizedItems);
-    await _persist();
-    notifyListeners();
+    await _collection(user.uid).doc(updated.id).set({
+      'title': updated.title.trim(),
+      'items': sanitizedItems.map((item) => item.toMap()).toList(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   Future<void> renameChecklist(String id, String title) async {
@@ -93,25 +206,22 @@ class ChecklistsService extends ChangeNotifier {
     if (trimmedTitle.isEmpty) {
       throw ArgumentError('Checklist title cannot be empty');
     }
-    await ensureLoaded();
-    final index = _checklists.indexWhere((item) => item.id == id);
-    if (index == -1) {
-      return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw StateError('User must be signed in to rename a checklist');
     }
-    final current = _checklists[index];
-    if (current.title == trimmedTitle) return;
-    _checklists[index] = current.copyWith(title: trimmedTitle);
-    await _persist();
-    notifyListeners();
+    await _collection(user.uid).doc(id).set({
+      'title': trimmedTitle,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   Future<void> deleteChecklist(String id) async {
-    await ensureLoaded();
-    final originalLength = _checklists.length;
-    _checklists.removeWhere((item) => item.id == id);
-    if (_checklists.length == originalLength) return;
-    await _persist();
-    notifyListeners();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw StateError('User must be signed in to delete a checklist');
+    }
+    await _collection(user.uid).doc(id).delete();
   }
 
   Future<void> setItemCompletion(
@@ -119,37 +229,44 @@ class ChecklistsService extends ChangeNotifier {
     String itemId,
     bool isDone,
   ) async {
-    await ensureLoaded();
-    final checklistIndex = _checklists.indexWhere(
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw StateError('User must be signed in to edit a checklist');
+    }
+
+    final current = _checklists.firstWhere(
       (element) => element.id == checklistId,
+      orElse: () => throw ArgumentError('Checklist not found: $checklistId'),
     );
-    if (checklistIndex == -1) return;
-    final checklist = _checklists[checklistIndex];
-    final itemIndex = checklist.items.indexWhere(
-      (element) => element.id == itemId,
-    );
-    if (itemIndex == -1) return;
-    final updatedItems = List<ChecklistItem>.from(checklist.items);
-    updatedItems[itemIndex] = updatedItems[itemIndex].copyWith(isDone: isDone);
-    _checklists[checklistIndex] = checklist.copyWith(
-      items: _sanitizeItems(updatedItems),
-    );
-    await _persist();
-    notifyListeners();
+
+    final updatedItems = current.items.map((item) {
+      if (item.id == itemId) {
+        return item.copyWith(isDone: isDone);
+      }
+      return item;
+    }).toList();
+
+    final sanitizedItems = _sanitizeItems(updatedItems);
+    await _collection(user.uid).doc(checklistId).set({
+      'items': sanitizedItems.map((item) => item.toMap()).toList(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   Future<void> replaceChecklistItems(
     String checklistId,
     List<ChecklistItem> items,
   ) async {
-    await ensureLoaded();
-    final index = _checklists.indexWhere((item) => item.id == checklistId);
-    if (index == -1) return;
-    _checklists[index] = _checklists[index].copyWith(
-      items: _sanitizeItems(items),
-    );
-    await _persist();
-    notifyListeners();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw StateError('User must be signed in to edit a checklist');
+    }
+
+    final sanitizedItems = _sanitizeItems(items);
+    await _collection(user.uid).doc(checklistId).set({
+      'items': sanitizedItems.map((item) => item.toMap()).toList(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   List<ChecklistItem> _sanitizeItems(List<ChecklistItem> items) {
@@ -168,11 +285,10 @@ class ChecklistsService extends ChangeNotifier {
     return result;
   }
 
-  Future<void> _persist() async {
-    final prefs = await _ensurePrefs();
-    final encoded = _checklists
-        .map((checklist) => jsonEncode(checklist.toMap()))
-        .toList(growable: false);
-    await prefs.setStringList(_storageKey, encoded);
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    _authSub?.cancel();
+    super.dispose();
   }
 }

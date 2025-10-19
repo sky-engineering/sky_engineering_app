@@ -150,7 +150,14 @@ class _ProjectTaskChecklistDialogState
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: templates.isEmpty ? null : _selectedChecklistId,
+                key: ValueKey<int>(
+                  Object.hash(
+                    _selectedChecklistId,
+                    templates.length,
+                    templates.hashCode,
+                  ),
+                ),
+                initialValue: templates.isEmpty ? null : _selectedChecklistId,
                 isExpanded: true,
                 decoration: const InputDecoration(
                   labelText: 'Source checklist',
@@ -179,7 +186,16 @@ class _ProjectTaskChecklistDialogState
                 ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: sortedProjects.isEmpty ? null : _selectedProjectId,
+                key: ValueKey<int>(
+                  Object.hash(
+                    _selectedProjectId,
+                    sortedProjects.length,
+                    sortedProjects.hashCode,
+                  ),
+                ),
+                initialValue: sortedProjects.isEmpty
+                    ? null
+                    : _selectedProjectId,
                 isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Project'),
                 items: sortedProjects
