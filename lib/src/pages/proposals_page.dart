@@ -232,7 +232,7 @@ class _ProposalClientCard extends StatelessWidget {
       detailChildren.add(
         Flexible(
           child: Text(
-            proposals.map((proposal) => 'â€¢ $proposal').join('\n'),
+            proposals.map((proposal) => '\u2022 $proposal').join('\n'),
             style: proposalStyle?.copyWith(color: textColor),
             maxLines: hasNotes ? 4 : 6,
             overflow: TextOverflow.ellipsis,
@@ -360,94 +360,109 @@ class _ProposalProjectTaskDialogState
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final mediaQuery = MediaQuery.of(context);
+    final viewInsets = mediaQuery.viewInsets.bottom;
+    final maxListHeight = (mediaQuery.size.height - viewInsets - 220)
+        .clamp(120.0, 320.0)
+        .toDouble();
 
-    return AlertDialog(
-      title: Text('001 Proposals Tasks for ${widget.project.name}'),
-      content: SizedBox(
-        width: 520,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              height: 280,
-              child: StreamBuilder<List<TaskItem>>(
-                stream: widget.taskRepository.streamByProject(
-                  widget.project.id,
-                ),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snapshot.hasError) {
-                    return Center(
-                      child: Text('Failed to load tasks: ${snapshot.error}'),
-                    );
-                  }
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
+      padding: EdgeInsets.only(bottom: viewInsets),
+      child: AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        title: Text('001 Proposals Tasks for ${widget.project.name}'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: maxListHeight),
+                  child: StreamBuilder<List<TaskItem>>(
+                    stream: widget.taskRepository.streamByProject(
+                      widget.project.id,
+                    ),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Text(
+                            'Failed to load tasks: ${snapshot.error}',
+                          ),
+                        );
+                      }
 
-                  final tasks = snapshot.data ?? const <TaskItem>[];
-                  if (tasks.isEmpty) {
-                    return const Center(
-                      child: Text('No tasks yet for this project.'),
-                    );
-                  }
+                      final tasks = snapshot.data ?? const <TaskItem>[];
+                      if (tasks.isEmpty) {
+                        return const Center(
+                          child: Text('No tasks yet for this project.'),
+                        );
+                      }
 
-                  return ListView.separated(
-                    itemCount: tasks.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final task = tasks[index];
-                      return ListTile(
-                        dense: true,
-                        title: Text(task.title),
-                        subtitle: Text(task.taskStatus),
+                      return ListView.separated(
+                        itemCount: tasks.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final task = tasks[index];
+                          return ListTile(
+                            dense: true,
+                            title: Text(task.title),
+                            subtitle: Text(task.taskStatus),
+                          );
+                        },
                       );
                     },
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _titleController,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Add task',
-                hintText: 'Describe the proposal task',
-              ),
-              enabled: !_submitting,
-              onSubmitted: (_) => _handleAddTask(),
-            ),
-            if (_errorMessage != null) ...[
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  _errorMessage!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.error,
                   ),
                 ),
               ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _titleController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Add task',
+                  hintText: 'Describe the proposal task',
+                ),
+                enabled: !_submitting,
+                onSubmitted: (_) => _handleAddTask(),
+              ),
+              if (_errorMessage != null) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    _errorMessage!,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.error,
+                    ),
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+          FilledButton(
+            onPressed: _submitting ? null : _handleAddTask,
+            child: _submitting
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Add Task'),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Close'),
-        ),
-        FilledButton(
-          onPressed: _submitting ? null : _handleAddTask,
-          child: _submitting
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Add Task'),
-        ),
-      ],
     );
   }
 }

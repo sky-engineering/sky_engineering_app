@@ -62,7 +62,8 @@ class _ProjectTaskChecklistDialogState
       _selectedChecklistId = widget.templates.first.id;
     }
     if (widget.projects.isNotEmpty) {
-      _selectedProjectId = widget.projects.first.id;
+      final sorted = _sortedProjects();
+      _selectedProjectId = sorted.first.id;
     }
   }
 
@@ -72,16 +73,56 @@ class _ProjectTaskChecklistDialogState
     super.dispose();
   }
 
+  @override
+  void didUpdateWidget(covariant _ProjectTaskChecklistDialog oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    String? nextChecklistId = _selectedChecklistId;
+    if (widget.templates.isEmpty) {
+      nextChecklistId = null;
+    } else if (nextChecklistId == null ||
+        !widget.templates.any((template) => template.id == nextChecklistId)) {
+      nextChecklistId = widget.templates.first.id;
+    }
+
+    final sortedProjects = _sortedProjects();
+    String? nextProjectId = _selectedProjectId;
+    if (sortedProjects.isEmpty) {
+      nextProjectId = null;
+    } else if (nextProjectId == null ||
+        !sortedProjects.any((project) => project.id == nextProjectId)) {
+      nextProjectId = sortedProjects.first.id;
+    }
+
+    if (nextChecklistId != _selectedChecklistId ||
+        nextProjectId != _selectedProjectId) {
+      setState(() {
+        _selectedChecklistId = nextChecklistId;
+        _selectedProjectId = nextProjectId;
+      });
+    }
+  }
+
   bool get _canSubmit {
     return (_formKey.currentState?.validate() ?? false) &&
         _selectedChecklistId != null &&
         _selectedProjectId != null;
   }
 
+  List<Project> _sortedProjects() {
+    final sorted = [...widget.projects];
+    sorted.sort(
+      (a, b) => _projectLabel(
+        a,
+      ).toLowerCase().compareTo(_projectLabel(b).toLowerCase()),
+    );
+    return sorted;
+  }
+
   @override
   Widget build(BuildContext context) {
     final templates = widget.templates;
-    final projects = widget.projects;
+    final sortedProjects = _sortedProjects();
     final theme = Theme.of(context);
 
     return AlertDialog(
@@ -109,7 +150,7 @@ class _ProjectTaskChecklistDialogState
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                initialValue: _selectedChecklistId,
+                value: templates.isEmpty ? null : _selectedChecklistId,
                 isExpanded: true,
                 decoration: const InputDecoration(
                   labelText: 'Source checklist',
@@ -138,10 +179,10 @@ class _ProjectTaskChecklistDialogState
                 ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                initialValue: _selectedProjectId,
+                value: sortedProjects.isEmpty ? null : _selectedProjectId,
                 isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Project'),
-                items: projects
+                items: sortedProjects
                     .map(
                       (project) => DropdownMenuItem<String>(
                         value: project.id,
@@ -149,13 +190,13 @@ class _ProjectTaskChecklistDialogState
                       ),
                     )
                     .toList(growable: false),
-                onChanged: projects.isEmpty
+                onChanged: sortedProjects.isEmpty
                     ? null
                     : (value) => setState(() {
                         _selectedProjectId = value;
                       }),
               ),
-              if (projects.isEmpty)
+              if (sortedProjects.isEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
@@ -194,9 +235,10 @@ class _ProjectTaskChecklistDialogState
 }
 
 String _projectLabel(Project project) {
-  final number = project.projectNumber;
-  if (number != null && number.trim().isNotEmpty) {
-    return '$number Ã¢â‚¬â€ ${project.name}';
+  final number = project.projectNumber?.trim();
+  final name = project.name.trim();
+  if (number != null && number.isNotEmpty) {
+    return '$number $name'.trim();
   }
-  return project.name;
+  return name;
 }
