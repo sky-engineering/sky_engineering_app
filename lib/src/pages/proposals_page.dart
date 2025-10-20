@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -373,78 +374,113 @@ class _ProposalProjectTaskDialogState
       child: AlertDialog(
         insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         title: Text('001 Proposals Tasks for ${widget.project.name}'),
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxHeight: maxListHeight),
-                  child: StreamBuilder<List<TaskItem>>(
-                    stream: widget.taskRepository.streamByProject(
-                      widget.project.id,
-                    ),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      if (snapshot.hasError) {
-                        return Center(
-                          child: Text(
-                            'Failed to load tasks: ${snapshot.error}',
+        content: LayoutBuilder(
+          builder: (context, dialogConstraints) {
+            final mediaSize = mediaQuery.size;
+            final rawAvailableHeight = dialogConstraints.maxHeight.isFinite
+                ? dialogConstraints.maxHeight
+                : (mediaSize.height - viewInsets - 120);
+            final availableHeight = rawAvailableHeight.isFinite
+                ? math.max(0.0, rawAvailableHeight)
+                : rawAvailableHeight;
+            const double controlsHeight = 148.0;
+            const double minListHeight = 96.0;
+            final double minDialogHeight = controlsHeight + minListHeight;
+            final double desiredHeight = maxListHeight + controlsHeight;
+            final double sanitizedAvailableHeight = availableHeight.isFinite
+                ? math.max(minDialogHeight, availableHeight.toDouble())
+                : desiredHeight;
+            final double dialogHeight = sanitizedAvailableHeight
+                .clamp(minDialogHeight, desiredHeight)
+                .toDouble();
+            final double listMaxHeight = (dialogHeight - controlsHeight)
+                .clamp(minListHeight, maxListHeight)
+                .toDouble();
+
+            return ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: SizedBox(
+                height: dialogHeight,
+                child: Column(
+                  mainAxisSize: MainAxisSize.max,
+                  children: [
+                    Expanded(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(maxHeight: listMaxHeight),
+                        child: StreamBuilder<List<TaskItem>>(
+                          stream: widget.taskRepository.streamByProject(
+                            widget.project.id,
                           ),
-                        );
-                      }
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState ==
+                                ConnectionState.waiting) {
+                              return const Center(
+                                child: CircularProgressIndicator(),
+                              );
+                            }
+                            if (snapshot.hasError) {
+                              return Center(
+                                child: Text(
+                                  'Failed to load tasks: ${snapshot.error}',
+                                ),
+                              );
+                            }
 
-                      final tasks = snapshot.data ?? const <TaskItem>[];
-                      if (tasks.isEmpty) {
-                        return const Center(
-                          child: Text('No tasks yet for this project.'),
-                        );
-                      }
+                            final tasks = snapshot.data ?? const <TaskItem>[];
+                            if (tasks.isEmpty) {
+                              return const Center(
+                                child: Text('No tasks yet for this project.'),
+                              );
+                            }
 
-                      return ListView.separated(
-                        itemCount: tasks.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final task = tasks[index];
-                          return ListTile(
-                            dense: true,
-                            title: Text(task.title),
-                            subtitle: Text(task.taskStatus),
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _titleController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'Add task',
-                  hintText: 'Describe the proposal task',
-                ),
-                enabled: !_submitting,
-                onSubmitted: (_) => _handleAddTask(),
-              ),
-              if (_errorMessage != null) ...[
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    _errorMessage!,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.error,
+                            return ListView.separated(
+                              padding: EdgeInsets.zero,
+                              keyboardDismissBehavior:
+                                  ScrollViewKeyboardDismissBehavior.onDrag,
+                              itemCount: tasks.length,
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 1),
+                              itemBuilder: (context, index) {
+                                final task = tasks[index];
+                                return ListTile(
+                                  dense: true,
+                                  title: Text(task.title),
+                                  subtitle: Text(task.taskStatus),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _titleController,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Add task',
+                        hintText: 'Describe the proposal task',
+                      ),
+                      enabled: !_submitting,
+                      onSubmitted: (_) => _handleAddTask(),
+                    ),
+                    if (_errorMessage != null) ...[
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          _errorMessage!,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.error,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-              ],
-            ],
-          ),
+              ),
+            );
+          },
         ),
         actions: [
           TextButton(
