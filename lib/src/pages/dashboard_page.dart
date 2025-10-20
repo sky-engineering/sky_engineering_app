@@ -3,11 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'subphases_page.dart';
-import 'starred_tasks_page.dart';
 import 'checklists_page.dart';
-import 'task_overview_page.dart';
 import 'proposals_page.dart';
-import 'external_tasks_overview_page.dart';
 import '../dialogs/city_inspect_links_dialog.dart';
 import '../dialogs/other_links_dialog.dart';
 import '../pages/clients_page.dart';
@@ -72,30 +69,6 @@ class DashboardPage extends StatelessWidget {
               const SizedBox(height: 8),
               Center(child: Text(_user?.email ?? '(no email)')),
               const SizedBox(height: 28),
-
-              linkButton('Tasks Overview', () {
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => TaskOverviewPage()));
-              }),
-              const SizedBox(height: 16),
-
-              linkButton('Starred Tasks', () {
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => StarredTasksPage()));
-              }),
-              const SizedBox(height: 16),
-
-              linkButton('External Tasks', () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => ExternalTasksOverviewPage(),
-                  ),
-                );
-              }),
-              const SizedBox(height: 16),
-
               linkButton('Proposals', () {
                 Navigator.of(
                   context,
@@ -156,3 +129,4 @@ class DashboardPage extends StatelessWidget {
     );
   }
 }
+
