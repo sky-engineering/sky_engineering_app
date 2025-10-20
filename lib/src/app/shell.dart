@@ -9,7 +9,6 @@ import '../pages/profile_page.dart';
 import '../pages/note_editor_page.dart';
 import '../dialogs/quick_actions.dart';
 import '../pages/invoices_page.dart';
-import '../pages/personal_checklist_page.dart';
 import '../pages/starred_tasks_page.dart';
 import '../pages/task_overview_page.dart';
 import '../pages/external_tasks_overview_page.dart';
@@ -25,13 +24,14 @@ class Shell extends StatefulWidget {
   State<Shell> createState() => _ShellState();
 }
 
-class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
+class _ShellState extends State<Shell> with TickerProviderStateMixin {
   final _pages = <Widget>[];
 
   bool _ready = false;
   int _navIndex = 0;
   int _bodyIndex = 0;
   int _previousIndex = 0;
+  bool _quickMenuOpen = false;
 
   late final AnimationController _taskMenuController;
   late final Animation<double> _taskMenuAnimation;
@@ -76,54 +76,24 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
     if (mounted) setState(() => _ready = true);
   }
 
-  void _showQuickActionSheet() {
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.checklist_rtl),
-                title: const Text('New Task'),
-                onTap: () async {
-                  Navigator.pop(sheetContext);
-                  if (!mounted) return;
-                  await showQuickAddTaskDialog(context);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.note_alt_outlined),
-                title: const Text('New Note'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  if (!mounted) return;
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const NoteEditorPage()),
-                  );
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.request_quote_outlined),
-                title: const Text('New Invoice'),
-                onTap: () async {
-                  Navigator.pop(sheetContext);
-                  if (!mounted) return;
-                  await showQuickAddInvoiceDialog(context);
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
+  void _toggleQuickMenu() {
+    if (_quickMenuOpen) {
+      _closeQuickMenu();
+    } else {
+      _openQuickMenu();
+    }
   }
 
-  void _openChecklist() {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const PersonalChecklistPage()));
+  void _openQuickMenu() {
+    if (!_taskMenuController.isDismissed) {
+      _closeTaskMenu(restoreSelection: true);
+    }
+    setState(() => _quickMenuOpen = true);
+  }
+
+  void _closeQuickMenu() {
+    if (!_quickMenuOpen) return;
+    setState(() => _quickMenuOpen = false);
   }
 
   void _handleDestinationSelected(int index) {
@@ -139,6 +109,9 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
     if (!_taskMenuController.isDismissed) {
       _closeTaskMenu();
     }
+    if (_quickMenuOpen) {
+      _closeQuickMenu();
+    }
 
     setState(() {
       _navIndex = index;
@@ -148,9 +121,14 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
 
   void _openTaskMenu() {
     _previousIndex = _navIndex;
-    setState(() {
-      _navIndex = 2;
-    });
+    if (_navIndex != 2) {
+      setState(() {
+        _navIndex = 2;
+      });
+    }
+    if (_quickMenuOpen) {
+      _closeQuickMenu();
+    }
     _taskMenuController.forward();
   }
 
@@ -198,6 +176,25 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
     }
   }
 
+  Future<void> _handleQuickAction(_QuickAction action) async {
+    _closeQuickMenu();
+    if (!mounted) return;
+
+    switch (action) {
+      case _QuickAction.newTask:
+        await showQuickAddTaskDialog(context);
+        break;
+      case _QuickAction.newNote:
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const NoteEditorPage()));
+        break;
+      case _QuickAction.newInvoice:
+        await showQuickAddInvoiceDialog(context);
+        break;
+    }
+  }
+
   Widget _buildTaskMenuOverlay(BuildContext context) {
     return AnimatedBuilder(
       animation: _taskMenuAnimation,
@@ -207,7 +204,7 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
           return const SizedBox.shrink();
         }
 
-        final options = const <_TaskMenuOption>[
+        const options = <_TaskMenuOption>[
           _TaskMenuOption(
             action: _TaskAction.starred,
             label: 'Starred Tasks',
@@ -258,6 +255,58 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
     );
   }
 
+  Widget _buildQuickMenuOverlay(BuildContext context) {
+    if (!_quickMenuOpen) {
+      return const SizedBox.shrink();
+    }
+
+    const options = <_QuickMenuOption>[
+      _QuickMenuOption(
+        action: _QuickAction.newTask,
+        label: 'New Task',
+        icon: Icons.checklist_rtl,
+      ),
+      _QuickMenuOption(
+        action: _QuickAction.newNote,
+        label: 'New Note',
+        icon: Icons.note_alt_outlined,
+      ),
+      _QuickMenuOption(
+        action: _QuickAction.newInvoice,
+        label: 'New Invoice',
+        icon: Icons.request_quote_outlined,
+      ),
+    ];
+
+    return Positioned.fill(
+      child: Stack(
+        children: [
+          GestureDetector(
+            onTap: _closeQuickMenu,
+            behavior: HitTestBehavior.opaque,
+            child: Container(color: Colors.black.withValues(alpha: 0.28)),
+          ),
+          Positioned(
+            right: 24,
+            bottom: 96,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                for (var i = 0; i < options.length; i++) ...[
+                  _QuickMenuListButton(
+                    option: options[i],
+                    onTap: () => _handleQuickAction(options[i].action),
+                  ),
+                  if (i != options.length - 1) const SizedBox(height: 12),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_ready) {
@@ -268,29 +317,15 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
       appBar: AppBar(title: _logoTitle()),
       body: IndexedStack(index: _bodyIndex, children: _pages),
       floatingActionButton: _bodyIndex == 0
-          ? Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  FloatingActionButton(
-                    heroTag: 'dashboard-checklist',
-                    onPressed: _openChecklist,
-                    tooltip: 'Personal checklist',
-                    child: const Icon(Icons.fact_check),
-                  ),
-                  FloatingActionButton(
-                    heroTag: 'dashboard-quick',
-                    backgroundColor: _brandYellow,
-                    foregroundColor: Colors.black,
-                    onPressed: _showQuickActionSheet,
-                    child: const Icon(Icons.add),
-                  ),
-                ],
-              ),
+          ? FloatingActionButton(
+              heroTag: 'dashboard-quick',
+              backgroundColor: _brandYellow,
+              foregroundColor: Colors.black,
+              onPressed: _toggleQuickMenu,
+              child: const Icon(Icons.add),
             )
           : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _navIndex,
         onDestinationSelected: _handleDestinationSelected,
@@ -324,11 +359,19 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
       ),
     );
 
-    return Stack(children: [scaffold, _buildTaskMenuOverlay(context)]);
+    return Stack(
+      children: [
+        scaffold,
+        _buildTaskMenuOverlay(context),
+        _buildQuickMenuOverlay(context),
+      ],
+    );
   }
 }
 
 enum _TaskAction { starred, overview, external }
+
+enum _QuickAction { newTask, newNote, newInvoice }
 
 class _TaskMenuOption {
   const _TaskMenuOption({
@@ -342,6 +385,62 @@ class _TaskMenuOption {
   final String label;
   final IconData icon;
   final Offset offset;
+}
+
+class _QuickMenuOption {
+  const _QuickMenuOption({
+    required this.action,
+    required this.label,
+    required this.icon,
+  });
+
+  final _QuickAction action;
+  final String label;
+  final IconData icon;
+}
+
+class _QuickMenuListButton extends StatelessWidget {
+  const _QuickMenuListButton({required this.option, required this.onTap});
+
+  final _QuickMenuOption option;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+      color: Colors.black87,
+      fontWeight: FontWeight.w600,
+    );
+
+    return Material(
+      color: Colors.transparent,
+      elevation: 4,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          decoration: const BoxDecoration(
+            borderRadius: BorderRadius.all(Radius.circular(16)),
+            gradient: LinearGradient(
+              colors: [_brandYellow, Color(0xFFFFE274)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(option.icon, color: Colors.black87),
+              const SizedBox(width: 12),
+              Text(option.label, style: textStyle),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _TaskMenuButton extends StatelessWidget {

@@ -121,6 +121,13 @@ class DashboardPage extends StatelessWidget {
               linkButton('Other Links', () {
                 showOtherLinksDialog(context);
               }),
+              const SizedBox(height: 16),
+
+              linkButton('Personal Tasks', () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const ChecklistsPage()),
+                );
+              }),
               const SizedBox(height: 32),
             ],
           ),
@@ -129,4 +136,3 @@ class DashboardPage extends StatelessWidget {
     );
   }
 }
-
