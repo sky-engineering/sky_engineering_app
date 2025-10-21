@@ -18,9 +18,7 @@ class TaskOverviewPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Task Overview')),
       body: SafeArea(
-        top: false,
         child: StreamBuilder<List<Project>>(
           stream: _projectRepo.streamAll(),
           builder: (context, snapshot) {

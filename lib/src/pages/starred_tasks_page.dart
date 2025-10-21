@@ -451,7 +451,6 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
 
     if (_loading && !hasEntries) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Starred Tasks')),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -527,7 +526,6 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
 
     if (slivers.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Starred Tasks')),
         body: _loading
             ? const Center(child: CircularProgressIndicator())
             : const _Empty(),
@@ -535,7 +533,6 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Starred Tasks')),
       body: CustomScrollView(slivers: slivers),
     );
   }

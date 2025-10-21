@@ -30,9 +30,7 @@ class _ExternalTasksOverviewPageState extends State<ExternalTasksOverviewPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('External Tasks Overview')),
       body: SafeArea(
-        top: false,
         child: Column(
           children: [
             Padding(

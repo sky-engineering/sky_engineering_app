@@ -50,35 +50,33 @@ class _InvoicesPageState extends State<InvoicesPage> {
     final currency = NumberFormat.simpleCurrency();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Invoices'),
-        actions: [
-          // Yellow text toggle: Unpaid Only (Show/Hide Paid Invoices)
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: TextButton(
-                onPressed: () => setState(() => _unpaidOnly = !_unpaidOnly),
-                style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  foregroundColor: _accentYellow,
-                ),
-                child: Text(
-                  _unpaidOnly ? 'Show Paid Invoices' : 'Hide Paid Invoices',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: _accentYellow,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
       body: Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            child: Row(
+              children: [
+                const Spacer(),
+                TextButton(
+                  onPressed: () => setState(() => _unpaidOnly = !_unpaidOnly),
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    foregroundColor: _accentYellow,
+                  ),
+                  child: Text(
+                    _unpaidOnly ? 'Show Paid Invoices' : 'Hide Paid Invoices',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: _accentYellow,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
           // Top type switcher: Clients | Vendors
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),

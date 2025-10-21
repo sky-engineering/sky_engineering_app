@@ -67,7 +67,6 @@ class _ProjectsPageState extends State<ProjectsPage> {
     final repo = ProjectRepository();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Projects')),
       body: StreamBuilder<List<Project>>(
         stream: repo.streamAll(),
         builder: (context, snap) {

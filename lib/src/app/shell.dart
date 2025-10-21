@@ -32,6 +32,8 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
   int _navIndex = 0;
   int _bodyIndex = 0;
   int _previousIndex = 0;
+  static const int _taskOverviewPageIndex = 5;
+  static const int _externalTasksPageIndex = 6;
   bool _quickMenuVisible = false;
 
   late final AnimationController _taskMenuController;
@@ -51,6 +53,8 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
       const StarredTasksPage(),
       const ProjectsPage(),
       InvoicesPage(),
+      TaskOverviewPage(),
+      const ExternalTasksOverviewPage(),
     ]);
 
     _taskMenuController = AnimationController(
@@ -194,21 +198,15 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
         break;
       case _TaskAction.overview:
         setState(() {
-          _navIndex = _previousIndex;
-          _bodyIndex = _previousIndex;
+          _navIndex = 2;
+          _bodyIndex = _taskOverviewPageIndex;
         });
-        Navigator.of(
-          context,
-        ).push(MaterialPageRoute(builder: (_) => TaskOverviewPage()));
         break;
       case _TaskAction.external:
         setState(() {
-          _navIndex = _previousIndex;
-          _bodyIndex = _previousIndex;
+          _navIndex = 2;
+          _bodyIndex = _externalTasksPageIndex;
         });
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const ExternalTasksOverviewPage()),
-        );
         break;
     }
   }
@@ -375,6 +373,57 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
     );
   }
 
+  Widget _buildAppBarTitle(BuildContext context) {
+    final theme = Theme.of(context);
+    final baseStyle =
+        theme.appBarTheme.titleTextStyle ??
+        theme.textTheme.titleLarge?.copyWith(
+          color: theme.colorScheme.onPrimary,
+        );
+    final displayStyle =
+        baseStyle ??
+        theme.textTheme.titleLarge?.copyWith(
+          color: theme.colorScheme.onPrimary,
+        );
+
+    String? pageTitle;
+    switch (_bodyIndex) {
+      case 0:
+        pageTitle = 'Home';
+        break;
+      case 1:
+        pageTitle = 'Profile';
+        break;
+      case 2:
+        pageTitle = 'Starred Tasks';
+        break;
+      case 3:
+        pageTitle = 'Projects';
+        break;
+      case 4:
+        pageTitle = 'Invoices';
+        break;
+      case _taskOverviewPageIndex:
+        pageTitle = 'Tasks Overview';
+        break;
+      case _externalTasksPageIndex:
+        pageTitle = 'External Tasks';
+        break;
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.max,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        _logoTitle(),
+        if (pageTitle != null) ...[
+          const Spacer(),
+          Text(pageTitle, style: displayStyle),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_ready) {
@@ -382,7 +431,7 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
     }
 
     final scaffold = Scaffold(
-      appBar: AppBar(title: _logoTitle()),
+      appBar: AppBar(title: _buildAppBarTitle(context)),
       body: IndexedStack(index: _bodyIndex, children: _pages),
       floatingActionButton: _bodyIndex == 0
           ? FloatingActionButton(
