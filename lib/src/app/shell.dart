@@ -1,4 +1,5 @@
 // lib/src/app/shell.dart
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -31,10 +32,12 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
   int _navIndex = 0;
   int _bodyIndex = 0;
   int _previousIndex = 0;
-  bool _quickMenuOpen = false;
+  bool _quickMenuVisible = false;
 
   late final AnimationController _taskMenuController;
   late final Animation<double> _taskMenuAnimation;
+  late final AnimationController _quickMenuController;
+  late final Animation<double> _quickMenuAnimation;
 
   Widget _logoTitle() =>
       SizedBox(height: 32, child: Image.asset('assets/logo_white.png'));
@@ -60,12 +63,33 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
       reverseCurve: Curves.easeInBack,
     );
 
+    _quickMenuController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+    );
+    _quickMenuAnimation = CurvedAnimation(
+      parent: _quickMenuController,
+      curve: Curves.easeOutBack,
+      reverseCurve: Curves.easeInBack,
+    );
+
+    _quickMenuController.addListener(() {
+      if (mounted) setState(() {});
+    });
+
+    _quickMenuController.addStatusListener((status) {
+      if (status == AnimationStatus.dismissed && _quickMenuVisible) {
+        setState(() => _quickMenuVisible = false);
+      }
+    });
+
     _init();
   }
 
   @override
   void dispose() {
     _taskMenuController.dispose();
+    _quickMenuController.dispose();
     super.dispose();
   }
 
@@ -76,8 +100,13 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
     if (mounted) setState(() => _ready = true);
   }
 
+  bool get _isQuickMenuActive =>
+      _quickMenuVisible ||
+      _quickMenuController.isAnimating ||
+      !_quickMenuController.isDismissed;
+
   void _toggleQuickMenu() {
-    if (_quickMenuOpen) {
+    if (_isQuickMenuActive) {
       _closeQuickMenu();
     } else {
       _openQuickMenu();
@@ -88,12 +117,20 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
     if (!_taskMenuController.isDismissed) {
       _closeTaskMenu(restoreSelection: true);
     }
-    setState(() => _quickMenuOpen = true);
+    if (!_quickMenuVisible) {
+      setState(() => _quickMenuVisible = true);
+    }
+    _quickMenuController.forward(from: 0);
   }
 
   void _closeQuickMenu() {
-    if (!_quickMenuOpen) return;
-    setState(() => _quickMenuOpen = false);
+    if (_quickMenuController.isDismissed && !_quickMenuController.isAnimating) {
+      if (_quickMenuVisible) {
+        setState(() => _quickMenuVisible = false);
+      }
+      return;
+    }
+    _quickMenuController.reverse();
   }
 
   void _handleDestinationSelected(int index) {
@@ -109,7 +146,7 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
     if (!_taskMenuController.isDismissed) {
       _closeTaskMenu();
     }
-    if (_quickMenuOpen) {
+    if (_isQuickMenuActive) {
       _closeQuickMenu();
     }
 
@@ -126,7 +163,7 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
         _navIndex = 2;
       });
     }
-    if (_quickMenuOpen) {
+    if (_isQuickMenuActive) {
       _closeQuickMenu();
     }
     _taskMenuController.forward();
@@ -177,7 +214,7 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
   }
 
   Future<void> _handleQuickAction(_QuickAction action) async {
-    _closeQuickMenu();
+    await _quickMenuController.reverse();
     if (!mounted) return;
 
     switch (action) {
@@ -256,54 +293,85 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
   }
 
   Widget _buildQuickMenuOverlay(BuildContext context) {
-    if (!_quickMenuOpen) {
+    final showOverlay =
+        _quickMenuVisible ||
+        _quickMenuController.isAnimating ||
+        !_quickMenuController.isDismissed;
+    if (!showOverlay) {
       return const SizedBox.shrink();
     }
 
-    const options = <_QuickMenuOption>[
-      _QuickMenuOption(
-        action: _QuickAction.newTask,
-        label: 'New Task',
-        icon: Icons.checklist_rtl,
-      ),
-      _QuickMenuOption(
-        action: _QuickAction.newNote,
-        label: 'New Note',
-        icon: Icons.note_alt_outlined,
-      ),
-      _QuickMenuOption(
-        action: _QuickAction.newInvoice,
-        label: 'New Invoice',
-        icon: Icons.request_quote_outlined,
-      ),
-    ];
+    return AnimatedBuilder(
+      animation: _quickMenuAnimation,
+      builder: (context, child) {
+        final progress = _quickMenuAnimation.value;
 
-    return Positioned.fill(
-      child: Stack(
-        children: [
-          GestureDetector(
-            onTap: _closeQuickMenu,
-            behavior: HitTestBehavior.opaque,
-            child: Container(color: Colors.black.withValues(alpha: 0.28)),
+        const options = <_QuickMenuOption>[
+          _QuickMenuOption(
+            action: _QuickAction.newTask,
+            label: 'New Task',
+            icon: Icons.checklist_rtl,
+            angleDeg: 80,
+            radius: 148,
           ),
-          Positioned(
-            right: 24,
-            bottom: 96,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+          _QuickMenuOption(
+            action: _QuickAction.newNote,
+            label: 'New Note',
+            icon: Icons.note_alt_outlined,
+            angleDeg: 45,
+            radius: 136,
+          ),
+          _QuickMenuOption(
+            action: _QuickAction.newInvoice,
+            label: 'New Invoice',
+            icon: Icons.request_quote_outlined,
+            angleDeg: 12,
+            radius: 124,
+          ),
+        ];
+
+        return Positioned.fill(
+          child: IgnorePointer(
+            ignoring: progress == 0,
+            child: Stack(
               children: [
-                for (var i = 0; i < options.length; i++) ...[
-                  _QuickMenuListButton(
-                    option: options[i],
-                    onTap: () => _handleQuickAction(options[i].action),
+                GestureDetector(
+                  onTap: _closeQuickMenu,
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.28 * progress),
                   ),
-                  if (i != options.length - 1) const SizedBox(height: 12),
-                ],
+                ),
+                Align(
+                  alignment: Alignment.bottomRight,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 24, bottom: 94),
+                    child: SizedBox(
+                      width: 220,
+                      height: 220,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          for (final option in options)
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: _QuickMenuButton(
+                                option: option,
+                                progress: progress,
+                                onTap: () => _handleQuickAction(option.action),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -371,8 +439,6 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
 
 enum _TaskAction { starred, overview, external }
 
-enum _QuickAction { newTask, newNote, newInvoice }
-
 class _TaskMenuOption {
   const _TaskMenuOption({
     required this.action,
@@ -387,55 +453,109 @@ class _TaskMenuOption {
   final Offset offset;
 }
 
+enum _QuickAction { newTask, newNote, newInvoice }
+
 class _QuickMenuOption {
   const _QuickMenuOption({
     required this.action,
     required this.label,
     required this.icon,
+    required this.angleDeg,
+    required this.radius,
   });
 
   final _QuickAction action;
   final String label;
   final IconData icon;
+  final double angleDeg;
+  final double radius;
 }
 
-class _QuickMenuListButton extends StatelessWidget {
-  const _QuickMenuListButton({required this.option, required this.onTap});
+class _QuickMenuButton extends StatelessWidget {
+  const _QuickMenuButton({
+    required this.option,
+    required this.progress,
+    required this.onTap,
+  });
 
   final _QuickMenuOption option;
+  final double progress;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-      color: Colors.black87,
+    final angleRad = option.angleDeg * math.pi / 180;
+    final dx = option.radius * math.cos(angleRad);
+    final dy = option.radius * math.sin(angleRad);
+    final translation = Offset(-dx * progress, -dy * progress);
+    final opacity = progress.clamp(0.0, 1.0);
+    final theme = Theme.of(context);
+    final textStyle = theme.textTheme.bodySmall?.copyWith(
+      color: Colors.white,
       fontWeight: FontWeight.w600,
+      letterSpacing: 0.2,
     );
 
-    return Material(
-      color: Colors.transparent,
-      elevation: 4,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          decoration: const BoxDecoration(
-            borderRadius: BorderRadius.all(Radius.circular(16)),
-            gradient: LinearGradient(
-              colors: [_brandYellow, Color(0xFFFFE274)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+    return Transform.translate(
+      offset: translation,
+      child: Transform.scale(
+        scale: 0.78 + (0.22 * progress),
+        child: Opacity(
+          opacity: opacity,
+          child: SizedBox(
+            width: 140,
+            height: 140,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned(
+                  bottom: 64,
+                  right: 32,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.55 * opacity),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      child: Text(option.label, style: textStyle),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Material(
+                    color: Colors.transparent,
+                    elevation: 8 * opacity,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      onTap: onTap,
+                      customBorder: const CircleBorder(),
+                      child: Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: [_brandYellow, Color(0xFFFFD84D)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                        ),
+                        child: Icon(
+                          option.icon,
+                          color: Colors.black87,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(option.icon, color: Colors.black87),
-              const SizedBox(width: 12),
-              Text(option.label, style: textStyle),
-            ],
           ),
         ),
       ),
