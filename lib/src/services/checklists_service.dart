@@ -26,6 +26,33 @@ class ChecklistsService extends ChangeNotifier {
   final List<Checklist> _checklists = <Checklist>[];
   Future<void>? _loadFuture;
   SharedPreferences? _prefs;
+  void _upsertLocal(Checklist checklist) {
+    final index = _checklists.indexWhere((c) => c.id == checklist.id);
+    if (index >= 0) {
+      _checklists[index] = checklist;
+    } else {
+      _checklists.add(checklist);
+    }
+    _checklists.sort(
+      (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+    );
+    notifyListeners();
+  }
+
+  void _removeLocal(String id) {
+    var removed = false;
+    _checklists.removeWhere((c) {
+      if (c.id == id) {
+        removed = true;
+        return true;
+      }
+      return false;
+    });
+    if (removed) {
+      notifyListeners();
+    }
+  }
+
   StreamSubscription<User?>? _authSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _subscription;
 
@@ -189,7 +216,13 @@ class ChecklistsService extends ChangeNotifier {
       'updatedAt': FieldValue.serverTimestamp(),
     });
 
-    return Checklist(id: doc.id, title: trimmedTitle, items: sanitizedItems);
+    final created = Checklist(
+      id: doc.id,
+      title: trimmedTitle,
+      items: sanitizedItems,
+    );
+    _upsertLocal(created);
+    return created;
   }
 
   Future<void> updateChecklist(Checklist updated) async {
@@ -198,12 +231,14 @@ class ChecklistsService extends ChangeNotifier {
       throw StateError('User must be signed in to update a checklist');
     }
     final sanitizedItems = _sanitizeItems(updated.items);
+    final trimmedTitle = updated.title.trim();
     await _collection().doc(updated.id).set({
       'ownerUid': user.uid,
-      'title': updated.title.trim(),
+      'title': trimmedTitle,
       'items': sanitizedItems.map((item) => item.toMap()).toList(),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+    _upsertLocal(updated.copyWith(title: trimmedTitle, items: sanitizedItems));
   }
 
   Future<void> renameChecklist(String id, String title) async {
@@ -220,6 +255,15 @@ class ChecklistsService extends ChangeNotifier {
       'title': trimmedTitle,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+    final existing = _checklists.firstWhere(
+      (c) => c.id == id,
+      orElse: () => Checklist(
+        id: id,
+        title: trimmedTitle,
+        items: const <ChecklistItem>[],
+      ),
+    );
+    _upsertLocal(existing.copyWith(title: trimmedTitle));
   }
 
   Future<void> deleteChecklist(String id) async {
@@ -228,6 +272,7 @@ class ChecklistsService extends ChangeNotifier {
       throw StateError('User must be signed in to delete a checklist');
     }
     await _collection().doc(id).delete();
+    _removeLocal(id);
   }
 
   Future<void> setItemCompletion(
@@ -258,6 +303,7 @@ class ChecklistsService extends ChangeNotifier {
       'items': sanitizedItems.map((item) => item.toMap()).toList(),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+    _upsertLocal(current.copyWith(items: sanitizedItems));
   }
 
   Future<void> replaceChecklistItems(
@@ -275,6 +321,12 @@ class ChecklistsService extends ChangeNotifier {
       'items': sanitizedItems.map((item) => item.toMap()).toList(),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+    final existing = _checklists.firstWhere(
+      (element) => element.id == checklistId,
+      orElse: () =>
+          Checklist(id: checklistId, title: '', items: const <ChecklistItem>[]),
+    );
+    _upsertLocal(existing.copyWith(items: sanitizedItems));
   }
 
   List<ChecklistItem> _sanitizeItems(List<ChecklistItem> items) {

@@ -1,22 +1,17 @@
-import 'dart:math' as math;
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../data/models/client.dart';
 import '../data/models/project.dart';
-import '../data/models/task.dart';
 import '../data/repositories/client_repository.dart';
 import '../data/repositories/project_repository.dart';
-import '../data/repositories/task_repository.dart';
 import '../dialogs/client_editor_dialog.dart';
+import 'project_detail_page.dart';
 
 class ProposalsPage extends StatelessWidget {
   ProposalsPage({super.key});
 
   final ClientRepository _clientRepository = ClientRepository();
   final ProjectRepository _projectRepository = ProjectRepository();
-  final TaskRepository _taskRepository = TaskRepository();
-  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   @override
   Widget build(BuildContext context) {
@@ -25,9 +20,9 @@ class ProposalsPage extends StatelessWidget {
         title: const Text('Proposals'),
         actions: [
           IconButton(
-            tooltip: 'View project tasks',
-            icon: const Icon(Icons.task),
-            onPressed: () => _showProposalTasksDialog(context),
+            tooltip: 'Open 001 Proposals project',
+            icon: const Icon(Icons.folder_open),
+            onPressed: () => _openProposalsProject(context),
           ),
         ],
       ),
@@ -102,6 +97,25 @@ class ProposalsPage extends StatelessWidget {
     );
   }
 
+  Future<void> _openProposalsProject(BuildContext context) async {
+    final project = await _findProposalsProject();
+    if (!context.mounted) return;
+    if (project == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not find the "001 Proposals" project.'),
+        ),
+      );
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ProjectDetailPage(projectId: project.id),
+      ),
+    );
+  }
+
   Future<Project?> _findProposalsProject() async {
     final projects = await _projectRepository.streamAll().first;
     for (final project in projects) {
@@ -122,62 +136,6 @@ class ProposalsPage extends StatelessWidget {
       }
     }
     return null;
-  }
-
-  Future<void> _showProposalTasksDialog(BuildContext context) async {
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return FutureBuilder<Project?>(
-          future: _findProposalsProject(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
-              return const AlertDialog(
-                content: SizedBox(
-                  height: 120,
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-              );
-            }
-
-            if (snapshot.hasError) {
-              return AlertDialog(
-                title: const Text('Project Tasks'),
-                content: Text('Failed to load project: ${snapshot.error}'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(dialogContext).pop(),
-                    child: const Text('Close'),
-                  ),
-                ],
-              );
-            }
-
-            final project = snapshot.data;
-            if (project == null) {
-              return AlertDialog(
-                title: const Text('Project Tasks'),
-                content: const Text(
-                  'Could not find the "001 Proposals" project.',
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(dialogContext).pop(),
-                    child: const Text('Close'),
-                  ),
-                ],
-              );
-            }
-
-            return _ProposalProjectTaskDialog(
-              project: project,
-              taskRepository: _taskRepository,
-              currentUser: _auth.currentUser,
-            );
-          },
-        );
-      },
-    );
   }
 
   SliverGrid _buildGrid(List<ClientRecord> clients) {
@@ -284,220 +242,6 @@ class _ProposalClientCard extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _ProposalProjectTaskDialog extends StatefulWidget {
-  const _ProposalProjectTaskDialog({
-    required this.project,
-    required this.taskRepository,
-    required this.currentUser,
-  });
-
-  final Project project;
-  final TaskRepository taskRepository;
-  final User? currentUser;
-
-  @override
-  State<_ProposalProjectTaskDialog> createState() =>
-      _ProposalProjectTaskDialogState();
-}
-
-class _ProposalProjectTaskDialogState
-    extends State<_ProposalProjectTaskDialog> {
-  final TextEditingController _titleController = TextEditingController();
-  bool _submitting = false;
-  String? _errorMessage;
-
-  @override
-  void dispose() {
-    _titleController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _handleAddTask() async {
-    final title = _titleController.text.trim();
-    if (title.isEmpty) {
-      setState(() => _errorMessage = 'Enter a task name.');
-      return;
-    }
-
-    final owner = widget.currentUser;
-    if (owner == null) {
-      setState(() => _errorMessage = 'Signed-in user required to add tasks.');
-      return;
-    }
-
-    setState(() {
-      _submitting = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final task = TaskItem(
-        id: '',
-        projectId: widget.project.id,
-        ownerUid: owner.uid,
-        title: title,
-        taskStatus: 'Pending',
-        isStarred: false,
-        subtasks: const [],
-      );
-      await widget.taskRepository.add(task);
-      setState(() {
-        _titleController.clear();
-      });
-    } catch (error) {
-      setState(() => _errorMessage = 'Failed to add task: $error');
-    } finally {
-      if (mounted) {
-        setState(() => _submitting = false);
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final mediaQuery = MediaQuery.of(context);
-    final viewInsets = mediaQuery.viewInsets.bottom;
-    final maxListHeight = (mediaQuery.size.height - viewInsets - 220)
-        .clamp(120.0, 320.0)
-        .toDouble();
-
-    return AnimatedPadding(
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOutCubic,
-      padding: EdgeInsets.only(bottom: viewInsets),
-      child: AlertDialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-        title: Text('001 Proposals Tasks for ${widget.project.name}'),
-        content: LayoutBuilder(
-          builder: (context, dialogConstraints) {
-            final mediaSize = mediaQuery.size;
-            final rawAvailableHeight = dialogConstraints.maxHeight.isFinite
-                ? dialogConstraints.maxHeight
-                : (mediaSize.height - viewInsets - 120);
-            final availableHeight = rawAvailableHeight.isFinite
-                ? math.max(0.0, rawAvailableHeight)
-                : rawAvailableHeight;
-            const double controlsHeight = 148.0;
-            const double minListHeight = 96.0;
-            final double minDialogHeight = controlsHeight + minListHeight;
-            final double desiredHeight = maxListHeight + controlsHeight;
-            final double sanitizedAvailableHeight = availableHeight.isFinite
-                ? math.max(minDialogHeight, availableHeight.toDouble())
-                : desiredHeight;
-            final double dialogHeight = sanitizedAvailableHeight
-                .clamp(minDialogHeight, desiredHeight)
-                .toDouble();
-            final double listMaxHeight = (dialogHeight - controlsHeight)
-                .clamp(minListHeight, maxListHeight)
-                .toDouble();
-
-            return ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
-              child: SizedBox(
-                height: dialogHeight,
-                child: Column(
-                  mainAxisSize: MainAxisSize.max,
-                  children: [
-                    Expanded(
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(maxHeight: listMaxHeight),
-                        child: StreamBuilder<List<TaskItem>>(
-                          stream: widget.taskRepository.streamByProject(
-                            widget.project.id,
-                          ),
-                          builder: (context, snapshot) {
-                            if (snapshot.connectionState ==
-                                ConnectionState.waiting) {
-                              return const Center(
-                                child: CircularProgressIndicator(),
-                              );
-                            }
-                            if (snapshot.hasError) {
-                              return Center(
-                                child: Text(
-                                  'Failed to load tasks: ${snapshot.error}',
-                                ),
-                              );
-                            }
-
-                            final tasks = snapshot.data ?? const <TaskItem>[];
-                            if (tasks.isEmpty) {
-                              return const Center(
-                                child: Text('No tasks yet for this project.'),
-                              );
-                            }
-
-                            return ListView.separated(
-                              padding: EdgeInsets.zero,
-                              keyboardDismissBehavior:
-                                  ScrollViewKeyboardDismissBehavior.onDrag,
-                              itemCount: tasks.length,
-                              separatorBuilder: (_, __) =>
-                                  const Divider(height: 1),
-                              itemBuilder: (context, index) {
-                                final task = tasks[index];
-                                return ListTile(
-                                  dense: true,
-                                  title: Text(task.title),
-                                  subtitle: Text(task.taskStatus),
-                                );
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _titleController,
-                      autofocus: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Add task',
-                        hintText: 'Describe the proposal task',
-                      ),
-                      enabled: !_submitting,
-                      onSubmitted: (_) => _handleAddTask(),
-                    ),
-                    if (_errorMessage != null) ...[
-                      const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          _errorMessage!,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.error,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-          FilledButton(
-            onPressed: _submitting ? null : _handleAddTask,
-            child: _submitting
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Add Task'),
-          ),
-        ],
       ),
     );
   }

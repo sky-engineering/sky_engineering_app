@@ -126,6 +126,11 @@ class _ChecklistEditDialogState extends State<_ChecklistEditDialog> {
     final maxHeight = (media.size.height * 0.7).clamp(360.0, 640.0);
 
     return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      titlePadding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
+      contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      buttonPadding: const EdgeInsets.symmetric(horizontal: 8),
       title: Text(widget.initial == null ? 'New Checklist' : 'Edit Checklist'),
       content: Form(
         key: _formKey,
@@ -138,7 +143,14 @@ class _ChecklistEditDialogState extends State<_ChecklistEditDialog> {
               TextFormField(
                 controller: _titleController,
                 textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(labelText: 'Checklist title'),
+                decoration: const InputDecoration(
+                  labelText: 'Checklist title',
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 12,
+                  ),
+                ),
                 validator: (value) {
                   if ((value ?? '').trim().isEmpty) {
                     return 'Enter a checklist title.';
@@ -146,27 +158,40 @@ class _ChecklistEditDialogState extends State<_ChecklistEditDialog> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
               Expanded(
                 child: ReorderableListView.builder(
                   itemCount: _items.length,
                   buildDefaultDragHandles: false,
                   onReorder: _onReorder,
-                  padding: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.symmetric(vertical: 4),
                   itemBuilder: (context, index) {
                     final entry = _items[index];
                     return Card(
                       key: ValueKey('editable-item-${entry.item.id}'),
-                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      margin: const EdgeInsets.symmetric(vertical: 2),
                       child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 2,
+                        ),
+                        visualDensity: const VisualDensity(vertical: -2),
+                        minVerticalPadding: 0,
+                        dense: true,
                         leading: ReorderableDragStartListener(
                           index: index,
                           child: const Icon(Icons.drag_handle),
                         ),
                         title: TextFormField(
                           controller: entry.controller,
+                          textInputAction: TextInputAction.next,
                           decoration: const InputDecoration(
                             labelText: 'Checklist item',
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(
+                              vertical: 8,
+                              horizontal: 12,
+                            ),
                           ),
                           validator: (value) {
                             if ((value ?? '').trim().isEmpty) {
@@ -186,7 +211,7 @@ class _ChecklistEditDialogState extends State<_ChecklistEditDialog> {
                 ),
               ),
               if (_itemsError != null) ...[
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   _itemsError!,
                   style: TextStyle(
@@ -195,11 +220,19 @@ class _ChecklistEditDialogState extends State<_ChecklistEditDialog> {
                   ),
                 ),
               ],
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Align(
                 alignment: Alignment.centerLeft,
                 child: TextButton.icon(
                   onPressed: _addItem,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
+                  ),
                   icon: const Icon(Icons.add),
                   label: const Text('Add checklist item'),
                 ),
@@ -211,9 +244,22 @@ class _ChecklistEditDialogState extends State<_ChecklistEditDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.compact,
+          ),
           child: const Text('Cancel'),
         ),
-        FilledButton(onPressed: _save, child: const Text('Save')),
+        FilledButton(
+          onPressed: _save,
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.compact,
+          ),
+          child: const Text('Save'),
+        ),
       ],
     );
   }

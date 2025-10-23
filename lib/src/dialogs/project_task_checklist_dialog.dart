@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 
 import '../data/models/checklist.dart';
 import '../data/models/project.dart';
+import '../data/models/project_task_checklist.dart';
 
 Future<ProjectTaskChecklistDialogResult?> showProjectTaskChecklistDialog(
   BuildContext context, {
   required List<Checklist> templates,
   required List<Project> projects,
+  ProjectTaskChecklist? initial,
 }) {
   return showDialog<ProjectTaskChecklistDialogResult?>(
     context: context,
@@ -16,6 +18,7 @@ Future<ProjectTaskChecklistDialogResult?> showProjectTaskChecklistDialog(
       return _ProjectTaskChecklistDialog(
         templates: templates,
         projects: projects,
+        initial: initial,
       );
     },
   );
@@ -37,10 +40,12 @@ class _ProjectTaskChecklistDialog extends StatefulWidget {
   const _ProjectTaskChecklistDialog({
     required this.templates,
     required this.projects,
+    this.initial,
   });
 
   final List<Checklist> templates;
   final List<Project> projects;
+  final ProjectTaskChecklist? initial;
 
   @override
   State<_ProjectTaskChecklistDialog> createState() =>
@@ -54,15 +59,25 @@ class _ProjectTaskChecklistDialogState
   String? _selectedChecklistId;
   String? _selectedProjectId;
 
+  bool get _isEdit => widget.initial != null;
+
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController();
-    if (widget.templates.isNotEmpty) {
+    _nameController = TextEditingController(text: widget.initial?.name ?? '');
+    if (_isEdit) {
+      _selectedChecklistId = widget.initial!.templateId;
+    } else if (widget.templates.isNotEmpty) {
       _selectedChecklistId = widget.templates.first.id;
     }
-    if (widget.projects.isNotEmpty) {
-      final sorted = _sortedProjects();
+
+    final sorted = _sortedProjects();
+    if (_isEdit) {
+      _selectedProjectId = widget.initial!.projectId;
+      if (_selectedProjectId == null && sorted.isNotEmpty) {
+        _selectedProjectId = sorted.first.id;
+      }
+    } else if (sorted.isNotEmpty) {
       _selectedProjectId = sorted.first.id;
     }
   }
@@ -78,7 +93,9 @@ class _ProjectTaskChecklistDialogState
     super.didUpdateWidget(oldWidget);
 
     String? nextChecklistId = _selectedChecklistId;
-    if (widget.templates.isEmpty) {
+    if (_isEdit) {
+      nextChecklistId ??= widget.initial?.templateId;
+    } else if (widget.templates.isEmpty) {
       nextChecklistId = null;
     } else if (nextChecklistId == null ||
         !widget.templates.any((template) => template.id == nextChecklistId)) {
@@ -87,7 +104,9 @@ class _ProjectTaskChecklistDialogState
 
     final sortedProjects = _sortedProjects();
     String? nextProjectId = _selectedProjectId;
-    if (sortedProjects.isEmpty) {
+    if (_isEdit) {
+      nextProjectId ??= widget.initial?.projectId;
+    } else if (sortedProjects.isEmpty) {
       nextProjectId = null;
     } else if (nextProjectId == null ||
         !sortedProjects.any((project) => project.id == nextProjectId)) {
@@ -104,8 +123,10 @@ class _ProjectTaskChecklistDialogState
   }
 
   bool get _canSubmit {
+    final hasChecklist =
+        _selectedChecklistId != null || widget.initial?.templateId != null;
     return (_formKey.currentState?.validate() ?? false) &&
-        _selectedChecklistId != null &&
+        hasChecklist &&
         _selectedProjectId != null;
   }
 
@@ -125,15 +146,44 @@ class _ProjectTaskChecklistDialogState
     final sortedProjects = _sortedProjects();
     final theme = Theme.of(context);
 
+    final projectItems = sortedProjects
+        .map(
+          (project) => DropdownMenuItem<String>(
+            value: project.id,
+            child: Text(_projectLabel(project)),
+          ),
+        )
+        .toList(growable: true);
+
+    if (widget.initial != null && widget.initial!.projectId.isNotEmpty) {
+      final hasExistingProject = projectItems.any(
+        (item) => item.value == widget.initial!.projectId,
+      );
+      if (!hasExistingProject) {
+        projectItems.add(
+          DropdownMenuItem<String>(
+            value: widget.initial!.projectId,
+            child: Text(_projectLabelForChecklist(widget.initial!)),
+          ),
+        );
+      }
+    }
+
+    final checklistId =
+        _selectedChecklistId ?? widget.initial?.templateId ?? '';
+
     return AlertDialog(
-      title: const Text('Create Project Task Checklist'),
-      content: SizedBox(
-        width: 520,
-        child: Form(
-          key: _formKey,
+      title: Text(
+        _isEdit
+            ? 'Edit Project Task Checklist'
+            : 'Create Project Task Checklist',
+      ),
+      content: Form(
+        key: _formKey,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 500),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               TextFormField(
                 controller: _nameController,
@@ -149,42 +199,55 @@ class _ProjectTaskChecklistDialogState
                 },
               ),
               const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                key: ValueKey<int>(
-                  Object.hash(
-                    _selectedChecklistId,
-                    templates.length,
-                    templates.hashCode,
+              if (_isEdit) ...[
+                InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Source checklist',
+                  ),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(widget.initial!.templateTitle),
                   ),
                 ),
-                initialValue: templates.isEmpty ? null : _selectedChecklistId,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Source checklist',
-                ),
-                items: templates
-                    .map(
-                      (template) => DropdownMenuItem<String>(
-                        value: template.id,
-                        child: Text(template.title),
-                      ),
-                    )
-                    .toList(growable: false),
-                onChanged: templates.isEmpty
-                    ? null
-                    : (value) => setState(() {
-                        _selectedChecklistId = value;
-                      }),
-              ),
-              if (templates.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    'Create a checklist first before making a project task checklist.',
-                    style: theme.textTheme.bodySmall,
+                const SizedBox(height: 16),
+              ] else ...[
+                DropdownButtonFormField<String>(
+                  key: ValueKey<int>(
+                    Object.hash(
+                      _selectedChecklistId,
+                      templates.length,
+                      templates.hashCode,
+                    ),
                   ),
+                  initialValue: templates.isEmpty ? null : _selectedChecklistId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Source checklist',
+                  ),
+                  items: templates
+                      .map(
+                        (template) => DropdownMenuItem<String>(
+                          value: template.id,
+                          child: Text(template.title),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: templates.isEmpty
+                      ? null
+                      : (value) => setState(() {
+                          _selectedChecklistId = value;
+                        }),
                 ),
-              const SizedBox(height: 16),
+                if (templates.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      'Create a checklist first before making a project task checklist.',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                const SizedBox(height: 16),
+              ],
               DropdownButtonFormField<String>(
                 key: ValueKey<int>(
                   Object.hash(
@@ -193,26 +256,17 @@ class _ProjectTaskChecklistDialogState
                     sortedProjects.hashCode,
                   ),
                 ),
-                initialValue: sortedProjects.isEmpty
-                    ? null
-                    : _selectedProjectId,
+                initialValue: projectItems.isEmpty ? null : _selectedProjectId,
                 isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Project'),
-                items: sortedProjects
-                    .map(
-                      (project) => DropdownMenuItem<String>(
-                        value: project.id,
-                        child: Text(_projectLabel(project)),
-                      ),
-                    )
-                    .toList(growable: false),
-                onChanged: sortedProjects.isEmpty
+                items: projectItems,
+                onChanged: projectItems.isEmpty
                     ? null
                     : (value) => setState(() {
                         _selectedProjectId = value;
                       }),
               ),
-              if (sortedProjects.isEmpty)
+              if (projectItems.isEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
@@ -231,30 +285,37 @@ class _ProjectTaskChecklistDialogState
         ),
         FilledButton(
           onPressed: () {
-            if (!_canSubmit) {
+            if (!_canSubmit || checklistId.isEmpty) {
               _formKey.currentState?.validate();
               return;
             }
             Navigator.of(context).pop(
               ProjectTaskChecklistDialogResult(
                 name: _nameController.text.trim(),
-                checklistId: _selectedChecklistId!,
+                checklistId: checklistId,
                 projectId: _selectedProjectId!,
               ),
             );
           },
-          child: const Text('Create'),
+          child: Text(_isEdit ? 'Save' : 'Create'),
         ),
       ],
     );
   }
-}
 
-String _projectLabel(Project project) {
-  final number = project.projectNumber?.trim();
-  final name = project.name.trim();
-  if (number != null && number.isNotEmpty) {
-    return '$number $name'.trim();
+  String _projectLabel(Project project) {
+    final number = project.projectNumber?.trim();
+    if (number != null && number.isNotEmpty) {
+      return '$number - ${project.name}'.trim();
+    }
+    return project.name;
   }
-  return name;
+
+  String _projectLabelForChecklist(ProjectTaskChecklist checklist) {
+    final number = checklist.projectNumber?.trim();
+    if (number != null && number.isNotEmpty) {
+      return '$number - ${checklist.projectName}'.trim();
+    }
+    return checklist.projectName;
+  }
 }

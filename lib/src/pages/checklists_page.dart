@@ -186,6 +186,45 @@ class _ChecklistsPageState extends State<ChecklistsPage> {
     );
   }
 
+  Future<void> _handleEditProjectTaskChecklist(
+    ProjectTaskChecklist checklist,
+  ) async {
+    final templates = _templateService.checklists.toList(growable: false);
+    final result = await showProjectTaskChecklistDialog(
+      context,
+      templates: templates,
+      projects: _projects,
+      initial: checklist,
+    );
+    if (result == null) return;
+
+    Project? selectedProject;
+    for (final project in _projects) {
+      if (project.id == result.projectId) {
+        selectedProject = project;
+        break;
+      }
+    }
+
+    if (selectedProject == null && result.projectId != checklist.projectId) {
+      _showInfo('Selected project is no longer available.');
+      return;
+    }
+
+    try {
+      await _projectTaskService.updateMetadata(
+        id: checklist.id,
+        name: result.name,
+        projectId: selectedProject?.id ?? checklist.projectId,
+        projectName: selectedProject?.name ?? checklist.projectName,
+        projectNumber:
+            selectedProject?.projectNumber ?? checklist.projectNumber,
+      );
+    } catch (error) {
+      _showError(error);
+    }
+  }
+
   void _toggleTemplateExpanded(String id) {
     setState(() {
       if (_templateExpanded.contains(id)) {
@@ -257,6 +296,7 @@ class _ChecklistsPageState extends State<ChecklistsPage> {
                   expanded: _projectExpanded,
                   onToggleExpanded: _toggleProjectExpanded,
                   onToggleItem: _toggleProjectTaskItem,
+                  onEdit: _handleEditProjectTaskChecklist,
                   onDelete: _deleteProjectTaskChecklist,
                 ),
                 const SizedBox(height: 24),
@@ -326,6 +366,7 @@ class _ProjectTaskSection extends StatelessWidget {
     required this.expanded,
     required this.onToggleExpanded,
     required this.onToggleItem,
+    required this.onEdit,
     required this.onDelete,
   });
 
@@ -334,6 +375,7 @@ class _ProjectTaskSection extends StatelessWidget {
   final void Function(String id) onToggleExpanded;
   final void Function(ProjectTaskChecklist checklist, ChecklistItem item)
   onToggleItem;
+  final void Function(ProjectTaskChecklist checklist) onEdit;
   final void Function(ProjectTaskChecklist checklist) onDelete;
 
   @override
@@ -359,6 +401,7 @@ class _ProjectTaskSection extends StatelessWidget {
             expanded: expanded.contains(checklists[i].id),
             onToggleExpanded: () => onToggleExpanded(checklists[i].id),
             onToggleItem: (item) => onToggleItem(checklists[i], item),
+            onEdit: () => onEdit(checklists[i]),
             onDelete: () => onDelete(checklists[i]),
           ),
           if (i < checklists.length - 1) const SizedBox(height: 12),
@@ -374,6 +417,7 @@ class _ProjectTaskChecklistCard extends StatelessWidget {
     required this.expanded,
     required this.onToggleExpanded,
     required this.onToggleItem,
+    required this.onEdit,
     required this.onDelete,
   });
 
@@ -381,6 +425,7 @@ class _ProjectTaskChecklistCard extends StatelessWidget {
   final bool expanded;
   final VoidCallback onToggleExpanded;
   final ValueChanged<ChecklistItem> onToggleItem;
+  final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   @override
@@ -404,17 +449,25 @@ class _ProjectTaskChecklistCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(checklist.name, style: titleStyle),
-                      const SizedBox(height: 4),
-                      Text(projectLabel, style: theme.textTheme.bodySmall),
-                      Text(
-                        'Template: ${checklist.templateTitle}',
-                        style: theme.textTheme.bodySmall,
+                  child: InkWell(
+                    onTap: onEdit,
+                    mouseCursor: SystemMouseCursors.click,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(checklist.name, style: titleStyle),
+                          const SizedBox(height: 4),
+                          Text(projectLabel, style: theme.textTheme.bodySmall),
+                          Text(
+                            'Template: ${checklist.templateTitle}',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
                 IconButton(

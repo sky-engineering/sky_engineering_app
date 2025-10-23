@@ -28,74 +28,6 @@ String _projectDisplay(Project project) {
   return number.isNotEmpty ? '$number ${project.name}' : project.name;
 }
 
-class _TaskFollowUpChoice {
-  const _TaskFollowUpChoice({
-    required this.starTask,
-    required this.openProject,
-  });
-
-  final bool starTask;
-  final bool openProject;
-}
-
-Future<_TaskFollowUpChoice?> _promptTaskFollowUp(
-  BuildContext context,
-  Project project,
-) {
-  var starTask = false;
-  var openProject = false;
-  final projectLabel = _projectDisplay(project);
-
-  return showDialog<_TaskFollowUpChoice>(
-    context: context,
-    builder: (dialogContext) {
-      return StatefulBuilder(
-        builder: (innerContext, setState) {
-          return AlertDialog(
-            title: const Text('Task created'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CheckboxListTile(
-                  value: starTask,
-                  onChanged: (value) =>
-                      setState(() => starTask = value ?? false),
-                  title: const Text('Star this task'),
-                  controlAffinity: ListTileControlAffinity.leading,
-                ),
-                CheckboxListTile(
-                  value: openProject,
-                  onChanged: (value) =>
-                      setState(() => openProject = value ?? false),
-                  title: const Text('Go to project detail page'),
-                  subtitle: Text(projectLabel),
-                  controlAffinity: ListTileControlAffinity.leading,
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Skip'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(
-                  dialogContext,
-                  _TaskFollowUpChoice(
-                    starTask: starTask,
-                    openProject: openProject,
-                  ),
-                ),
-                child: const Text('Continue'),
-              ),
-            ],
-          );
-        },
-      );
-    },
-  );
-}
-
 Future<void> showQuickAddInvoiceDialog(BuildContext context) async {
   final me = FirebaseAuth.instance.currentUser;
   if (me == null) {
@@ -159,6 +91,7 @@ Future<void> showQuickAddTaskDialog(BuildContext context) async {
       (selectedProject.selectedSubphases?.isNotEmpty ?? false)
       ? selectedProject.selectedSubphases!.first.code
       : null;
+  var starTask = false;
 
   final titleCtl = TextEditingController();
   final notesCtl = TextEditingController();
@@ -272,6 +205,15 @@ Future<void> showQuickAddTaskDialog(BuildContext context) async {
                     ),
                     maxLines: 4,
                   ),
+                  const SizedBox(height: 12),
+                  CheckboxListTile(
+                    value: starTask,
+                    onChanged: (value) =>
+                        setState(() => starTask = value ?? false),
+                    title: const Text('Star this task?'),
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                  ),
                 ],
               ),
             ),
@@ -309,52 +251,23 @@ Future<void> showQuickAddTaskDialog(BuildContext context) async {
                     Navigator.pop(dialogContext);
                     if (!context.mounted) return;
 
-                    final followUp = await _promptTaskFollowUp(
-                      context,
-                      selectedProject,
-                    );
+                    final messenger = ScaffoldMessenger.of(context);
+                    final theme = Theme.of(context);
 
-                    if (!context.mounted) return;
-
-                    var feedbackShown = false;
-
-                    if (followUp == null ||
-                        (!followUp.starTask && !followUp.openProject)) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Task created.')),
-                      );
-                      return;
-                    }
-
-                    if (followUp.starTask) {
+                    if (starTask) {
                       try {
                         await repo.setStarred(persistedTask, true);
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Task starred.')),
-                        );
-                        feedbackShown = true;
                       } catch (e) {
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        final controller = messenger.showSnackBar(
                           SnackBar(content: Text('Failed to star task: $e')),
                         );
-                        feedbackShown = true;
+                        await controller.closed;
+                        if (!context.mounted) return;
                       }
                     }
 
-                    if (followUp.openProject) {
+                    void openProjectDetail() {
                       if (!context.mounted) return;
-
-                      if (!feedbackShown) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Task created.')),
-                        );
-                        feedbackShown = true;
-                      }
-
-                      if (!context.mounted) return;
-
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => ProjectDetailPage(
@@ -364,12 +277,25 @@ Future<void> showQuickAddTaskDialog(BuildContext context) async {
                       );
                     }
 
-                    if (!feedbackShown) {
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Task created.')),
-                      );
-                    }
+                    messenger.showSnackBar(
+                      SnackBar(
+                        behavior: SnackBarBehavior.floating,
+                        duration: const Duration(seconds: 3),
+                        content: GestureDetector(
+                          onTap: () {
+                            messenger.hideCurrentSnackBar();
+                            openProjectDetail();
+                          },
+                          child: Text(
+                            "Go to Task's Project Detail Page",
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.secondary,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
                   } catch (e) {
                     if (!dialogContext.mounted) return;
                     ScaffoldMessenger.of(dialogContext).showSnackBar(

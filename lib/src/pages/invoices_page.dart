@@ -8,7 +8,14 @@ import '../data/models/project.dart';
 import '../data/repositories/invoice_repository.dart';
 import '../data/repositories/project_repository.dart';
 
-enum _InvoiceSort { numberDesc, numberAsc, amountDesc, amountAsc }
+enum _InvoiceSort {
+  numberDesc,
+  numberAsc,
+  amountDesc,
+  amountAsc,
+  projectDesc,
+  projectAsc,
+}
 
 class InvoicesPage extends StatefulWidget {
   const InvoicesPage({super.key});
@@ -381,7 +388,41 @@ class _InvoicesPageState extends State<InvoicesPage> {
       _InvoiceSort.numberAsc => _compareByNumberAsc(a, b),
       _InvoiceSort.amountDesc => _compareByAmountDesc(a, b),
       _InvoiceSort.amountAsc => _compareByAmountAsc(a, b),
+      _InvoiceSort.projectDesc => _compareByProjectDesc(a, b),
+      _InvoiceSort.projectAsc => _compareByProjectAsc(a, b),
     };
+  }
+
+  String _projectNumberFor(Invoice invoice) {
+    return (_projectNumById[invoice.projectId]?.trim() ?? '').toLowerCase();
+  }
+
+  int _compareByProjectDesc(Invoice a, Invoice b) {
+    final aNumber = _projectNumberFor(a);
+    final bNumber = _projectNumberFor(b);
+    final aEmpty = aNumber.isEmpty;
+    final bEmpty = bNumber.isEmpty;
+    if (aEmpty && !bEmpty) return 1;
+    if (!aEmpty && bEmpty) return -1;
+    if (!aEmpty && !bEmpty) {
+      final cmp = bNumber.toLowerCase().compareTo(aNumber.toLowerCase());
+      if (cmp != 0) return cmp;
+    }
+    return _compareByNumberDesc(a, b);
+  }
+
+  int _compareByProjectAsc(Invoice a, Invoice b) {
+    final aNumber = _projectNumberFor(a);
+    final bNumber = _projectNumberFor(b);
+    final aEmpty = aNumber.isEmpty;
+    final bEmpty = bNumber.isEmpty;
+    if (aEmpty && !bEmpty) return 1;
+    if (!aEmpty && bEmpty) return -1;
+    if (!aEmpty && !bEmpty) {
+      final cmp = aNumber.toLowerCase().compareTo(bNumber.toLowerCase());
+      if (cmp != 0) return cmp;
+    }
+    return _compareByNumberAsc(a, b);
   }
 
   int _compareByNumberDesc(Invoice a, Invoice b) {
