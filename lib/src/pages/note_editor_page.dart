@@ -1,11 +1,14 @@
 // lib/src/pages/note_editor_page.dart
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:super_clipboard/super_clipboard.dart';
 
 import '../data/models/project.dart';
 import '../data/repositories/project_repository.dart';
@@ -80,9 +83,33 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                 hintText: 'Start typing...',
               ),
               autofocus: true,
-              cursorColor: Theme.of(context).colorScheme.primary,
+              cursorColor: Theme.of(context).colorScheme.onSurface,
               maxLines: null,
               keyboardType: TextInputType.multiline,
+              contextMenuBuilder: (context, EditableTextState state) {
+                final items = state.contextMenuButtonItems
+                    .map((item) {
+                      if (item.type == ContextMenuButtonType.paste) {
+                        final original = item.onPressed;
+                        return ContextMenuButtonItem(
+                          type: item.type,
+                          onPressed: () async {
+                            Navigator.of(context).pop();
+                            final handled = await _handlePaste();
+                            if (!handled) {
+                              original?.call();
+                            }
+                          },
+                        );
+                      }
+                      return item;
+                    })
+                    .toList(growable: false);
+                return AdaptiveTextSelectionToolbar.buttonItems(
+                  anchors: state.contextMenuAnchors,
+                  buttonItems: items,
+                );
+              },
             ),
           ),
         ),
@@ -198,6 +225,85 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     _updateHasChanges();
   }
 
+  Future<bool> _handlePaste() async {
+    final clipboard = SystemClipboard.instance;
+    if (clipboard == null) {
+      return false;
+    }
+
+    try {
+      final reader = await clipboard.read();
+      final imageFormats = <FileFormat>[
+        Formats.png,
+        Formats.jpeg,
+        Formats.heic,
+        Formats.heif,
+        Formats.gif,
+        Formats.webp,
+        Formats.tiff,
+        Formats.bmp,
+      ];
+
+      for (final format in imageFormats) {
+        if (!reader.canProvide(format)) {
+          continue;
+        }
+
+        final completer = Completer<Uint8List?>();
+        final progress = reader.getFile(
+          format,
+          (file) async {
+            try {
+              final data = await file.readAll();
+              if (!completer.isCompleted) {
+                completer.complete(data);
+              }
+            } catch (error) {
+              if (!completer.isCompleted) {
+                completer.completeError(error);
+              }
+            }
+          },
+          onError: (error) {
+            if (!completer.isCompleted) {
+              completer.completeError(error);
+            }
+          },
+        );
+
+        if (progress == null && !completer.isCompleted) {
+          completer.complete(null);
+        }
+
+        try {
+          final bytes = await completer.future.timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => null,
+          );
+          if (bytes != null && bytes.isNotEmpty) {
+            if (!mounted) return true;
+            setState(() {
+              _attachments.add(
+                _NoteAttachment(
+                  id: DateTime.now().microsecondsSinceEpoch.toString(),
+                  bytes: bytes,
+                ),
+              );
+            });
+            _updateHasChanges();
+            return true;
+          }
+        } catch (_) {
+          // Continue checking other formats on errors.
+        }
+      }
+    } catch (e) {
+      debugPrint('Clipboard paste failed: $e');
+    }
+
+    return false;
+  }
+
   Widget _buildAttachmentStrip() {
     return SizedBox(
       height: 120,
@@ -310,14 +416,17 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     void closeProgress() {
       if (progressClosed) return;
       progressClosed = true;
-      overlayNavigator.pop();
+      if (overlayNavigator.canPop()) {
+        overlayNavigator.pop();
+      }
     }
 
-    await showDialog<void>(
+    showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (_) => const _SavingNoteDialog(),
     );
+    await Future<void>.delayed(Duration.zero);
 
     final attachments = List<_NoteAttachment>.from(_attachments);
 

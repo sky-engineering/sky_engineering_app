@@ -58,5 +58,12 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+
+	<key>NSCameraUsageDescription</key>
+	<string>Allow Sky Engineering to capture photos for note attachments.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Allow Sky Engineering to access the photo library for note attachments.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Allow Sky Engineering to save note attachments to the photo library.</string>
 </dict>
 </plist>
