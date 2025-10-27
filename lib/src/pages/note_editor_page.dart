@@ -1,9 +1,11 @@
 // lib/src/pages/note_editor_page.dart
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 
 import '../data/models/project.dart';
 import '../data/repositories/project_repository.dart';
@@ -17,13 +19,23 @@ class NoteEditorPage extends StatefulWidget {
   State<NoteEditorPage> createState() => _NoteEditorPageState();
 }
 
+class _NoteAttachment {
+  _NoteAttachment({required this.id, required this.bytes});
+
+  final String id;
+  final Uint8List bytes;
+}
+
 class _NoteEditorPageState extends State<NoteEditorPage> {
   final TextEditingController _controller = TextEditingController();
   final ProjectRepository _projectRepository = ProjectRepository();
   final DropboxAuth _dropboxAuth = DropboxAuth();
+  final ImagePicker _picker = ImagePicker();
 
   bool _saving = false;
   bool _hasChanges = false;
+  bool _isPickingImage = false;
+  final List<_NoteAttachment> _attachments = <_NoteAttachment>[];
 
   @override
   void initState() {
@@ -32,7 +44,12 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   }
 
   void _handleTextChanged() {
-    final dirty = _controller.text.isNotEmpty;
+    _updateHasChanges();
+  }
+
+  void _updateHasChanges() {
+    final hasText = _controller.text.trim().isNotEmpty;
+    final dirty = hasText || _attachments.isNotEmpty;
     if (dirty != _hasChanges && !_saving) {
       setState(() => _hasChanges = dirty);
     }
@@ -47,6 +64,31 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
   @override
   Widget build(BuildContext context) {
+    final body = Column(
+      children: [
+        if (_attachments.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _buildAttachmentStrip(),
+        ],
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: TextField(
+              controller: _controller,
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                hintText: 'Start typing...',
+              ),
+              autofocus: true,
+              cursorColor: Theme.of(context).colorScheme.primary,
+              maxLines: null,
+              keyboardType: TextInputType.multiline,
+            ),
+          ),
+        ),
+      ],
+    );
+
     return PopScope(
       canPop: !_hasChanges || _saving,
       onPopInvokedWithResult: (didPop, _) async {
@@ -63,6 +105,19 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           title: const Text('New Note'),
           leading: BackButton(onPressed: _handleBack),
           actions: [
+            IconButton(
+              tooltip: 'Add photo',
+              onPressed: (_saving || _isPickingImage)
+                  ? null
+                  : _showImageSourceSheet,
+              icon: _isPickingImage
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2.2),
+                    )
+                  : const Icon(Icons.add_a_photo_outlined),
+            ),
             TextButton(
               onPressed: _saving ? null : _handleDone,
               child: _saving
@@ -75,22 +130,122 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             ),
           ],
         ),
-        body: Padding(
-          padding: const EdgeInsets.all(16),
-          child: TextField(
-            controller: _controller,
-            decoration: const InputDecoration(
-              border: InputBorder.none,
-              hintText: 'Start typing...',
-            ),
-            autofocus: true,
-            cursorColor: Theme.of(context).colorScheme.primary,
-            maxLines: null,
-            keyboardType: TextInputType.multiline,
-          ),
-        ),
+        body: body,
       ),
     );
+  }
+
+  Future<void> _showImageSourceSheet() async {
+    FocusScope.of(context).unfocus();
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.camera_alt_outlined),
+                title: const Text('Take photo'),
+                onTap: () => Navigator.of(context).pop(ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Choose from library'),
+                onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (!mounted || source == null) return;
+    await _pickImage(source);
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    setState(() => _isPickingImage = true);
+    try {
+      final file = await _picker.pickImage(source: source, imageQuality: 80);
+      if (!mounted || file == null) {
+        return;
+      }
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
+      setState(() {
+        _attachments.add(
+          _NoteAttachment(
+            id: DateTime.now().microsecondsSinceEpoch.toString(),
+            bytes: bytes,
+          ),
+        );
+        _isPickingImage = false;
+      });
+      _updateHasChanges();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to add image: $e')));
+      setState(() => _isPickingImage = false);
+    }
+  }
+
+  void _removeAttachment(String id) {
+    setState(() {
+      _attachments.removeWhere((attachment) => attachment.id == id);
+    });
+    _updateHasChanges();
+  }
+
+  Widget _buildAttachmentStrip() {
+    return SizedBox(
+      height: 120,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        scrollDirection: Axis.horizontal,
+        itemBuilder: (context, index) {
+          final attachment = _attachments[index];
+          return Stack(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: Image.memory(attachment.bytes, fit: BoxFit.cover),
+                ),
+              ),
+              Positioned(
+                top: 4,
+                right: 4,
+                child: Material(
+                  color: Colors.black.withValues(alpha: 0.6),
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => _removeAttachment(attachment.id),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.close, size: 16, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemCount: _attachments.length,
+      ),
+    );
+  }
+
+  String _projectDisplayLabel(Project project) {
+    final number = (project.projectNumber ?? '').trim();
+    if (number.isEmpty) {
+      return project.name;
+    }
+    return '$number ${project.name}';
   }
 
   Future<void> _handleBack() async {
@@ -131,10 +286,12 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
   Future<void> _handleDone() async {
     final content = _controller.text;
-    if (content.trim().isEmpty) {
+    if (content.trim().isEmpty && _attachments.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add some text before saving.')),
+        const SnackBar(
+          content: Text('Add some text or attach at least one image.'),
+        ),
       );
       return;
     }
@@ -162,14 +319,19 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       builder: (_) => const _SavingNoteDialog(),
     );
 
+    final attachments = List<_NoteAttachment>.from(_attachments);
+
     try {
-      await _saveNoteToDropbox(selectedProject, content);
+      await _saveNoteToDropbox(selectedProject, content, attachments);
       if (!mounted) {
         closeProgress();
         return;
       }
       closeProgress();
-      setState(() => _hasChanges = false);
+      setState(() {
+        _attachments.clear();
+        _hasChanges = false;
+      });
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Note saved to Dropbox.')));
@@ -232,7 +394,11 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     }
   }
 
-  Future<void> _saveNoteToDropbox(Project project, String content) async {
+  Future<void> _saveNoteToDropbox(
+    Project project,
+    String content,
+    List<_NoteAttachment> attachments,
+  ) async {
     final projectRoot = _resolveProjectDropboxPath(project);
     if (projectRoot == null) {
       throw Exception('Selected project is missing a Dropbox folder.');
@@ -252,13 +418,19 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     await _ensureNotesFolders(api, projectRoot);
 
     final notesFolder = _stripTrailingSlashes('$projectRoot/00 PRMG/05 NOTE');
-    final fileName = DateFormat('yyyy-MM-dd_HHmmss').format(DateTime.now());
-    final filePath = '$notesFolder/$fileName.txt';
-    final bytes = Uint8List.fromList(utf8.encode(content));
+    final timestamp = DateTime.now();
+    final fileName = DateFormat('yyyy-MM-dd_HHmmss').format(timestamp);
+    final filePath = '$notesFolder/$fileName.pdf';
+    final pdfBytes = await _buildPdfBytes(
+      project: project,
+      content: content,
+      attachments: attachments,
+      timestamp: timestamp,
+    );
 
     await api.upload(
       path: filePath,
-      bytes: bytes,
+      bytes: pdfBytes,
       mode: 'overwrite',
       autorename: false,
     );
@@ -271,6 +443,100 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     await api.ensureFolder(normalizedRoot);
     await api.ensureFolder(prmg);
     await api.ensureFolder(notes);
+  }
+
+  Future<Uint8List> _buildPdfBytes({
+    required Project project,
+    required String content,
+    required List<_NoteAttachment> attachments,
+    required DateTime timestamp,
+  }) async {
+    final doc = pw.Document();
+    final projectLabel = _projectDisplayLabel(project);
+    final formattedDate = DateFormat('MMMM d, yyyy h:mm a').format(timestamp);
+    final noteText = content.trim();
+
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.letter,
+        margin: const pw.EdgeInsets.fromLTRB(40, 40, 40, 40),
+        build: (context) {
+          final widgets = <pw.Widget>[
+            pw.Text(
+              'Field Note',
+              style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 6),
+            pw.Text(
+              projectLabel,
+              style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.Text(
+              formattedDate,
+              style: pw.TextStyle(fontSize: 11, color: PdfColors.grey700),
+            ),
+            pw.SizedBox(height: 16),
+          ];
+
+          if (noteText.isNotEmpty) {
+            widgets.add(
+              pw.Text(
+                noteText,
+                style: pw.TextStyle(fontSize: 12, height: 1.35),
+              ),
+            );
+            widgets.add(pw.SizedBox(height: 18));
+          }
+
+          if (attachments.isNotEmpty) {
+            widgets.add(
+              pw.Text(
+                'Photos',
+                style: pw.TextStyle(
+                  fontSize: 14,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            );
+            widgets.add(pw.SizedBox(height: 10));
+            for (var i = 0; i < attachments.length; i++) {
+              final attachment = attachments[i];
+              widgets.add(
+                pw.Text(
+                  'Photo \${i + 1}',
+                  style: pw.TextStyle(
+                    fontSize: 12,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              );
+              widgets.add(pw.SizedBox(height: 6));
+              widgets.add(
+                pw.Container(
+                  width: double.infinity,
+                  decoration: pw.BoxDecoration(
+                    borderRadius: pw.BorderRadius.circular(6),
+                    border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
+                  ),
+                  padding: const pw.EdgeInsets.all(4),
+                  child: pw.Image(
+                    pw.MemoryImage(attachment.bytes),
+                    fit: pw.BoxFit.contain,
+                  ),
+                ),
+              );
+              if (i != attachments.length - 1) {
+                widgets.add(pw.SizedBox(height: 16));
+              }
+            }
+          }
+
+          return widgets;
+        },
+      ),
+    );
+
+    return doc.save();
   }
 
   String? _resolveProjectDropboxPath(Project project) {
