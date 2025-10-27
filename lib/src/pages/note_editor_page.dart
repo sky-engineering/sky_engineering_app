@@ -1,5 +1,5 @@
 // lib/src/pages/note_editor_page.dart
-import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -8,8 +8,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:super_clipboard/super_clipboard.dart';
-
 import '../data/models/project.dart';
 import '../data/repositories/project_repository.dart';
 import '../integrations/dropbox/dropbox_api.dart';
@@ -95,7 +93,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                           type: item.type,
                           onPressed: () async {
                             Navigator.of(context).pop();
-                            final handled = await _handlePaste();
+                            final handled = await _handlePaste(state);
                             if (!handled) {
                               original?.call();
                             }
