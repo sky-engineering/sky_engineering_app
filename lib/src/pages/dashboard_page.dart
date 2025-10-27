@@ -5,7 +5,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'subphases_page.dart';
 import 'checklists_page.dart';
 import 'proposals_page.dart';
-import 'personal_checklist_page.dart';
 import '../dialogs/city_inspect_links_dialog.dart';
 import '../dialogs/other_links_dialog.dart';
 import '../pages/clients_page.dart';
@@ -121,15 +120,6 @@ class DashboardPage extends StatelessWidget {
 
               linkButton('Other Links', () {
                 showOtherLinksDialog(context);
-              }),
-              const SizedBox(height: 16),
-
-              linkButton('Personal Tasks', () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const PersonalChecklistPage(),
-                  ),
-                );
               }),
               const SizedBox(height: 32),
             ],

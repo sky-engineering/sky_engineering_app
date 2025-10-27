@@ -170,40 +170,50 @@ class _ChecklistEditDialogState extends State<_ChecklistEditDialog> {
                     return Card(
                       key: ValueKey('editable-item-${entry.item.id}'),
                       margin: const EdgeInsets.symmetric(vertical: 2),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 2,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
                         ),
-                        visualDensity: const VisualDensity(vertical: -2),
-                        minVerticalPadding: 0,
-                        dense: true,
-                        leading: ReorderableDragStartListener(
-                          index: index,
-                          child: const Icon(Icons.drag_handle),
-                        ),
-                        title: TextFormField(
-                          controller: entry.controller,
-                          textInputAction: TextInputAction.next,
-                          decoration: const InputDecoration(
-                            labelText: 'Checklist item',
-                            isDense: true,
-                            contentPadding: EdgeInsets.symmetric(
-                              vertical: 8,
-                              horizontal: 12,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            ReorderableDragStartListener(
+                              index: index,
+                              child: const Icon(Icons.drag_handle, size: 20),
                             ),
-                          ),
-                          validator: (value) {
-                            if ((value ?? '').trim().isEmpty) {
-                              return 'Enter text or remove this row.';
-                            }
-                            return null;
-                          },
-                        ),
-                        trailing: IconButton(
-                          tooltip: 'Remove item',
-                          onPressed: () => _removeAt(index),
-                          icon: const Icon(Icons.delete_outline),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: TextFormField(
+                                controller: entry.controller,
+                                textInputAction: TextInputAction.next,
+                                decoration: const InputDecoration(
+                                  hintText: 'Add item',
+                                  border: InputBorder.none,
+                                  isDense: true,
+                                  contentPadding: EdgeInsets.symmetric(
+                                    vertical: 8,
+                                  ),
+                                ),
+                                validator: (value) {
+                                  if ((value ?? '').trim().isEmpty) {
+                                    return 'Enter text or remove this row.';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Remove item',
+                              padding: const EdgeInsets.all(4),
+                              constraints: const BoxConstraints(
+                                minWidth: 36,
+                                minHeight: 36,
+                              ),
+                              onPressed: () => _removeAt(index),
+                              icon: const Icon(Icons.delete_outline, size: 20),
+                            ),
+                          ],
                         ),
                       ),
                     );

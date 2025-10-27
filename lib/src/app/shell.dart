@@ -13,6 +13,7 @@ import '../pages/invoices_page.dart';
 import '../pages/starred_tasks_page.dart';
 import '../pages/task_overview_page.dart';
 import '../pages/external_tasks_overview_page.dart';
+import '../pages/personal_checklist_page.dart';
 
 const _brandYellow = Color(0xFFF1C400);
 
@@ -34,6 +35,7 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
   int _previousIndex = 0;
   static const int _taskOverviewPageIndex = 5;
   static const int _externalTasksPageIndex = 6;
+  static const int _personalTasksPageIndex = 7;
   bool _quickMenuVisible = false;
 
   late final AnimationController _taskMenuController;
@@ -55,6 +57,7 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
       InvoicesPage(),
       TaskOverviewPage(),
       const ExternalTasksOverviewPage(),
+      const PersonalChecklistPage(),
     ]);
 
     _taskMenuController = AnimationController(
@@ -202,6 +205,12 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
           _bodyIndex = _taskOverviewPageIndex;
         });
         break;
+      case _TaskAction.personal:
+        setState(() {
+          _navIndex = 2;
+          _bodyIndex = _personalTasksPageIndex;
+        });
+        break;
       case _TaskAction.external:
         setState(() {
           _navIndex = 2;
@@ -241,22 +250,28 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
 
         const options = <_TaskMenuOption>[
           _TaskMenuOption(
-            action: _TaskAction.starred,
-            label: 'Starred Tasks',
-            icon: Icons.star,
-            offset: Offset(0, -150),
+            action: _TaskAction.overview,
+            label: 'Overview',
+            icon: Icons.dashboard_customize,
+            offset: Offset(-117, -68),
           ),
           _TaskMenuOption(
-            action: _TaskAction.overview,
-            label: 'Tasks Overview',
-            icon: Icons.dashboard_customize,
-            offset: Offset(-120, -110),
+            action: _TaskAction.starred,
+            label: 'Starred',
+            icon: Icons.star,
+            offset: Offset(-46, -127),
+          ),
+          _TaskMenuOption(
+            action: _TaskAction.personal,
+            label: 'Personal',
+            icon: Icons.person,
+            offset: Offset(46, -127),
           ),
           _TaskMenuOption(
             action: _TaskAction.external,
-            label: 'External Tasks',
+            label: 'External',
             icon: Icons.public,
-            offset: Offset(120, -110),
+            offset: Offset(117, -68),
           ),
         ];
 
@@ -307,24 +322,24 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
         const options = <_QuickMenuOption>[
           _QuickMenuOption(
             action: _QuickAction.newTask,
-            label: 'New Task',
+            label: 'Task',
             icon: Icons.checklist_rtl,
-            angleDeg: 80,
-            radius: 148,
-          ),
-          _QuickMenuOption(
-            action: _QuickAction.newNote,
-            label: 'New Note',
-            icon: Icons.note_alt_outlined,
-            angleDeg: 45,
-            radius: 136,
+            angleDeg: 95,
+            radius: 115,
           ),
           _QuickMenuOption(
             action: _QuickAction.newInvoice,
-            label: 'New Invoice',
+            label: 'Invoice',
             icon: Icons.request_quote_outlined,
-            angleDeg: 12,
-            radius: 124,
+            angleDeg: 55,
+            radius: 115,
+          ),
+          _QuickMenuOption(
+            action: _QuickAction.newNote,
+            label: 'Note',
+            icon: Icons.note_alt_outlined,
+            angleDeg: 15,
+            radius: 115,
           ),
         ];
 
@@ -486,7 +501,7 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
   }
 }
 
-enum _TaskAction { starred, overview, external }
+enum _TaskAction { starred, overview, personal, external }
 
 class _TaskMenuOption {
   const _TaskMenuOption({
@@ -539,7 +554,11 @@ class _QuickMenuButton extends StatelessWidget {
     final translation = Offset(-dx * progress, -dy * progress);
     final opacity = progress.clamp(0.0, 1.0);
     final theme = Theme.of(context);
-    final textStyle = theme.textTheme.bodySmall?.copyWith(
+    final baseStyle =
+        theme.textTheme.labelSmall ??
+        theme.textTheme.bodySmall ??
+        const TextStyle(fontSize: 12);
+    final textStyle = baseStyle.copyWith(
       color: Colors.white,
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
@@ -631,10 +650,14 @@ class _TaskMenuButton extends StatelessWidget {
     );
     final opacity = progress.clamp(0.0, 1.0);
     final theme = Theme.of(context);
-    final textStyle = theme.textTheme.bodyMedium?.copyWith(
+    final baseStyle =
+        theme.textTheme.labelSmall ??
+        theme.textTheme.bodySmall ??
+        const TextStyle(fontSize: 12);
+    final textStyle = baseStyle.copyWith(
       color: Colors.white,
       fontWeight: FontWeight.w600,
-      letterSpacing: 0.3,
+      letterSpacing: 0.2,
     );
 
     return Transform.translate(
@@ -644,6 +667,20 @@ class _TaskMenuButton extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.45 * opacity),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                child: Text(option.label, style: textStyle),
+              ),
+            ),
+            const SizedBox(height: 6),
             Material(
               color: Colors.transparent,
               elevation: 8 * opacity,
@@ -663,20 +700,6 @@ class _TaskMenuButton extends StatelessWidget {
                   ),
                   child: Icon(option.icon, color: Colors.black87, size: 24),
                 ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.55 * opacity),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                child: Text(option.label, style: textStyle),
               ),
             ),
           ],

@@ -35,7 +35,7 @@ class ProposalsPage extends StatelessWidget {
           if (snapshot.hasError) {
             return Center(
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(10),
                 child: Text('Failed to load clients: ${snapshot.error}'),
               ),
             );
@@ -75,19 +75,19 @@ class ProposalsPage extends StatelessWidget {
             slivers: [
               if (withProposals.isNotEmpty)
                 SliverPadding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(10),
                   sliver: _buildGrid(withProposals),
                 ),
               if (withProposals.isNotEmpty && withoutProposals.isNotEmpty)
                 const SliverToBoxAdapter(
                   child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     child: Divider(thickness: 4, color: Colors.red),
                   ),
                 ),
               if (withoutProposals.isNotEmpty)
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
                   sliver: _buildGrid(withoutProposals),
                 ),
             ],
@@ -146,8 +146,8 @@ class ProposalsPage extends StatelessWidget {
       ),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
+        mainAxisSpacing: 2,
+        crossAxisSpacing: 2,
         childAspectRatio: 1,
       ),
     );
@@ -221,7 +221,7 @@ class _ProposalClientCard extends StatelessWidget {
       child: InkWell(
         onTap: () => showClientEditorDialog(context, client: client),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

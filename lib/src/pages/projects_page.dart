@@ -27,16 +27,16 @@ class _ProjectsPageState extends State<ProjectsPage> {
   static const List<MapEntry<String, String>> _statusOptions =
       <MapEntry<String, String>>[
         MapEntry('In Progress', 'IP'),
-        MapEntry('On Hold', 'OH'),
         MapEntry('Under Construction', 'UC'),
+        MapEntry('On Hold', 'OH'),
         MapEntry('Close When Paid', 'CWP'),
         MapEntry('Archive', 'Arch'),
       ];
 
   static const Set<String> _defaultStatusFilters = <String>{
     'In Progress',
-    'On Hold',
     'Under Construction',
+    'On Hold',
     'Close When Paid',
   };
 
@@ -82,21 +82,29 @@ class _ProjectsPageState extends State<ProjectsPage> {
             items = items.where((p) => _matchesSearch(p, query)).toList();
           }
 
+          final filterLabelStyle =
+              Theme.of(
+                context,
+              ).textTheme.labelSmall?.copyWith(fontSize: 9.5, height: 1.0) ??
+              const TextStyle(fontSize: 9.5, height: 1.0);
+
           final children = <Widget>[
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
               child: SegmentedButton<String>(
                 segments: _statusOptions
                     .map(
                       (entry) => ButtonSegment<String>(
                         value: entry.key,
                         label: SizedBox(
-                          width: 56,
-                          child: Center(
-                            child: Text(
-                              entry.value,
-                              textAlign: TextAlign.center,
-                            ),
+                          width: 132,
+                          child: Text(
+                            entry.key,
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.visible,
+                            softWrap: true,
+                            style: filterLabelStyle,
                           ),
                         ),
                       ),
@@ -106,6 +114,12 @@ class _ProjectsPageState extends State<ProjectsPage> {
                 multiSelectionEnabled: true,
                 emptySelectionAllowed: true,
                 showSelectedIcon: false,
+                style: ButtonStyle(
+                  padding: MaterialStateProperty.all(
+                    const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                  ),
+                  minimumSize: MaterialStateProperty.all(const Size(0, 32)),
+                ),
                 onSelectionChanged: (newSelection) {
                   setState(() {
                     _statusFilters = Set<String>.from(newSelection);
@@ -115,7 +129,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
             ),
             const SizedBox(height: 6),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
               child: TextField(
                 controller: _searchController,
                 decoration: InputDecoration(

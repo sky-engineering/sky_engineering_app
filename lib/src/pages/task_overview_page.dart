@@ -9,14 +9,43 @@ import 'project_detail_page.dart';
 
 const _kWatchedStatuses = ['In Progress', 'Pending'];
 
-class TaskOverviewPage extends StatelessWidget {
-  TaskOverviewPage({super.key});
+class TaskOverviewPage extends StatefulWidget {
+  const TaskOverviewPage({super.key});
 
+  @override
+  State<TaskOverviewPage> createState() => _TaskOverviewPageState();
+}
+
+class _TaskOverviewPageState extends State<TaskOverviewPage> {
   final ProjectRepository _projectRepo = ProjectRepository();
   final TaskRepository _taskRepo = TaskRepository();
 
+  static const List<MapEntry<String, String>> _statusOptions =
+      <MapEntry<String, String>>[
+        MapEntry('In Progress', 'IP'),
+        MapEntry('Under Construction', 'UC'),
+        MapEntry('On Hold', 'OH'),
+        MapEntry('Close When Paid', 'CWP'),
+        MapEntry('Archive', 'Arch'),
+      ];
+
+  static const Set<String> _defaultStatusFilters = <String>{
+    'In Progress',
+    'Under Construction',
+    'On Hold',
+    'Close When Paid',
+  };
+
+  Set<String> _statusFilters = {..._defaultStatusFilters};
+
   @override
   Widget build(BuildContext context) {
+    final filterLabelStyle =
+        Theme.of(
+          context,
+        ).textTheme.labelSmall?.copyWith(fontSize: 9.5, height: 1.0) ??
+        const TextStyle(fontSize: 9.5, height: 1.0);
+
     return Scaffold(
       body: SafeArea(
         child: StreamBuilder<List<Project>>(
@@ -29,21 +58,111 @@ class TaskOverviewPage extends StatelessWidget {
             if (projects.isEmpty) {
               return const _EmptyState();
             }
-            final sorted = [...projects]..sort(_compareProjects);
-            return ListView.separated(
-              physics: const ClampingScrollPhysics(),
+
+            final visibleProjects = projects
+                .where(_includeProject)
+                .toList(growable: false);
+            visibleProjects.sort(_compareProjects);
+
+            final children = <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(0, 0, 0, 4),
+                child: SegmentedButton<String>(
+                  segments: _statusOptions
+                      .map(
+                        (entry) => ButtonSegment<String>(
+                          value: entry.key,
+                          label: SizedBox(
+                            width: 132,
+                            child: Text(
+                              entry.key,
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.visible,
+                              softWrap: true,
+                              style: filterLabelStyle,
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
+                  selected: _statusFilters,
+                  multiSelectionEnabled: true,
+                  emptySelectionAllowed: true,
+                  showSelectedIcon: false,
+                  style: ButtonStyle(
+                    padding: MaterialStateProperty.all(
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    ),
+                    minimumSize: MaterialStateProperty.all(const Size(0, 32)),
+                  ),
+                  onSelectionChanged: (newSelection) {
+                    setState(() {
+                      _statusFilters = Set<String>.from(newSelection);
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+            ];
+
+            if (visibleProjects.isEmpty) {
+              children.add(
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 32,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.inbox_outlined, size: 48),
+                      SizedBox(height: 8),
+                      Text('No projects match the selected statuses.'),
+                    ],
+                  ),
+                ),
+              );
+            } else {
+              for (var i = 0; i < visibleProjects.length; i++) {
+                children.add(
+                  _ProjectTaskCard(
+                    project: visibleProjects[i],
+                    taskRepo: _taskRepo,
+                  ),
+                );
+                if (i != visibleProjects.length - 1) {
+                  children.add(const SizedBox(height: 12));
+                }
+              }
+            }
+
+            return ListView(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-              itemCount: sorted.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final project = sorted[index];
-                return _ProjectTaskCard(project: project, taskRepo: _taskRepo);
-              },
+              children: children,
             );
           },
         ),
       ),
     );
+  }
+
+  bool _includeProject(Project project) {
+    if (_statusFilters.isEmpty) {
+      return false;
+    }
+
+    final status = project.status.trim();
+    if (_statusFilters.contains(status)) {
+      return true;
+    }
+
+    if (_statusFilters.contains('Archive') &&
+        (project.isArchived || status == 'Archive')) {
+      return true;
+    }
+
+    return false;
   }
 }
 
