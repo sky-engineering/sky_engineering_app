@@ -1,13 +1,13 @@
 // lib/src/pages/note_editor_page.dart
-import 'dart:convert';
-import 'dart:typed_data';
+import 'dart:async';
+import 'dart:typed_data' as typed_data;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:super_clipboard/super_clipboard.dart';
 import '../data/models/project.dart';
 import '../data/repositories/project_repository.dart';
 import '../integrations/dropbox/dropbox_api.dart';
@@ -24,7 +24,7 @@ class _NoteAttachment {
   _NoteAttachment({required this.id, required this.bytes});
 
   final String id;
-  final Uint8List bytes;
+  final typed_data.Uint8List bytes;
 }
 
 class _NoteEditorPageState extends State<NoteEditorPage> {
@@ -93,7 +93,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                           type: item.type,
                           onPressed: () async {
                             Navigator.of(context).pop();
-                            final handled = await _handlePaste(state);
+                            final handled = await _handlePaste();
                             if (!handled) {
                               original?.call();
                             }
@@ -247,7 +247,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           continue;
         }
 
-        final completer = Completer<Uint8List?>();
+        final completer = Completer<typed_data.Uint8List?>();
         final progress = reader.getFile(
           format,
           (file) async {
@@ -552,7 +552,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     await api.ensureFolder(notes);
   }
 
-  Future<Uint8List> _buildPdfBytes({
+  Future<typed_data.Uint8List> _buildPdfBytes({
     required Project project,
     required String content,
     required List<_NoteAttachment> attachments,
