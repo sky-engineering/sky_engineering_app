@@ -11,13 +11,24 @@ workflows:
       xcode: latest
       cocoapods: default
       vars:
-        BUNDLE_ID: com.skyengineering.sky-engineering-app
+        BUNDLE_ID: com.skyengineering.skyengineeringapp   # ← fixed bundle id
         TEAM_ID: NJGU3G29BR
-      # keep this if your env vars are in the ios_signing group
       groups:
         - ios_signing
 
     scripts:
+      - name: iOS clean & pods
+        script: |
+          set -euo pipefail
+          flutter --version
+          flutter clean
+          rm -rf ios/Pods ios/Podfile.lock
+          flutter pub get
+          cd ios
+          pod repo update
+          pod install
+          cd ..
+
       - name: Flutter packages
         script: flutter pub get
 
@@ -47,7 +58,7 @@ workflows:
           security list-keychains -d user -s "$KEYCHAIN_PATH"
           security default-keychain -s "$KEYCHAIN_PATH"
 
-          # ❗ Import the PKCS#12 WITHOUT forcing -t cert (keeps the private key)
+          # import the p12 (keep private key)
           if [ -n "${IOS_DIST_CERT_PASSWORD:-}" ]; then
             security import /tmp/dist.p12 -k "$KEYCHAIN_PATH" -P "$IOS_DIST_CERT_PASSWORD" -A -f pkcs12
           else
