@@ -1,3 +1,4 @@
+# Xcode and CocoaPods
 **/dgph
 *.mode1v3
 *.mode2v3
@@ -15,6 +16,8 @@ Icon?
 profile
 xcuserdata
 **/.generated/
+
+# Flutter-specific ignores
 Flutter/App.framework
 Flutter/Flutter.framework
 Flutter/Flutter.podspec
@@ -27,8 +30,18 @@ Flutter/flutter_export_environment.sh
 ServiceDefinitions.json
 Runner/GeneratedPluginRegistrant.*
 
-# Exceptions to above rules.
+# Exceptions (keep default Xcode files)
 !default.mode1v3
 !default.mode2v3
 !default.pbxuser
 !default.perspectivev3
+
+# --- iOS (track project, ignore build artifacts) ---
+/ios/Pods/
+/ios/.symlinks/
+/ios/Flutter/ephemeral/
+/ios/Flutter/Generated.xcconfig
+/ios/Flutter/Flutter.podspec
+/ios/ServiceDefinitions.json
+**/xcuserdata/
+**/DerivedData/
