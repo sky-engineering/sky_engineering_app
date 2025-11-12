@@ -22,3 +22,8 @@ Squash work-in-progress commits before review. PRs need a punchy summary, linked
 ## Security & Configuration Tips
 Firebase config is generated in firebase_options.dart; rerun `flutterfire configure` instead of editing by hand.
 Keep secrets and provisioning material out of git -- store them in environment variables or Codemagic secure groups. Document any new setup steps in README.md or AGENTS.md before merging.
+
+### Dropbox local setup
+- Request the `DROPBOX_APP_KEY` and redirect URI (`com.skyengineering.skyengineeringapp://oauth2redirect`) from the mobile team.
+- Run the app with dart-defines so the Dropbox auth flow can launch: `flutter run --dart-define=DROPBOX_APP_KEY=<key> --dart-define=DROPBOX_REDIRECT_URI=com.skyengineering.skyengineeringapp://oauth2redirect`.
+- Codemagic already injects these values; the defines are only needed for local emulators/simulators.

@@ -15,18 +15,14 @@ class PersonalChecklistService extends ChangeNotifier {
   factory PersonalChecklistService() => instance;
 
   static const _itemsKey = 'personal_checklist_items';
-  static const _showKey = 'personal_checklist_show_starred';
 
   final List<PersonalChecklistItem> _items = <PersonalChecklistItem>[];
-  bool _showInStarred = false;
 
   Future<void>? _loadFuture;
   SharedPreferences? _prefs;
 
   UnmodifiableListView<PersonalChecklistItem> get items =>
       UnmodifiableListView(_items);
-
-  bool get showInStarred => _showInStarred;
 
   Future<void> ensureLoaded() {
     return _loadFuture ??= _load();
@@ -47,7 +43,6 @@ class PersonalChecklistService extends ChangeNotifier {
           }
         }).whereType<PersonalChecklistItem>(),
       );
-    _showInStarred = prefs.getBool(_showKey) ?? false;
     notifyListeners();
   }
 
@@ -61,18 +56,33 @@ class PersonalChecklistService extends ChangeNotifier {
     final trimmed = title.trim();
     if (trimmed.isEmpty) return;
     await ensureLoaded();
-    _items.add(PersonalChecklistItem(id: _nextId(), title: trimmed));
+    _items.add(
+      PersonalChecklistItem(id: _nextId(), title: trimmed),
+    );
     await _persistItems();
     notifyListeners();
   }
 
-  Future<void> setCompletion(String id, bool isDone) async {
-    await ensureLoaded();
-    final index = _items.indexWhere((item) => item.id == id);
-    if (index == -1) return;
-    _items[index] = _items[index].copyWith(isDone: isDone);
-    await _persistItems();
-    notifyListeners();
+  Future<void> setCompletion(String id, bool isDone) {
+    return _updateItemFields(id, isDone: isDone);
+  }
+
+  Future<void> setStarred(String id, bool isStarred) {
+    return _updateItemFields(id, isStarred: isStarred);
+  }
+
+  Future<void> updateItem({
+    required String id,
+    String? title,
+    bool? isDone,
+    bool? isStarred,
+  }) {
+    return _updateItemFields(
+      id,
+      title: title,
+      isDone: isDone,
+      isStarred: isStarred,
+    );
   }
 
   Future<void> reorderItems(List<String> orderedIds) async {
@@ -125,25 +135,38 @@ class PersonalChecklistService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setShowInStarred(bool value) async {
+  Future<void> _updateItemFields(
+    String id, {
+    String? title,
+    bool? isDone,
+    bool? isStarred,
+  }) async {
     await ensureLoaded();
-    if (_showInStarred == value) return;
-    _showInStarred = value;
-    await _persistFlag();
+    final index = _items.indexWhere((item) => item.id == id);
+    if (index == -1) return;
+    final trimmedTitle = title?.trim();
+    if (trimmedTitle?.isEmpty ?? false) {
+      return;
+    }
+    final current = _items[index];
+    final updated = current.copyWith(
+      title: trimmedTitle ?? current.title,
+      isDone: isDone ?? current.isDone,
+      isStarred: isStarred ?? current.isStarred,
+    );
+    final changed = updated.title != current.title ||
+        updated.isDone != current.isDone ||
+        updated.isStarred != current.isStarred;
+    if (!changed) return;
+    _items[index] = updated;
+    await _persistItems();
     notifyListeners();
   }
 
   Future<void> _persistItems() async {
     final prefs = await _ensurePrefs();
-    final encoded = _items
-        .map((item) => jsonEncode(item.toMap()))
-        .toList(growable: false);
+    final encoded =
+        _items.map((item) => jsonEncode(item.toMap())).toList(growable: false);
     await prefs.setStringList(_itemsKey, encoded);
-    await _persistFlag();
-  }
-
-  Future<void> _persistFlag() async {
-    final prefs = await _ensurePrefs();
-    await prefs.setBool(_showKey, _showInStarred);
   }
 }

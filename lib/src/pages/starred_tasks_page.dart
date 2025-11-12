@@ -37,7 +37,6 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
   final PersonalChecklistService _personalService =
       PersonalChecklistService.instance;
   List<PersonalChecklistItem> _personalItems = const [];
-  bool _showPersonal = false;
 
   List<_StarredEntry> _entries = const [];
   final Set<String> _subtaskUpdates = <String>{};
@@ -47,16 +46,14 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
     super.initState();
     _user = FirebaseAuth.instance.currentUser;
     if (_user != null) {
-      _sub = _repo
-          .streamStarredForUser(_user!.uid)
-          .listen(
-            _onTasks,
-            onError: (_) {
-              if (mounted) {
-                setState(() => _loading = false);
-              }
-            },
-          );
+      _sub = _repo.streamStarredForUser(_user!.uid).listen(
+        _onTasks,
+        onError: (_) {
+          if (mounted) {
+            setState(() => _loading = false);
+          }
+        },
+      );
     } else {
       _loading = false;
     }
@@ -91,7 +88,7 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
     }
     final removedProjectIds = _syncProjectSubscriptions(sorted);
     if (!mounted) return;
-    final includePersonal = _shouldShowPersonal;
+    final includePersonal = _personalItems.isNotEmpty;
     final merged = _mergeEntries(
       entries: _entries,
       tasks: sorted,
@@ -110,18 +107,18 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
 
   void _syncPersonal() {
     if (!mounted) return;
-    final items = List<PersonalChecklistItem>.from(_personalService.items);
-    final show = _personalService.showInStarred;
-    final includePersonal = show && items.isNotEmpty;
+    final starred = _personalService.items
+        .where((item) => item.isStarred)
+        .toList(growable: false);
+    final includePersonal = starred.isNotEmpty;
     final merged = _mergeEntries(
       entries: _entries,
       tasks: _tasks,
-      personal: includePersonal ? items : const [],
+      personal: includePersonal ? starred : const [],
       includePersonal: includePersonal,
     );
     setState(() {
-      _personalItems = items;
-      _showPersonal = show;
+      _personalItems = starred;
       _entries = merged;
     });
   }
@@ -256,13 +253,11 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
     setState(() {
       _entries = normalizedEntries;
       _tasks = updatedTasks;
-      if (_showPersonal) {
-        _personalItems = updatedPersonal;
-      }
+      _personalItems = updatedPersonal;
     });
 
     final futures = <Future<void>>[_repo.reorderStarredTasks(updatedTasks)];
-    if (_showPersonal && updatedPersonal.isNotEmpty) {
+    if (updatedPersonal.isNotEmpty) {
       futures.add(
         _personalService.reorderItems(
           updatedPersonal.map((item) => item.id).toList(growable: false),
@@ -291,7 +286,7 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
           remaining[i] = remaining[i].copyWith(starredOrder: i);
         }
         _tasks = remaining;
-        final includePersonal = _shouldShowPersonal;
+        final includePersonal = _personalItems.isNotEmpty;
         _entries = _mergeEntries(
           entries: _entries,
           tasks: remaining,
@@ -337,8 +332,7 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
   }
 
   Future<bool> _deleteTask(TaskItem task) async {
-    final ok =
-        await showDialog<bool>(
+    final ok = await showDialog<bool>(
           context: context,
           builder: (dialogContext) {
             return AlertDialog(
@@ -394,9 +388,8 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
       _subtaskUpdates.add(task.id);
       _entries = List<_StarredEntry>.from(_entries)
         ..[entryIndex] = _StarredEntry.task(updatedTask);
-      _tasks = _tasks
-          .map((t) => t.id == updatedTask.id ? updatedTask : t)
-          .toList();
+      _tasks =
+          _tasks.map((t) => t.id == updatedTask.id ? updatedTask : t).toList();
     });
 
     try {
@@ -436,8 +429,6 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
       context,
     ).push(MaterialPageRoute(builder: (_) => const PersonalChecklistPage()));
   }
-
-  bool get _shouldShowPersonal => _showPersonal && _personalItems.isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -650,8 +641,7 @@ class _SwipeableStarredTileState extends State<_SwipeableStarredTile> {
       secondaryBackground: _buildSwipeBackground(context, isStartToEnd: false),
       onUpdate: (details) {
         final progress = details.progress.abs().clamp(0.0, 1.0);
-        final direction =
-            (details.direction == DismissDirection.startToEnd ||
+        final direction = (details.direction == DismissDirection.startToEnd ||
                 details.direction == DismissDirection.endToStart)
             ? details.direction
             : null;
@@ -691,8 +681,7 @@ class _SwipeableStarredTileState extends State<_SwipeableStarredTile> {
     required bool isStartToEnd,
   }) {
     final theme = Theme.of(context);
-    final isActive =
-        _currentDirection ==
+    final isActive = _currentDirection ==
         (isStartToEnd
             ? DismissDirection.startToEnd
             : DismissDirection.endToStart);
@@ -711,22 +700,19 @@ class _SwipeableStarredTileState extends State<_SwipeableStarredTile> {
     final iconOpacity = isStartToEnd
         ? (progress / _completeThreshold).clamp(0.0, 1.0)
         : progress <= _completeThreshold
-        ? 0.0
-        : ((progress - _completeThreshold) /
-                  (_deleteThreshold - _completeThreshold))
-              .clamp(0.0, 1.0);
+            ? 0.0
+            : ((progress - _completeThreshold) /
+                    (_deleteThreshold - _completeThreshold))
+                .clamp(0.0, 1.0);
 
-    final alignment = isStartToEnd
-        ? Alignment.centerLeft
-        : Alignment.centerRight;
-    final rowAlignment = isStartToEnd
-        ? MainAxisAlignment.start
-        : MainAxisAlignment.end;
+    final alignment =
+        isStartToEnd ? Alignment.centerLeft : Alignment.centerRight;
+    final rowAlignment =
+        isStartToEnd ? MainAxisAlignment.start : MainAxisAlignment.end;
 
     final icon = isStartToEnd ? Icons.check_circle : Icons.delete_forever;
-    final iconColor = isStartToEnd
-        ? theme.colorScheme.primary
-        : theme.colorScheme.error;
+    final iconColor =
+        isStartToEnd ? theme.colorScheme.primary : theme.colorScheme.error;
 
     return Container(
       alignment: alignment,
