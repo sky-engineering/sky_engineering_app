@@ -7,9 +7,30 @@ import 'package:flutter/material.dart';
 class LoadingOverlay {
   static bool _showing = false;
   static BuildContext? _dialogContext;
+  static NavigatorState? _rootNavigator;
+
+  static NavigatorState? _navigatorFrom(BuildContext? context) {
+    if (context == null) return null;
+    try {
+      return Navigator.of(context, rootNavigator: true);
+    } catch (_) {
+      try {
+        return Navigator.of(context);
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+
+  static void _resetState() {
+    _dialogContext = null;
+    _rootNavigator = null;
+    _showing = false;
+  }
 
   static void show(BuildContext context, {String message = 'Loading...'}) {
     if (_showing) return;
+    _rootNavigator = _navigatorFrom(context);
     _showing = true;
 
     showDialog<void>(
@@ -55,29 +76,29 @@ class LoadingOverlay {
           ),
         );
       },
-    ).whenComplete(() {
-      _dialogContext = null;
-      _showing = false;
-    });
+    ).whenComplete(_resetState);
   }
 
   static void hide([BuildContext? context]) {
-    if (!_showing) return;
+    if (!_showing && _dialogContext == null) return;
 
-    final navigatorContext = _dialogContext ?? context;
-    if (navigatorContext != null) {
-      try {
-        Navigator.of(navigatorContext, rootNavigator: true).pop();
-      } catch (_) {
-        try {
-          Navigator.of(navigatorContext).maybePop();
-        } catch (_) {
-          // Ignore if the dialog is already gone.
-        }
-      }
+    final navigator = _rootNavigator ??
+        _navigatorFrom(context) ??
+        _navigatorFrom(_dialogContext);
+
+    if (navigator == null) {
+      _resetState();
+      return;
     }
 
-    _dialogContext = null;
-    _showing = false;
+    if (navigator.canPop()) {
+      try {
+        navigator.pop();
+      } catch (_) {
+        _resetState();
+      }
+    } else {
+      _resetState();
+    }
   }
 }

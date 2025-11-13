@@ -1,8 +1,9 @@
 // lib/src/pages/task_overview_page.dart
 import 'package:flutter/material.dart';
-
+import '../data/models/external_task.dart';
 import '../data/models/project.dart';
 import '../data/models/task.dart';
+import '../data/repositories/external_task_repository.dart';
 import '../data/repositories/project_repository.dart';
 import '../data/repositories/task_repository.dart';
 import 'project_detail_page.dart';
@@ -11,7 +12,6 @@ const _kWatchedStatuses = ['In Progress', 'Pending'];
 
 class TaskOverviewPage extends StatefulWidget {
   const TaskOverviewPage({super.key});
-
   @override
   State<TaskOverviewPage> createState() => _TaskOverviewPageState();
 }
@@ -19,33 +19,28 @@ class TaskOverviewPage extends StatefulWidget {
 class _TaskOverviewPageState extends State<TaskOverviewPage> {
   final ProjectRepository _projectRepo = ProjectRepository();
   final TaskRepository _taskRepo = TaskRepository();
-
+  final ExternalTaskRepository _externalRepo = ExternalTaskRepository();
   static const List<MapEntry<String, String>> _statusOptions =
       <MapEntry<String, String>>[
-        MapEntry('In Progress', 'IP'),
-        MapEntry('Under Construction', 'UC'),
-        MapEntry('On Hold', 'OH'),
-        MapEntry('Close When Paid', 'CWP'),
-        MapEntry('Archive', 'Arch'),
-      ];
-
+    MapEntry('In Progress', 'IP'),
+    MapEntry('Under Construction', 'UC'),
+    MapEntry('On Hold', 'OH'),
+    MapEntry('Close When Paid', 'CWP'),
+    MapEntry('Archive', 'Arch'),
+  ];
   static const Set<String> _defaultStatusFilters = <String>{
     'In Progress',
     'Under Construction',
     'On Hold',
     'Close When Paid',
   };
-
   Set<String> _statusFilters = {..._defaultStatusFilters};
-
   @override
   Widget build(BuildContext context) {
-    final filterLabelStyle =
-        Theme.of(
+    final filterLabelStyle = Theme.of(
           context,
         ).textTheme.labelSmall?.copyWith(fontSize: 9.5, height: 1.0) ??
         const TextStyle(fontSize: 9.5, height: 1.0);
-
     return Scaffold(
       body: SafeArea(
         child: StreamBuilder<List<Project>>(
@@ -58,12 +53,9 @@ class _TaskOverviewPageState extends State<TaskOverviewPage> {
             if (projects.isEmpty) {
               return const _EmptyState();
             }
-
-            final visibleProjects = projects
-                .where(_includeProject)
-                .toList(growable: false);
+            final visibleProjects =
+                projects.where(_includeProject).toList(growable: false);
             visibleProjects.sort(_compareProjects);
-
             final children = <Widget>[
               Padding(
                 padding: const EdgeInsets.fromLTRB(0, 0, 0, 4),
@@ -90,11 +82,11 @@ class _TaskOverviewPageState extends State<TaskOverviewPage> {
                   multiSelectionEnabled: true,
                   emptySelectionAllowed: true,
                   showSelectedIcon: false,
-                  style: ButtonStyle(
-                    padding: MaterialStateProperty.all(
-                      const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                  style: const ButtonStyle(
+                    padding: WidgetStatePropertyAll(
+                      EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                     ),
-                    minimumSize: MaterialStateProperty.all(const Size(0, 32)),
+                    minimumSize: WidgetStatePropertyAll(Size(0, 32)),
                   ),
                   onSelectionChanged: (newSelection) {
                     setState(() {
@@ -105,7 +97,6 @@ class _TaskOverviewPageState extends State<TaskOverviewPage> {
               ),
               const SizedBox(height: 8),
             ];
-
             if (visibleProjects.isEmpty) {
               children.add(
                 Padding(
@@ -129,6 +120,7 @@ class _TaskOverviewPageState extends State<TaskOverviewPage> {
                   _ProjectTaskCard(
                     project: visibleProjects[i],
                     taskRepo: _taskRepo,
+                    externalRepo: _externalRepo,
                   ),
                 );
                 if (i != visibleProjects.length - 1) {
@@ -136,7 +128,6 @@ class _TaskOverviewPageState extends State<TaskOverviewPage> {
                 }
               }
             }
-
             return ListView(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
               children: children,
@@ -151,27 +142,27 @@ class _TaskOverviewPageState extends State<TaskOverviewPage> {
     if (_statusFilters.isEmpty) {
       return false;
     }
-
     final status = project.status.trim();
     if (_statusFilters.contains(status)) {
       return true;
     }
-
     if (_statusFilters.contains('Archive') &&
         (project.isArchived || status == 'Archive')) {
       return true;
     }
-
     return false;
   }
 }
 
 class _ProjectTaskCard extends StatelessWidget {
-  const _ProjectTaskCard({required this.project, required this.taskRepo});
-
+  const _ProjectTaskCard({
+    required this.project,
+    required this.taskRepo,
+    required this.externalRepo,
+  });
   final Project project;
   final TaskRepository taskRepo;
-
+  final ExternalTaskRepository externalRepo;
   @override
   Widget build(BuildContext context) {
     final projectNumber = project.projectNumber?.trim();
@@ -179,7 +170,7 @@ class _ProjectTaskCard extends StatelessWidget {
         ? '$projectNumber ${project.name}'
         : project.name;
     final titleColor = _statusTextColor(context, project);
-
+    final externalSection = _buildExternalTasksSection(context, titleColor);
     Future<void> toggleStar(TaskItem task) async {
       try {
         await taskRepo.setStarred(task, !task.isStarred);
@@ -211,9 +202,9 @@ class _ProjectTaskCard extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: titleColor,
-                ),
+                      fontWeight: FontWeight.w600,
+                      color: titleColor,
+                    ),
               ),
             ),
             const SizedBox(height: 8),
@@ -239,8 +230,8 @@ class _ProjectTaskCard extends StatelessWidget {
                             Padding(
                               padding: const EdgeInsets.only(top: 3),
                               child: Icon(
-                                task.isStarred ? Icons.star : Icons.circle,
-                                size: task.isStarred ? 12 : 6,
+                                task.isStarred ? Icons.star : Icons.star_border,
+                                size: 12,
                                 color: task.isStarred
                                     ? const Color(0xFFF1C400)
                                     : titleColor.withValues(alpha: 0.7),
@@ -252,7 +243,9 @@ class _ProjectTaskCard extends StatelessWidget {
                                 task.title,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
                                     ?.copyWith(
                                       color: titleColor.withValues(alpha: 0.85),
                                     ),
@@ -266,16 +259,138 @@ class _ProjectTaskCard extends StatelessWidget {
                 );
               },
             ),
+            if (externalSection != null) externalSection,
           ],
         ),
       ),
     );
   }
+
+  Widget? _buildExternalTasksSection(
+    BuildContext context,
+    Color titleColor,
+  ) {
+    final tasks = (project.externalTasks ?? const <ExternalTask>[])
+        .where((task) => !task.isDone)
+        .toList();
+    if (tasks.isEmpty) return null;
+    tasks.sort((a, b) {
+      if (a.isStarred != b.isStarred) {
+        return a.isStarred ? -1 : 1;
+      }
+      final ao = a.starredOrder ?? 1 << 20;
+      final bo = b.starredOrder ?? 1 << 20;
+      final cmpOrder = ao.compareTo(bo);
+      if (cmpOrder != 0) return cmpOrder;
+      final ad = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bd = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return ad.compareTo(bd);
+    });
+    final theme = Theme.of(context);
+    final mutedColor = titleColor.withValues(alpha: 0.7);
+    final visible = tasks.take(3).toList();
+    final remaining = tasks.length - visible.length;
+    Widget buildRow(ExternalTask task) {
+      final assignee = task.assigneeName.trim();
+      final parts = <String>['External', task.title.trim()];
+      if (assignee.isNotEmpty) {
+        parts.add(assignee);
+      }
+      final line = parts.join(' - ');
+      return InkWell(
+        onTap: () => _toggleExternalStar(context, task),
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 3),
+                child: Icon(
+                  task.isStarred ? Icons.star : Icons.star_border,
+                  size: 12,
+                  color: task.isStarred
+                      ? const Color(0xFFF1C400)
+                      : titleColor.withValues(alpha: 0.7),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  line,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: titleColor.withValues(alpha: 0.85),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        ...visible.map(buildRow),
+        if (remaining > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              '+$remaining more external tasks',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: titleColor.withValues(alpha: 0.8),
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _toggleExternalStar(
+      BuildContext context, ExternalTask task) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final nextValue = !task.isStarred;
+    try {
+      await externalRepo.setStarred(
+        project.id,
+        task.id,
+        nextValue,
+        starredOrder: nextValue ? _nextExternalStarOrder(task) : null,
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Failed to update external task: $e')),
+      );
+    }
+  }
+
+  int _nextExternalStarOrder(ExternalTask toggled) {
+    final tasks = project.externalTasks ?? const <ExternalTask>[];
+    var maxOrder = -1;
+    var starredCount = 0;
+    for (final task in tasks) {
+      if (task.id == toggled.id) continue;
+      if (task.isStarred) {
+        starredCount++;
+        if (task.starredOrder != null && task.starredOrder! > maxOrder) {
+          maxOrder = task.starredOrder!;
+        }
+      }
+    }
+    if (maxOrder >= 0) {
+      return maxOrder + 1;
+    }
+    return starredCount;
+  }
 }
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
-
   @override
   Widget build(BuildContext context) {
     return Center(

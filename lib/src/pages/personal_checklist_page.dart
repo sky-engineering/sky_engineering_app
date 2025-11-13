@@ -3,9 +3,12 @@ import 'package:flutter/material.dart';
 
 import '../data/models/personal_checklist_item.dart';
 import '../services/personal_checklist_service.dart';
+import '../dialogs/personal_task_edit_dialog.dart';
 
 class PersonalChecklistPage extends StatefulWidget {
-  const PersonalChecklistPage({super.key});
+  const PersonalChecklistPage({super.key, this.showAppBar = false});
+
+  final bool showAppBar;
 
   @override
   State<PersonalChecklistPage> createState() => _PersonalChecklistPageState();
@@ -87,75 +90,11 @@ class _PersonalChecklistPageState extends State<PersonalChecklistPage> {
   }
 
   Future<void> _editItem(PersonalChecklistItem item) async {
-    final controller = TextEditingController(text: item.title);
-    var isDone = item.isDone;
-    var isStarred = item.isStarred;
-
-    final result = await showDialog<_PersonalEditResult>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            final canSave = controller.text.trim().isNotEmpty;
-            return AlertDialog(
-              title: const Text('Edit Task'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: controller,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Task name',
-                    ),
-                    onChanged: (_) => setState(() {}),
-                  ),
-                  const SizedBox(height: 12),
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Mark complete'),
-                    value: isDone,
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() => isDone = value);
-                    },
-                  ),
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Star task'),
-                    value: isStarred,
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() => isStarred = value);
-                    },
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: canSave
-                      ? () => Navigator.of(dialogContext).pop(
-                            _PersonalEditResult(
-                              title: controller.text.trim(),
-                              isDone: isDone,
-                              isStarred: isStarred,
-                            ),
-                          )
-                      : null,
-                  child: const Text('Save'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+    final result = await showPersonalTaskEditDialog(
+      context,
+      initialTitle: item.title,
+      initialIsDone: item.isDone,
     );
-
-    controller.dispose();
 
     if (result == null) return;
 
@@ -163,12 +102,34 @@ class _PersonalChecklistPageState extends State<PersonalChecklistPage> {
       id: item.id,
       title: result.title,
       isDone: result.isDone,
-      isStarred: result.isStarred,
     );
   }
 
   Future<void> _removeItem(PersonalChecklistItem item) async {
     await _service.removeItem(item.id);
+  }
+
+  Future<void> _handleReorder(int oldIndex, int newIndex) async {
+    final currentIds =
+        _service.items.map((item) => item.id).toList(growable: true);
+    if (oldIndex < 0 || oldIndex >= currentIds.length) {
+      return;
+    }
+    if (newIndex > currentIds.length) {
+      newIndex = currentIds.length;
+    }
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+    if (newIndex < 0 || newIndex >= currentIds.length) {
+      newIndex = currentIds.length - 1;
+    }
+    if (oldIndex == newIndex) {
+      return;
+    }
+    final moved = currentIds.removeAt(oldIndex);
+    currentIds.insert(newIndex, moved);
+    await _service.reorderItems(currentIds);
   }
 
   Future<void> _clearCompleted() async {
@@ -180,54 +141,89 @@ class _PersonalChecklistPageState extends State<PersonalChecklistPage> {
     final items = _service.items;
     final hasCompleted = items.any((item) => item.isDone);
 
-    Widget body;
+    Widget content;
     if (_loading) {
-      body = const Center(child: CircularProgressIndicator());
+      content = const Center(child: CircularProgressIndicator());
     } else if (items.isEmpty) {
-      body = const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-        child: _EmptyState(),
+      content = const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: _EmptyState(),
+        ),
       );
     } else {
-      body = ListView.separated(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+      content = ReorderableListView.builder(
+        padding: const EdgeInsets.fromLTRB(0, 8, 0, 96),
+        buildDefaultDragHandles: false,
+        proxyDecorator: (child, index, animation) {
+          final radius = BorderRadius.circular(16);
+          return Material(
+            elevation: 4,
+            borderRadius: radius,
+            clipBehavior: Clip.antiAlias,
+            child: child,
+          );
+        },
+        itemCount: items.length,
+        onReorder: _handleReorder,
         itemBuilder: (context, index) {
           final item = items[index];
-          return Dismissible(
+          return Padding(
             key: ValueKey(item.id),
-            direction: DismissDirection.endToStart,
-            onDismissed: (_) => _removeItem(item),
-            background: _dismissBackground(context),
-            child: _PersonalChecklistTile(
-              item: item,
-              onToggleComplete: (value) => _toggleItem(item, value),
-              onToggleStar: () => _toggleStar(item),
-              onEdit: () => _editItem(item),
+            padding: EdgeInsets.fromLTRB(
+              12,
+              0,
+              12,
+              index == items.length - 1 ? 0 : 12,
+            ),
+            child: ReorderableDelayedDragStartListener(
+              index: index,
+              child: _SwipeablePersonalChecklistTile(
+                item: item,
+                onToggleComplete: (value) => _toggleItem(item, value),
+                onToggleStar: () => _toggleStar(item),
+                onEdit: () => _editItem(item),
+                onDelete: () => _removeItem(item),
+              ),
             ),
           );
         },
-        separatorBuilder: (context, index) => const SizedBox(height: 12),
-        itemCount: items.length,
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Personal Tasks'),
-        actions: [
-          if (!_loading && hasCompleted)
-            IconButton(
-              tooltip: 'Clear completed',
-              onPressed: _clearCompleted,
-              icon: const Icon(Icons.clear_all),
+    final canClearCompleted = !_loading && hasCompleted;
+
+    final body = SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+        child: Column(
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: canClearCompleted ? _clearCompleted : null,
+                icon: const Icon(Icons.clear_all),
+                label: const Text('Clear Completed'),
+              ),
             ),
-        ],
+            const SizedBox(height: 8),
+            Expanded(child: content),
+          ],
+        ),
       ),
+    );
+
+    return Scaffold(
+      appBar: widget.showAppBar
+          ? AppBar(title: const Text('Personal Tasks'))
+          : null,
       body: body,
       floatingActionButton: FloatingActionButton(
         tooltip: 'Add checklist item',
+        backgroundColor: const Color(0xFFF1C400),
+        foregroundColor: Colors.black,
         onPressed: _addItem,
-        child: const Icon(Icons.playlist_add),
+        child: const Icon(Icons.add),
       ),
     );
   }
@@ -251,20 +247,20 @@ class _PersonalChecklistTile extends StatelessWidget {
     final theme = Theme.of(context);
     final filledStar = theme.colorScheme.secondary;
     final hollowStar = theme.colorScheme.onSurfaceVariant;
-    final titleStyle = theme.textTheme.bodyLarge?.copyWith(
-          fontWeight: FontWeight.w600,
-          decoration: item.isDone ? TextDecoration.lineThrough : null,
-        ) ??
-        TextStyle(
-          fontWeight: FontWeight.w600,
-          decoration: item.isDone ? TextDecoration.lineThrough : null,
-        );
+    final baseTitle = DefaultTextStyle.of(context).style;
+    final titleStyle = baseTitle.copyWith(
+      fontWeight: FontWeight.w600,
+      decoration: item.isDone ? TextDecoration.lineThrough : null,
+    );
+    final cardColor =
+        item.isDone ? theme.colorScheme.surfaceContainerHighest : null;
 
     return Card(
+      color: cardColor,
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
+        borderRadius: BorderRadius.circular(16),
         onTap: onEdit,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -273,6 +269,7 @@ class _PersonalChecklistTile extends StatelessWidget {
               IconButton(
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                iconSize: 20,
                 tooltip: item.isStarred ? 'Unstar' : 'Star',
                 splashRadius: 20,
                 icon: Icon(
@@ -309,6 +306,134 @@ class _PersonalChecklistTile extends StatelessWidget {
   }
 }
 
+class _SwipeablePersonalChecklistTile extends StatefulWidget {
+  const _SwipeablePersonalChecklistTile({
+    required this.item,
+    required this.onToggleComplete,
+    required this.onToggleStar,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final PersonalChecklistItem item;
+  final Future<void> Function(bool value) onToggleComplete;
+  final Future<void> Function() onToggleStar;
+  final Future<void> Function() onEdit;
+  final Future<void> Function() onDelete;
+
+  @override
+  State<_SwipeablePersonalChecklistTile> createState() =>
+      _SwipeablePersonalChecklistTileState();
+}
+
+class _SwipeablePersonalChecklistTileState
+    extends State<_SwipeablePersonalChecklistTile> {
+  static const double _completeThreshold = 0.6;
+  static const double _deleteThreshold = 0.85;
+
+  double _dragProgress = 0.0;
+  DismissDirection? _currentDirection;
+
+  bool get _completeArmed =>
+      _currentDirection == DismissDirection.startToEnd &&
+      _dragProgress >= _completeThreshold;
+
+  bool get _deleteArmed =>
+      _currentDirection == DismissDirection.endToStart &&
+      _dragProgress >= _deleteThreshold;
+
+  void _resetDrag() {
+    if (_dragProgress != 0.0 || _currentDirection != null) {
+      setState(() {
+        _dragProgress = 0.0;
+        _currentDirection = null;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dismissible(
+      key: ValueKey('checklist-${widget.item.id}'),
+      direction: DismissDirection.horizontal,
+      dismissThresholds: const {
+        DismissDirection.startToEnd: _completeThreshold,
+        DismissDirection.endToStart: _deleteThreshold,
+      },
+      background: _buildSwipeBackground(context, isStartToEnd: true),
+      secondaryBackground: _buildSwipeBackground(context, isStartToEnd: false),
+      onUpdate: (details) {
+        final progress = details.progress.abs().clamp(0.0, 1.0);
+        final direction = (details.direction == DismissDirection.startToEnd ||
+                details.direction == DismissDirection.endToStart)
+            ? details.direction
+            : null;
+        if (_dragProgress != progress || _currentDirection != direction) {
+          setState(() {
+            _dragProgress = progress;
+            _currentDirection = direction;
+          });
+        }
+      },
+      confirmDismiss: (direction) async {
+        final progress = _dragProgress;
+        _resetDrag();
+        if (direction == DismissDirection.startToEnd &&
+            progress >= _completeThreshold) {
+          await widget.onToggleComplete(!widget.item.isDone);
+        } else if (direction == DismissDirection.endToStart &&
+            progress >= _deleteThreshold) {
+          await widget.onDelete();
+        }
+        return false;
+      },
+      child: _PersonalChecklistTile(
+        item: widget.item,
+        onToggleComplete: (value) => widget.onToggleComplete(value),
+        onToggleStar: widget.onToggleStar,
+        onEdit: widget.onEdit,
+      ),
+    );
+  }
+
+  Widget _buildSwipeBackground(
+    BuildContext context, {
+    required bool isStartToEnd,
+  }) {
+    final theme = Theme.of(context);
+    final isActive = _currentDirection ==
+        (isStartToEnd
+            ? DismissDirection.startToEnd
+            : DismissDirection.endToStart);
+    final isArmed = isStartToEnd ? _completeArmed : _deleteArmed;
+    final color = isStartToEnd
+        ? theme.colorScheme.primary.withValues(
+            alpha: isActive && isArmed ? 0.25 : 0.12,
+          )
+        : Colors.transparent;
+
+    final icon = isStartToEnd ? Icons.check : Icons.delete;
+    final alignment =
+        isStartToEnd ? Alignment.centerLeft : Alignment.centerRight;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: EdgeInsets.only(
+        left: isStartToEnd ? 6 : 0,
+        right: isStartToEnd ? 0 : 6,
+      ),
+      alignment: alignment,
+      child: Icon(
+        icon,
+        color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+      ),
+    );
+  }
+}
+
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
 
@@ -332,27 +457,4 @@ class _EmptyState extends StatelessWidget {
       ),
     );
   }
-}
-
-class _PersonalEditResult {
-  const _PersonalEditResult({
-    required this.title,
-    required this.isDone,
-    required this.isStarred,
-  });
-
-  final String title;
-  final bool isDone;
-  final bool isStarred;
-}
-
-Widget _dismissBackground(BuildContext context) {
-  final color = Theme.of(context).colorScheme.errorContainer;
-  final onColor = Theme.of(context).colorScheme.onErrorContainer;
-  return Container(
-    alignment: Alignment.centerRight,
-    padding: const EdgeInsets.symmetric(horizontal: 20),
-    color: color,
-    child: Icon(Icons.delete_outline, color: onColor),
-  );
 }

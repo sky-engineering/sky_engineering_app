@@ -306,8 +306,7 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
   }
 
   Widget _buildQuickMenuOverlay(BuildContext context) {
-    final showOverlay =
-        _quickMenuVisible ||
+    final showOverlay = _quickMenuVisible ||
         _quickMenuController.isAnimating ||
         !_quickMenuController.isDismissed;
     if (!showOverlay) {
@@ -390,13 +389,11 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
 
   Widget _buildAppBarTitle(BuildContext context) {
     final theme = Theme.of(context);
-    final baseStyle =
-        theme.appBarTheme.titleTextStyle ??
+    final baseStyle = theme.appBarTheme.titleTextStyle ??
         theme.textTheme.titleLarge?.copyWith(
           color: theme.colorScheme.onPrimary,
         );
-    final displayStyle =
-        baseStyle ??
+    final displayStyle = baseStyle ??
         theme.textTheme.titleLarge?.copyWith(
           color: theme.colorScheme.onPrimary,
         );
@@ -423,6 +420,9 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
         break;
       case _externalTasksPageIndex:
         pageTitle = 'External Tasks';
+        break;
+      case _personalTasksPageIndex:
+        pageTitle = 'Personal Tasks';
         break;
     }
 
@@ -554,8 +554,7 @@ class _QuickMenuButton extends StatelessWidget {
     final translation = Offset(-dx * progress, -dy * progress);
     final opacity = progress.clamp(0.0, 1.0);
     final theme = Theme.of(context);
-    final baseStyle =
-        theme.textTheme.labelSmall ??
+    final baseStyle = theme.textTheme.labelSmall ??
         theme.textTheme.bodySmall ??
         const TextStyle(fontSize: 12);
     final textStyle = baseStyle.copyWith(
@@ -650,8 +649,7 @@ class _TaskMenuButton extends StatelessWidget {
     );
     final opacity = progress.clamp(0.0, 1.0);
     final theme = Theme.of(context);
-    final baseStyle =
-        theme.textTheme.labelSmall ??
+    final baseStyle = theme.textTheme.labelSmall ??
         theme.textTheme.bodySmall ??
         const TextStyle(fontSize: 12);
     final textStyle = baseStyle.copyWith(
@@ -717,9 +715,8 @@ class _StarTabIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final backgroundColor = isSelected ? _brandYellow : Colors.white;
-    final borderColor = isSelected
-        ? Colors.transparent
-        : _brandYellow.withValues(alpha: 0.5);
+    final borderColor =
+        isSelected ? Colors.transparent : _brandYellow.withValues(alpha: 0.5);
     final iconColor = isSelected ? Colors.black : _brandYellow;
     final shadowColor = _brandYellow.withValues(alpha: 0.35);
 
@@ -732,9 +729,8 @@ class _StarTabIcon extends StatelessWidget {
         border: Border.all(color: borderColor, width: 2),
         boxShadow: [
           BoxShadow(
-            color: isSelected
-                ? shadowColor
-                : shadowColor.withValues(alpha: 0.15),
+            color:
+                isSelected ? shadowColor : shadowColor.withValues(alpha: 0.15),
             blurRadius: isSelected ? 14 : 6,
             offset: isSelected ? const Offset(0, 6) : const Offset(0, 2),
           ),

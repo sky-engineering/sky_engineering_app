@@ -10,6 +10,8 @@ class ExternalTask {
   final String assigneeKey;
   final String assigneeName;
   final bool isDone;
+  final bool isStarred;
+  final int? starredOrder;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -20,6 +22,8 @@ class ExternalTask {
     required this.assigneeKey,
     required this.assigneeName,
     this.isDone = false,
+    this.isStarred = false,
+    this.starredOrder,
     this.createdAt,
     this.updatedAt,
   });
@@ -31,6 +35,8 @@ class ExternalTask {
     String? assigneeKey,
     String? assigneeName,
     bool? isDone,
+    bool? isStarred,
+    int? starredOrder,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -41,6 +47,8 @@ class ExternalTask {
       assigneeKey: assigneeKey ?? this.assigneeKey,
       assigneeName: assigneeName ?? this.assigneeName,
       isDone: isDone ?? this.isDone,
+      isStarred: isStarred ?? this.isStarred,
+      starredOrder: starredOrder ?? this.starredOrder,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -61,21 +69,38 @@ class ExternalTask {
       assigneeKey: readString(map, 'assigneeKey'),
       assigneeName: readString(map, 'assigneeName'),
       isDone: readBool(map, 'isDone'),
-      createdAt: readDateTime(map, 'createdAt'),
-      updatedAt: readDateTime(map, 'updatedAt'),
+      isStarred: readBool(map, 'isStarred'),
+      starredOrder: map['starredOrder'] is num
+          ? (map['starredOrder'] as num).toInt()
+          : null,
+      createdAt: _readTimestamp(map['createdAt']),
+      updatedAt: _readTimestamp(map['updatedAt']),
     );
   }
 
   Map<String, dynamic> toMap() {
-    return <String, dynamic>{
+    return {
       'id': id,
       'projectId': projectId,
       'title': title,
       'assigneeKey': assigneeKey,
       'assigneeName': assigneeName,
       'isDone': isDone,
-      if (createdAt != null) 'createdAt': timestampFromDate(createdAt),
-      if (updatedAt != null) 'updatedAt': timestampFromDate(updatedAt),
+      'isStarred': isStarred,
+      'starredOrder': starredOrder,
+      'createdAt': createdAt?.millisecondsSinceEpoch,
+      'updatedAt': updatedAt?.millisecondsSinceEpoch,
     };
   }
+}
+
+DateTime? _readTimestamp(dynamic value) {
+  if (value is Timestamp) return value.toDate();
+  if (value is int) {
+    return DateTime.fromMillisecondsSinceEpoch(value);
+  }
+  if (value is num) {
+    return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+  }
+  return null;
 }
