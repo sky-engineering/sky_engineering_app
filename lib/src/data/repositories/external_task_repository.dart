@@ -33,6 +33,7 @@ class ExternalTaskRepository {
       txn.update(docRef, {
         'externalTasks': tasks.map((t) => t.toMap()).toList(),
         'updatedAt': FieldValue.serverTimestamp(),
+        'hasExternalTasks': tasks.isNotEmpty,
       });
     });
   }
@@ -106,6 +107,7 @@ class ExternalTaskRepository {
       txn.update(docRef, {
         'externalTasks': tasks.map((t) => t.toMap()).toList(),
         'updatedAt': FieldValue.serverTimestamp(),
+        'hasExternalTasks': tasks.isNotEmpty,
       });
     });
   }
@@ -128,6 +130,7 @@ class ExternalTaskRepository {
       txn.update(docRef, {
         'externalTasks': updated.map((t) => t.toMap()).toList(),
         'updatedAt': FieldValue.serverTimestamp(),
+        'hasExternalTasks': updated.isNotEmpty,
       });
     });
   }
@@ -174,6 +177,7 @@ class ExternalTaskRepository {
       await updater({
         'externalTasks': tasks.map((t) => t.toMap()).toList(),
         'updatedAt': FieldValue.serverTimestamp(),
+        'hasExternalTasks': tasks.isNotEmpty,
       });
     }
 

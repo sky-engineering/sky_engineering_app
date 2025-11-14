@@ -6,6 +6,7 @@ import '../data/repositories/client_repository.dart';
 import '../data/repositories/project_repository.dart';
 import '../dialogs/client_editor_dialog.dart';
 import 'project_detail_page.dart';
+import '../app/shell.dart';
 
 class ProposalsPage extends StatelessWidget {
   ProposalsPage({super.key});
@@ -21,11 +22,12 @@ class ProposalsPage extends StatelessWidget {
         actions: [
           IconButton(
             tooltip: 'Open 001 Proposals project',
-            icon: const Icon(Icons.folder_open),
+            icon: const Icon(Icons.open_in_new),
             onPressed: () => _openProposalsProject(context),
           ),
         ],
       ),
+      bottomNavigationBar: const ShellBottomNav(popCurrentRoute: true),
       body: StreamBuilder<List<ClientRecord>>(
         stream: _clientRepository.streamAll(),
         builder: (context, snapshot) {
@@ -48,8 +50,7 @@ class ProposalsPage extends StatelessWidget {
             );
           }
 
-          final sortedClients = [...clients]
-            ..sort((a, b) {
+          final sortedClients = [...clients]..sort((a, b) {
               final aHasProposals = (a.currentProposals?.isNotEmpty ?? false);
               final bHasProposals = (b.currentProposals?.isNotEmpty ?? false);
               if (aHasProposals != bHasProposals) {

@@ -12,6 +12,7 @@ import '../dialogs/project_task_checklist_dialog.dart';
 import '../services/checklists_service.dart';
 import '../services/project_task_checklist_service.dart';
 import '../widgets/form_helpers.dart';
+import '../app/shell.dart';
 
 class ChecklistsPage extends StatefulWidget {
   const ChecklistsPage({super.key});
@@ -270,6 +271,7 @@ class _ChecklistsPageState extends State<ChecklistsPage> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Checklists')),
+      bottomNavigationBar: const ShellBottomNav(popCurrentRoute: true),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
@@ -374,7 +376,7 @@ class _ProjectTaskSection extends StatelessWidget {
   final Set<String> expanded;
   final void Function(String id) onToggleExpanded;
   final void Function(ProjectTaskChecklist checklist, ChecklistItem item)
-  onToggleItem;
+      onToggleItem;
   final void Function(ProjectTaskChecklist checklist) onEdit;
   final void Function(ProjectTaskChecklist checklist) onDelete;
 
@@ -432,8 +434,7 @@ class _ProjectTaskChecklistCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final titleStyle = theme.textTheme.titleMedium;
-    final projectLabel =
-        checklist.projectNumber != null &&
+    final projectLabel = checklist.projectNumber != null &&
             checklist.projectNumber!.trim().isNotEmpty
         ? '${checklist.projectNumber} - ${checklist.projectName}'
         : checklist.projectName;

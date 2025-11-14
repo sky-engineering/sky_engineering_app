@@ -7,12 +7,44 @@ import '../data/repositories/subphase_template_repository.dart';
 
 import '../data/models/phase_template.dart';
 import '../data/repositories/phase_template_repository.dart';
+import '../app/shell.dart';
 
-class SubphasesPage extends StatelessWidget {
-  SubphasesPage({super.key});
+const _accentYellow = Color(0xFFF1C400);
 
+class SubphasesPage extends StatefulWidget {
+  const SubphasesPage({super.key});
+
+  @override
+  State<SubphasesPage> createState() => _SubphasesPageState();
+}
+
+class _SubphasesPageState extends State<SubphasesPage> {
   final _subRepo = SubphaseTemplateRepository();
   final _phaseRepo = PhaseTemplateRepository();
+  List<String>? _phaseOrder;
+  bool _fabExpanded = false;
+
+  void _refreshPhases() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _persistPhaseOrder(
+    List<String> orderedKeys,
+    List<PhaseTemplate> phases,
+  ) async {
+    for (var i = 0; i < orderedKeys.length; i++) {
+      final code = orderedKeys[i];
+      final match = phases.firstWhere(
+        (p) => p.phaseCode == code,
+        orElse: () => phases[i % phases.length],
+      );
+      if (match.sortOrder != i) {
+        await _phaseRepo.update(match.id, {'sortOrder': i});
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,8 +55,13 @@ class SubphasesPage extends StatelessWidget {
       );
     }
 
+    final isOwner = me.uid.isNotEmpty;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Task Structure')),
+      bottomNavigationBar: const ShellBottomNav(popCurrentRoute: true),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: isOwner ? _buildFab(me.uid) : null,
       body: FutureBuilder<List<PhaseTemplate>>(
         future: _phaseRepo.getAllForUser(me.uid),
         builder: (context, phaseSnap) {
@@ -52,8 +89,8 @@ class SubphasesPage extends StatelessWidget {
                 final key = (t.phaseCode.isNotEmpty)
                     ? t.phaseCode
                     : (t.subphaseCode.length >= 2
-                          ? t.subphaseCode.substring(0, 2)
-                          : '??');
+                        ? t.subphaseCode.substring(0, 2)
+                        : '??');
                 (grouped[key] ??= <SubphaseTemplate>[]).add(t);
               }
               final phaseKeys = grouped.keys.toList()
@@ -67,65 +104,217 @@ class SubphasesPage extends StatelessWidget {
                   return a.compareTo(b);
                 });
 
-              return ListView.builder(
-                padding: const EdgeInsets.all(12),
-                itemCount: phaseKeys.length + 1, // +1 for bottom buttons row
-                itemBuilder: (context, idx) {
-                  if (idx == phaseKeys.length) {
-                    // Bottom action buttons row
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 8, bottom: 80),
-                      child: Wrap(
-                        spacing: 12,
-                        runSpacing: 8,
-                        children: [
-                          FilledButton.icon(
-                            onPressed: () => _showAddDialog(context, me.uid),
-                            icon: const Icon(Icons.add),
-                            label: const Text('Add Subphase'),
-                          ),
-                          FilledButton.icon(
-                            onPressed: () =>
-                                _showManagePhasesDialog(context, me.uid),
-                            icon: const Icon(Icons.tune),
-                            label: const Text('Manage Phases'),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-
-                  final phase = phaseKeys[idx];
-                  final list = grouped[phase]!
-                    ..sort((a, b) => a.subphaseCode.compareTo(b.subphaseCode));
-                  final header =
-                      phaseLabelByCode[phase] ?? '$phase - (Unnamed Phase)';
-
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            header,
-                            style: Theme.of(context).textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 6),
-                          ...list.map(
-                            (t) =>
-                                _RowTile(t: t, repo: _subRepo, meUid: me.uid),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
+              return _buildPhaseList(
+                context: context,
+                ownerUid: me.uid,
+                phases: phases,
+                phaseLabelByCode: phaseLabelByCode,
+                grouped: grouped,
+                orderedPhaseKeys: phaseKeys,
+                isOwner: isOwner,
               );
             },
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildPhaseList({
+    required BuildContext context,
+    required String ownerUid,
+    required List<PhaseTemplate> phases,
+    required Map<String, String> phaseLabelByCode,
+    required Map<String, List<SubphaseTemplate>> grouped,
+    required List<String> orderedPhaseKeys,
+    required bool isOwner,
+  }) {
+    final keys = _phaseOrder ?? orderedPhaseKeys;
+    final normalizedKeys = <String>[
+      ...keys.where(grouped.containsKey),
+      ...orderedPhaseKeys.where((code) => !keys.contains(code)),
+    ];
+
+    if (isOwner && _phaseOrder == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() => _phaseOrder = List<String>.from(normalizedKeys));
+        }
+      });
+    }
+
+    Widget buildPhaseCard(String phase) {
+      final list = grouped[phase]!
+        ..sort((a, b) => a.subphaseCode.compareTo(b.subphaseCode));
+      final header = phaseLabelByCode[phase] ?? '$phase - (Unnamed Phase)';
+      final template = phases.firstWhere(
+        (p) => p.phaseCode == phase,
+        orElse: () => PhaseTemplate(
+          id: '',
+          ownerUid: ownerUid,
+          phaseCode: phase,
+          phaseName: header,
+          sortOrder: 0,
+        ),
+      );
+
+      return Card(
+        key: ValueKey('phase-$phase'),
+        margin: const EdgeInsets.only(bottom: 10),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              InkWell(
+                borderRadius: BorderRadius.circular(6),
+                onTap: template.id.isEmpty
+                    ? null
+                    : () => _showEditPhaseDialog(
+                          context,
+                          template,
+                          _phaseRepo,
+                          _refreshPhases,
+                        ),
+                child: Text(
+                  header,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
+              const SizedBox(height: 6),
+              ...list.map(
+                (t) => _RowTile(t: t, repo: _subRepo, meUid: ownerUid),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final padding = const EdgeInsets.fromLTRB(12, 12, 12, 120);
+    if (isOwner) {
+      return ReorderableListView.builder(
+        padding: padding,
+        buildDefaultDragHandles: false,
+        itemCount: normalizedKeys.length,
+        onReorder: (oldIndex, newIndex) async {
+          if (newIndex > normalizedKeys.length) {
+            newIndex = normalizedKeys.length;
+          }
+          final updated = List<String>.from(normalizedKeys);
+          final moved = updated.removeAt(oldIndex);
+          updated.insert(newIndex > oldIndex ? newIndex - 1 : newIndex, moved);
+          setState(() => _phaseOrder = updated);
+          await _persistPhaseOrder(updated, phases);
+        },
+        itemBuilder: (context, index) {
+          final phase = normalizedKeys[index];
+          return ReorderableDelayedDragStartListener(
+            key: ValueKey('phase-$phase'),
+            index: index,
+            child: buildPhaseCard(phase),
+          );
+        },
+      );
+    }
+
+    return ListView(
+      padding: padding,
+      children: normalizedKeys.map(buildPhaseCard).toList(),
+    );
+  }
+
+  Widget _buildFab(String ownerUid) {
+    return SizedBox(
+      width: 200,
+      height: _fabExpanded ? 200 : 80,
+      child: Stack(
+        alignment: Alignment.bottomRight,
+        children: [
+          if (_fabExpanded) ...[
+            Positioned(
+              right: 56,
+              bottom: 70,
+              child: _FabOptionButton(
+                label: 'Phase',
+                icon: Icons.layers_outlined,
+                onTap: () {
+                  setState(() => _fabExpanded = false);
+                  _showAddPhaseDialog(
+                    context,
+                    _phaseRepo,
+                    ownerUid,
+                    _refreshPhases,
+                  );
+                },
+              ),
+            ),
+            Positioned(
+              right: 16,
+              bottom: 120,
+              child: _FabOptionButton(
+                label: 'Subphase',
+                icon: Icons.timeline_outlined,
+                onTap: () {
+                  setState(() => _fabExpanded = false);
+                  _showAddDialog(context, ownerUid);
+                },
+              ),
+            ),
+          ],
+          FloatingActionButton(
+            heroTag: 'subphases-fab',
+            backgroundColor: _accentYellow,
+            foregroundColor: Colors.black,
+            onPressed: () => setState(() => _fabExpanded = !_fabExpanded),
+            child: Icon(_fabExpanded ? Icons.close : Icons.add),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FabOptionButton extends StatelessWidget {
+  const _FabOptionButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.75),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: Colors.white, size: 18),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -157,12 +346,6 @@ class _RowTile extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontWeight: FontWeight.w500),
-      ),
-      // No subtitle - keep compact
-      trailing: IconButton(
-        tooltip: 'Edit subphase',
-        icon: const Icon(Icons.chevron_right),
-        onPressed: () => _showEditDialog(context, t, meUid),
       ),
       onTap: () => _showEditDialog(context, t, meUid),
     );
@@ -223,7 +406,7 @@ Future<void> _showAddDialog(BuildContext context, String ownerUid) async {
       return StatefulBuilder(
         builder: (context, setState) {
           return AlertDialog(
-            title: const Text('Add subphase'),
+            title: const Text('Add Subphase'),
             content: Form(
               key: formKey,
               child: SizedBox(
@@ -281,9 +464,8 @@ Future<void> _showAddDialog(BuildContext context, String ownerUid) async {
                   }
 
                   final code = codeCtl.text.trim();
-                  final phaseCode = (code.length >= 2)
-                      ? code.substring(0, 2)
-                      : '';
+                  final phaseCode =
+                      (code.length >= 2) ? code.substring(0, 2) : '';
                   final defaults = parseDefaults(defaultsCtl.text);
 
                   final t = SubphaseTemplate(
@@ -305,6 +487,208 @@ Future<void> _showAddDialog(BuildContext context, String ownerUid) async {
             ],
           );
         },
+      );
+    },
+  );
+}
+
+Future<void> _showAddPhaseDialog(
+  BuildContext context,
+  PhaseTemplateRepository repo,
+  String ownerUid,
+  VoidCallback onCreated,
+) async {
+  final codeCtl = TextEditingController();
+  final nameCtl = TextEditingController();
+  final formKey = GlobalKey<FormState>();
+
+  String? validateCode(String? value) {
+    final s = (value ?? '').trim();
+    if (s.length != 2 || int.tryParse(s) == null) {
+      return 'Enter a 2-digit code (e.g., 02)';
+    }
+    return null;
+  }
+
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
+      return AlertDialog(
+        title: const Text('Add Phase'),
+        content: Form(
+          key: formKey,
+          child: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: codeCtl,
+                  decoration: const InputDecoration(
+                    labelText: 'Phase code',
+                    hintText: 'e.g., 02',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                  validator: validateCode,
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: nameCtl,
+                  decoration: const InputDecoration(
+                    labelText: 'Name',
+                    hintText: 'e.g., Preliminary Design',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) => (value == null || value.trim().isEmpty)
+                      ? 'Required'
+                      : null,
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (!(formKey.currentState?.validate() ?? false)) {
+                return;
+              }
+              final phase = PhaseTemplate(
+                id: '_',
+                ownerUid: ownerUid,
+                phaseCode: codeCtl.text.trim(),
+                phaseName: nameCtl.text.trim(),
+                sortOrder: 0,
+              );
+              await repo.add(phase);
+              if (context.mounted) {
+                Navigator.pop(dialogContext);
+                onCreated();
+              }
+            },
+            child: const Text('Create'),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+Future<void> _showEditPhaseDialog(
+  BuildContext context,
+  PhaseTemplate phase,
+  PhaseTemplateRepository repo,
+  VoidCallback onUpdated,
+) async {
+  final codeCtl = TextEditingController(text: phase.phaseCode);
+  final nameCtl = TextEditingController(text: phase.phaseName);
+  final formKey = GlobalKey<FormState>();
+
+  String? validateCode(String? value) {
+    final s = (value ?? '').trim();
+    if (s.length != 2 || int.tryParse(s) == null) {
+      return 'Enter a 2-digit code (e.g., 02)';
+    }
+    return null;
+  }
+
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
+      return AlertDialog(
+        title: const Text('Edit Phase'),
+        content: Form(
+          key: formKey,
+          child: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: codeCtl,
+                  decoration: const InputDecoration(
+                    labelText: 'Phase code',
+                    hintText: 'e.g., 02',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                  validator: validateCode,
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: nameCtl,
+                  decoration: const InputDecoration(
+                    labelText: 'Name',
+                    hintText: 'e.g., Preliminary Design',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) => (value == null || value.trim().isEmpty)
+                      ? 'Required'
+                      : null,
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            onPressed: () async {
+              final confirm = await showDialog<bool>(
+                context: dialogContext,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Delete phase?'),
+                  content:
+                      Text('Remove "${phase.phaseCode} - ${phase.phaseName}"?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      style: TextButton.styleFrom(foregroundColor: Colors.red),
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text('Delete'),
+                    ),
+                  ],
+                ),
+              );
+              if (confirm == true) {
+                await repo.delete(phase.id);
+                if (context.mounted) {
+                  Navigator.pop(dialogContext);
+                  onUpdated();
+                }
+              }
+            },
+            child: const Text('Delete'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (!(formKey.currentState?.validate() ?? false)) {
+                return;
+              }
+              await repo.update(phase.id, {
+                'phaseCode': codeCtl.text.trim(),
+                'phaseName': nameCtl.text.trim(),
+              });
+              if (context.mounted) {
+                Navigator.pop(dialogContext);
+                onUpdated();
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
       );
     },
   );
@@ -392,6 +776,7 @@ Future<void> _showEditDialog(
             ),
             actions: [
               TextButton(
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
                 onPressed: () async {
                   final ok = await showDialog<bool>(
                     context: context,
@@ -405,7 +790,10 @@ Future<void> _showEditDialog(
                           onPressed: () => Navigator.pop(ctx, false),
                           child: const Text('Cancel'),
                         ),
-                        FilledButton(
+                        TextButton(
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.red,
+                          ),
                           onPressed: () => Navigator.pop(ctx, true),
                           child: const Text('Delete'),
                         ),
@@ -433,9 +821,8 @@ Future<void> _showEditDialog(
                   }
 
                   final newCode = codeCtl.text.trim();
-                  final newPhaseCode = (newCode.length >= 2)
-                      ? newCode.substring(0, 2)
-                      : '';
+                  final newPhaseCode =
+                      (newCode.length >= 2) ? newCode.substring(0, 2) : '';
                   final defaults = parseDefaults(defaultsCtl.text);
 
                   await repo.update(t.id, {
@@ -453,204 +840,9 @@ Future<void> _showEditDialog(
                 },
                 child: const Text('Save'),
               ),
-            ],
-          );
-        },
-      );
-    },
-  );
-}
-
-Future<void> _showManagePhasesDialog(
-  BuildContext context,
-  String ownerUid,
-) async {
-  final repo = PhaseTemplateRepository();
-  List<PhaseTemplate> list;
-  try {
-    list = await repo.getAllForUser(ownerUid);
-  } on FirebaseException catch (e) {
-    if (!context.mounted) {
-      return;
-    }
-    final message = (e.message != null && e.message!.trim().isNotEmpty)
-        ? e.message!.trim()
-        : e.code;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('Could not load phases: $message')));
-    return;
-  } catch (_) {
-    if (!context.mounted) {
-      return;
-    }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Could not load phases')));
-    return;
-  }
-  if (!context.mounted) {
-    return;
-  }
-  final phases = [...list]; // mutable
-
-  await showDialog<void>(
-    context: context,
-    builder: (context) {
-      return StatefulBuilder(
-        builder: (context, setState) {
-          Future<void> addPhase() async {
-            final codeCtl = TextEditingController();
-            final nameCtl = TextEditingController();
-            final formKey = GlobalKey<FormState>();
-
-            String? validateCode(String? value) {
-              final s = (value ?? '').trim();
-              if (s.length != 2 || int.tryParse(s) == null) {
-                return 'Enter 2-digit code, e.g., 02';
-              }
-              return null;
-            }
-
-            await showDialog<void>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                title: const Text('Add Phase'),
-                content: Form(
-                  key: formKey,
-                  child: SizedBox(
-                    width: 420,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        TextFormField(
-                          controller: codeCtl,
-                          decoration: const InputDecoration(
-                            labelText: 'Phase code',
-                            hintText: 'e.g., 02',
-                            border: OutlineInputBorder(),
-                          ),
-                          keyboardType: TextInputType.number,
-                          validator: validateCode,
-                        ),
-                        const SizedBox(height: 10),
-                        TextFormField(
-                          controller: nameCtl,
-                          decoration: const InputDecoration(
-                            labelText: 'Name',
-                            hintText: 'e.g., Preliminary Design',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (v) => (v == null || v.trim().isEmpty)
-                              ? 'Required'
-                              : null,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text('Cancel'),
-                  ),
-                  FilledButton(
-                    onPressed: () async {
-                      if (!(formKey.currentState?.validate() ?? false)) {
-                        return;
-                      }
-                      final p = PhaseTemplate(
-                        id: '_',
-                        ownerUid: ownerUid,
-                        phaseCode: codeCtl.text.trim(),
-                        phaseName: nameCtl.text.trim(),
-                        sortOrder: phases.length,
-                      );
-                      final newId = await repo.add(p);
-                      setState(() => phases.add(p.copyWith(id: newId)));
-                      if (!context.mounted) {
-                        return;
-                      }
-                      Navigator.of(context).pop();
-                    },
-                    child: const Text('Create'),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          Future<void> deletePhase(PhaseTemplate p) async {
-            final ok = await showDialog<bool>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                title: const Text('Delete phase?'),
-                content: Text('Remove "${p.phaseCode} - ${p.phaseName}"?'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    child: const Text('Cancel'),
-                  ),
-                  FilledButton(
-                    onPressed: () => Navigator.pop(ctx, true),
-                    child: const Text('Delete'),
-                  ),
-                ],
-              ),
-            );
-            if (ok == true) {
-              await repo.delete(p.id);
-              setState(() => phases.removeWhere((x) => x.id == p.id));
-            }
-          }
-
-          return AlertDialog(
-            title: const Text('Manage Phases'),
-            content: SizedBox(
-              width: 460,
-              child: ReorderableListView.builder(
-                shrinkWrap: true,
-                itemCount: phases.length,
-                onReorder: (oldIndex, newIndex) async {
-                  if (newIndex > oldIndex) {
-                    newIndex -= 1;
-                  }
-                  final moved = phases.removeAt(oldIndex);
-                  phases.insert(newIndex, moved);
-                  setState(() {});
-                  // Persist new order
-                  for (var i = 0; i < phases.length; i++) {
-                    if (phases[i].sortOrder != i) {
-                      await repo.update(phases[i].id, {'sortOrder': i});
-                      phases[i] = phases[i].copyWith(sortOrder: i);
-                    }
-                  }
-                },
-                itemBuilder: (context, i) {
-                  final p = phases[i];
-                  return ListTile(
-                    key: ValueKey(p.id),
-                    dense: true,
-                    leading: const Icon(Icons.drag_indicator),
-                    title: Text('${p.phaseCode} - ${p.phaseName}'),
-                    trailing: IconButton(
-                      tooltip: 'Delete phase',
-                      icon: const Icon(Icons.delete_outline),
-                      onPressed: () => deletePhase(p),
-                    ),
-                  );
-                },
-              ),
-            ),
-            actions: [
-              FilledButton.icon(
-                onPressed: addPhase,
-                icon: const Icon(Icons.add),
-                label: const Text('Add Phase'),
-              ),
-              FilledButton(
+              TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
+                child: const Text('Cancel'),
               ),
             ],
           );

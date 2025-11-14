@@ -26,12 +26,12 @@ class _ProjectsPageState extends State<ProjectsPage> {
 
   static const List<MapEntry<String, String>> _statusOptions =
       <MapEntry<String, String>>[
-        MapEntry('In Progress', 'IP'),
-        MapEntry('Under Construction', 'UC'),
-        MapEntry('On Hold', 'OH'),
-        MapEntry('Close When Paid', 'CWP'),
-        MapEntry('Archive', 'Arch'),
-      ];
+    MapEntry('In Progress', 'IP'),
+    MapEntry('Under Construction', 'UC'),
+    MapEntry('On Hold', 'OH'),
+    MapEntry('Close When Paid', 'CWP'),
+    MapEntry('Archive', 'Arch'),
+  ];
 
   static const Set<String> _defaultStatusFilters = <String>{
     'In Progress',
@@ -82,8 +82,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
             items = items.where((p) => _matchesSearch(p, query)).toList();
           }
 
-          final filterLabelStyle =
-              Theme.of(
+          final filterLabelStyle = Theme.of(
                 context,
               ).textTheme.labelSmall?.copyWith(fontSize: 9.5, height: 1.0) ??
               const TextStyle(fontSize: 9.5, height: 1.0);
@@ -193,14 +192,16 @@ class _ProjectsPageState extends State<ProjectsPage> {
             for (var i = 0; i < sorted.length; i++) {
               final p = sorted[i];
 
-              final titleStyle = Theme.of(context).textTheme.titleMedium
-                  ?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    fontSize:
-                        (Theme.of(context).textTheme.titleMedium?.fontSize ??
-                            16) +
-                        1,
-                  );
+              final titleStyle =
+                  Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: (Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.fontSize ??
+                                16) +
+                            1,
+                      );
               final titleColor = _statusTextColor(context, p);
               final projectNumber = p.projectNumber?.trim();
               final displayTitle = (projectNumber?.isNotEmpty ?? false)
@@ -272,12 +273,12 @@ class _ProjectsPageState extends State<ProjectsPage> {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: FloatingActionButton(
         onPressed: () => _showAddDialog(context),
-        icon: const Icon(Icons.add),
-        label: const Text('New Project'),
         backgroundColor: _accentYellow,
-        foregroundColor: Colors.black87,
+        foregroundColor: Colors.black,
+        child: const Icon(Icons.add),
       ),
     );
   }
@@ -383,10 +384,8 @@ class _ProjectsPageState extends State<ProjectsPage> {
     final trimmed = raw.trim();
     if (trimmed.isEmpty) return null;
     final sanitized = trimmed.replaceAll('\\', '/');
-    final segments = sanitized
-        .split('/')
-        .where((segment) => segment.isNotEmpty)
-        .toList();
+    final segments =
+        sanitized.split('/').where((segment) => segment.isNotEmpty).toList();
     final name = segments.isNotEmpty ? segments.last : sanitized;
     return name.trim().toLowerCase();
   }
@@ -402,15 +401,14 @@ class _ProjectsPageState extends State<ProjectsPage> {
     }
 
     final normalized = _normalizeDropboxFolderName(project.folderName);
-    final hasMatch =
-        normalized != null &&
+    final hasMatch = normalized != null &&
         (_dropboxFolderNames?.contains(normalized) ?? false);
     final unavailable = _dropboxFolderNames == null;
     final color = hasMatch
         ? Colors.green
         : unavailable
-        ? theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4)
-        : theme.colorScheme.error;
+            ? theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4)
+            : theme.colorScheme.error;
     final icon = Icon(
       hasMatch ? Icons.link : Icons.link_off,
       size: 18,
@@ -476,9 +474,8 @@ class _ProjectsPageState extends State<ProjectsPage> {
     if (trimmed.isEmpty || trimmed == '/') {
       return Uri.parse('https://www.dropbox.com/home');
     }
-    final withoutLeadingSlash = trimmed.startsWith('/')
-        ? trimmed.substring(1)
-        : trimmed;
+    final withoutLeadingSlash =
+        trimmed.startsWith('/') ? trimmed.substring(1) : trimmed;
     final segments = withoutLeadingSlash
         .split('/')
         .where((segment) => segment.isNotEmpty)

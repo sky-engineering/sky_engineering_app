@@ -16,6 +16,7 @@ import '../widgets/tasks_by_subphase_section.dart';
 import '../widgets/invoices_section.dart' as inv;
 import '../dialogs/edit_project_dialog.dart';
 import '../utils/phone_utils.dart';
+import '../app/shell.dart';
 
 class _TeamFieldConfig {
   const _TeamFieldConfig({required this.key, required this.label});
@@ -51,18 +52,18 @@ class _AssigneeOption {
 }
 
 Map<String, String?> _teamValueMap(Project project) => {
-  'teamOwner': project.teamOwner,
-  'teamArchitect': project.teamArchitect,
-  'teamSurveyor': project.teamSurveyor,
-  'teamGeotechnical': project.teamGeotechnical,
-  'teamMechanical': project.teamMechanical,
-  'teamElectrical': project.teamElectrical,
-  'teamPlumbing': project.teamPlumbing,
-  'teamLandscape': project.teamLandscape,
-  'teamContractor': project.teamContractor,
-  'teamEnvironmental': project.teamEnvironmental,
-  'teamOther': project.teamOther,
-};
+      'teamOwner': project.teamOwner,
+      'teamArchitect': project.teamArchitect,
+      'teamSurveyor': project.teamSurveyor,
+      'teamGeotechnical': project.teamGeotechnical,
+      'teamMechanical': project.teamMechanical,
+      'teamElectrical': project.teamElectrical,
+      'teamPlumbing': project.teamPlumbing,
+      'teamLandscape': project.teamLandscape,
+      'teamContractor': project.teamContractor,
+      'teamEnvironmental': project.teamEnvironmental,
+      'teamOther': project.teamOther,
+    };
 
 List<_AssigneeOption> _buildExternalAssigneeOptions(
   Project project,
@@ -72,9 +73,8 @@ List<_AssigneeOption> _buildExternalAssigneeOptions(
 
   if (owner != null) {
     final email = owner.email?.trim();
-    final label = (email != null && email.isNotEmpty)
-        ? 'Owner ($email)'
-        : 'Owner';
+    final label =
+        (email != null && email.isNotEmpty) ? 'Owner ($email)' : 'Owner';
     options.add(_AssigneeOption(key: 'owner', label: label, value: label));
   }
 
@@ -145,25 +145,23 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
     _project = null;
     _isLoading = true;
     _notFound = false;
-    _projectSub = _projectRepo
-        .streamById(projectId)
-        .listen(
-          (proj) {
-            if (!mounted) return;
-            setState(() {
-              _project = proj;
-              _isLoading = false;
-              _notFound = proj == null;
-            });
-          },
-          onError: (_) {
-            if (!mounted) return;
-            setState(() {
-              _isLoading = false;
-              _notFound = true;
-            });
-          },
-        );
+    _projectSub = _projectRepo.streamById(projectId).listen(
+      (proj) {
+        if (!mounted) return;
+        setState(() {
+          _project = proj;
+          _isLoading = false;
+          _notFound = proj == null;
+        });
+      },
+      onError: (_) {
+        if (!mounted) return;
+        setState(() {
+          _isLoading = false;
+          _notFound = true;
+        });
+      },
+    );
   }
 
   void _setUnpaidOnly(bool v) {
@@ -231,6 +229,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
             ),
         ],
       ),
+      bottomNavigationBar: const ShellBottomNav(popCurrentRoute: true),
       body: ListView(
         controller: _scrollCtrl,
         padding: const EdgeInsets.all(16),
@@ -252,8 +251,8 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                     Text(
                       'Contact',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                            fontWeight: FontWeight.w600,
+                          ),
                     ),
                     const SizedBox(height: 4),
                     if ((project.contactName ?? '').isNotEmpty)
@@ -314,11 +313,11 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                           _unpaidOnly
                               ? 'Show Paid Invoices'
                               : 'Hide Paid Invoices',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: _accentYellow,
-                                fontWeight: FontWeight.w600,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: _accentYellow,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                         ),
                       ),
                     ],
@@ -370,16 +369,18 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                   const SizedBox(height: 12),
                   if (isOwner)
                     Align(
-                      alignment: Alignment.centerLeft,
-                      child: FilledButton.icon(
+                      alignment: Alignment.centerRight,
+                      child: FloatingActionButton(
+                        heroTag: null,
+                        backgroundColor: _accentYellow,
+                        foregroundColor: Colors.black,
                         onPressed: () => inv.showAddInvoiceDialog(
                           context,
                           project.id,
                           defaultProjectNumber: project.projectNumber,
                           initialInvoiceType: 'Client',
                         ),
-                        icon: const Icon(Icons.add),
-                        label: const Text('New Invoice'),
+                        child: const Icon(Icons.add),
                       ),
                     ),
                 ],
@@ -454,9 +455,8 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
       fontWeight: FontWeight.w600,
     );
 
-    final prompt = isOwner
-        ? 'Tap to add project partners'
-        : 'No project partners listed';
+    final prompt =
+        isOwner ? 'Tap to add project partners' : 'No project partners listed';
 
     return Card(
       color: _subtleSurfaceTint(context),
@@ -529,9 +529,8 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
       final initial = (initialValues[key] ?? '').trim();
       final normalizedInitial = initial.isEmpty ? null : initial;
       final updated = result[key]?.trim();
-      final normalizedUpdated = (updated == null || updated.isEmpty)
-          ? null
-          : updated;
+      final normalizedUpdated =
+          (updated == null || updated.isEmpty) ? null : updated;
       if (normalizedInitial != normalizedUpdated) {
         updates[key] = normalizedUpdated;
         hasChanges = true;
@@ -661,6 +660,7 @@ class _ExternalTasksSection extends StatelessWidget {
   final bool isOwner;
   final List<_AssigneeOption> assigneeOptions;
   final List<ExternalTask> tasks;
+  static const _fabColor = Color(0xFFF1C400);
 
   static final ExternalTaskRepository _repo = ExternalTaskRepository();
 
@@ -717,11 +717,13 @@ class _ExternalTasksSection extends StatelessWidget {
             if (canEdit) ...[
               const SizedBox(height: 12),
               Align(
-                alignment: Alignment.centerLeft,
-                child: FilledButton.icon(
+                alignment: Alignment.centerRight,
+                child: FloatingActionButton(
+                  heroTag: null,
                   onPressed: () => _showAddExternalTaskDialog(context),
-                  icon: const Icon(Icons.add),
-                  label: const Text('New Task'),
+                  backgroundColor: _fabColor,
+                  foregroundColor: Colors.black,
+                  child: const Icon(Icons.add),
                 ),
               ),
             ],
@@ -750,8 +752,7 @@ class _ExternalTasksSection extends StatelessWidget {
 
   Future<bool> _delete(BuildContext context, ExternalTask task) async {
     final messenger = ScaffoldMessenger.of(context);
-    final confirmed =
-        await showDialog<bool>(
+    final confirmed = await showDialog<bool>(
           context: context,
           builder: (dialogContext) {
             return AlertDialog(
@@ -786,9 +787,8 @@ class _ExternalTasksSection extends StatelessWidget {
 
   Future<void> _showAddExternalTaskDialog(BuildContext context) async {
     final titleController = TextEditingController();
-    var selectedKey = assigneeOptions.isNotEmpty
-        ? assigneeOptions.first.key
-        : null;
+    var selectedKey =
+        assigneeOptions.isNotEmpty ? assigneeOptions.first.key : null;
 
     final messenger = ScaffoldMessenger.of(context);
     final result = await showDialog<Map<String, String>>(
@@ -954,9 +954,8 @@ class _ExternalTaskTileState extends State<_ExternalTaskTile> {
 
     return Dismissible(
       key: widget.dismissibleKey,
-      direction: widget.isOwner
-          ? DismissDirection.horizontal
-          : DismissDirection.none,
+      direction:
+          widget.isOwner ? DismissDirection.horizontal : DismissDirection.none,
       dismissThresholds: const {
         DismissDirection.startToEnd: _completeThreshold,
         DismissDirection.endToStart: _deleteThreshold,
@@ -965,8 +964,7 @@ class _ExternalTaskTileState extends State<_ExternalTaskTile> {
       secondaryBackground: _buildSwipeBackground(context, isStartToEnd: false),
       onUpdate: (details) {
         final progress = details.progress.abs().clamp(0.0, 1.0);
-        final direction =
-            (details.direction == DismissDirection.startToEnd ||
+        final direction = (details.direction == DismissDirection.startToEnd ||
                 details.direction == DismissDirection.endToStart)
             ? details.direction
             : null;
@@ -1055,8 +1053,7 @@ class _ExternalTaskTileState extends State<_ExternalTaskTile> {
     required bool isStartToEnd,
   }) {
     final theme = Theme.of(context);
-    final isActive =
-        _currentDirection ==
+    final isActive = _currentDirection ==
         (isStartToEnd
             ? DismissDirection.startToEnd
             : DismissDirection.endToStart);
@@ -1075,22 +1072,19 @@ class _ExternalTaskTileState extends State<_ExternalTaskTile> {
     final iconOpacity = isStartToEnd
         ? (progress / _completeThreshold).clamp(0.0, 1.0)
         : progress <= _completeThreshold
-        ? 0.0
-        : ((progress - _completeThreshold) /
-                  (_deleteThreshold - _completeThreshold))
-              .clamp(0.0, 1.0);
+            ? 0.0
+            : ((progress - _completeThreshold) /
+                    (_deleteThreshold - _completeThreshold))
+                .clamp(0.0, 1.0);
 
-    final alignment = isStartToEnd
-        ? Alignment.centerLeft
-        : Alignment.centerRight;
-    final rowAlignment = isStartToEnd
-        ? MainAxisAlignment.start
-        : MainAxisAlignment.end;
+    final alignment =
+        isStartToEnd ? Alignment.centerLeft : Alignment.centerRight;
+    final rowAlignment =
+        isStartToEnd ? MainAxisAlignment.start : MainAxisAlignment.end;
 
     final icon = isStartToEnd ? Icons.check_circle : Icons.delete_forever;
-    final iconColor = isStartToEnd
-        ? theme.colorScheme.primary
-        : theme.colorScheme.error;
+    final iconColor =
+        isStartToEnd ? theme.colorScheme.primary : theme.colorScheme.error;
 
     return Container(
       alignment: alignment,
@@ -1151,9 +1145,8 @@ class _FinancialSummaryCard extends StatelessWidget {
         }
 
         final contract = contractAmount ?? 0.0;
-        final pctInvoiced = (contract > 0)
-            ? (clientInvoiced / contract) * 100
-            : 0.0;
+        final pctInvoiced =
+            (contract > 0) ? (clientInvoiced / contract) * 100 : 0.0;
         final theme = Theme.of(context);
         final surface = theme.colorScheme.surface;
         final cardColor = Color.alphaBlend(const Color(0x14FFFFFF), surface);
@@ -1244,8 +1237,8 @@ class _FinancialSummaryCard extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
           ),
           const SizedBox(height: 4),
           Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),

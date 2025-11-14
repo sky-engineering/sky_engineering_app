@@ -1,4 +1,6 @@
 // lib/src/pages/external_tasks_overview_page.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../data/models/external_task.dart';
@@ -24,6 +26,8 @@ class _ExternalTasksOverviewPageState extends State<ExternalTasksOverviewPage> {
   String _query = '';
   _ExternalTaskSort _sort = _ExternalTaskSort.teamType;
   List<Project> _projectsCache = const [];
+  late final Future<void> _seedExternalTaskFlags =
+      _projectRepo.ensureExternalTaskFlagsSeeded();
 
   @override
   void dispose() {
@@ -87,80 +91,90 @@ class _ExternalTasksOverviewPageState extends State<ExternalTasksOverviewPage> {
             ),
             const SizedBox(height: 4),
             Expanded(
-              child: StreamBuilder<List<Project>>(
-                stream: _projectRepo.streamAll(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
+              child: FutureBuilder<void>(
+                future: _seedExternalTaskFlags,
+                builder: (context, seedSnapshot) {
+                  if (seedSnapshot.connectionState != ConnectionState.done) {
                     return const Center(child: CircularProgressIndicator());
                   }
 
-                  final projects = snapshot.data ?? const <Project>[];
-                  final sortedProjects = [...projects]
-                    ..removeWhere(
-                      (project) =>
-                          (project.externalTasks ?? const <ExternalTask>[])
-                              .isEmpty,
-                    )
-                    ..sort(_compareProjects);
-                  _projectsCache = sortedProjects;
+                  return StreamBuilder<List<Project>>(
+                    stream: _projectRepo.streamWithExternalTasks(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
 
-                  final entries = <_ExternalTaskEntry>[];
-                  for (final project in sortedProjects) {
-                    final tasks = [
-                      ...(project.externalTasks ?? const <ExternalTask>[]),
-                    ]..sort(_compareTasks);
-                    for (final task in tasks) {
-                      entries.add(
-                        _ExternalTaskEntry(project: project, task: task),
-                      );
-                    }
-                  }
+                      final projects = snapshot.data ?? const <Project>[];
+                      final sortedProjects = [...projects]
+                        ..removeWhere(
+                          (project) =>
+                              (project.externalTasks ?? const <ExternalTask>[])
+                                  .isEmpty,
+                        )
+                        ..sort(_compareProjects);
+                      _projectsCache = sortedProjects;
 
-                  final filtered = _filterEntries(entries, _query);
-                  final sortedEntries = [...filtered]..sort(_entryComparator);
+                      final entries = <_ExternalTaskEntry>[];
+                      for (final project in sortedProjects) {
+                        final tasks = [
+                          ...(project.externalTasks ?? const <ExternalTask>[]),
+                        ]..sort(_compareTasks);
+                        for (final task in tasks) {
+                          entries.add(
+                            _ExternalTaskEntry(project: project, task: task),
+                          );
+                        }
+                      }
 
-                  if (sortedEntries.isEmpty) {
-                    if (entries.isEmpty) {
-                      return const _EmptyState();
-                    }
-                    return Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Text(
-                          _query.isEmpty
-                              ? 'No external tasks found.'
-                              : 'No tasks match your search.',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    );
-                  }
+                      final filtered = _filterEntries(entries, _query);
+                      final sortedEntries = [...filtered]
+                        ..sort(_entryComparator);
 
-                  return ListView.separated(
-                    physics: const ClampingScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(0, 0, 0, 12),
-                    itemCount: sortedEntries.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final entry = sortedEntries[index];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: _OverviewExternalTaskTile(
-                          project: entry.project,
-                          task: entry.task,
-                          repo: _externalRepo,
-                          onEdit: () =>
-                              _openEditExternalTask(entry.project, entry.task),
-                          onOpenProject: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => ProjectDetailPage(
-                                    projectId: entry.project.id),
-                              ),
-                            );
-                          },
-                        ),
+                      if (sortedEntries.isEmpty) {
+                        if (entries.isEmpty) {
+                          return const _EmptyState();
+                        }
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Text(
+                              _query.isEmpty
+                                  ? 'No external tasks found.'
+                                  : 'No tasks match your search.',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        );
+                      }
+
+                      return ListView.separated(
+                        physics: const ClampingScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(0, 0, 0, 96),
+                        itemCount: sortedEntries.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          final entry = sortedEntries[index];
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: _OverviewExternalTaskTile(
+                              project: entry.project,
+                              task: entry.task,
+                              repo: _externalRepo,
+                              onEdit: () => _openEditExternalTask(
+                                  entry.project, entry.task),
+                              onOpenProject: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => ProjectDetailPage(
+                                        projectId: entry.project.id),
+                                  ),
+                                );
+                              },
+                            ),
+                          );
+                        },
                       );
                     },
                   );

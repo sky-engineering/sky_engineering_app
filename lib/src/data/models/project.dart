@@ -34,9 +34,8 @@ class SelectedSubphase {
   factory SelectedSubphase.fromMap(Map<String, dynamic> data) {
     final map = mapFrom(data);
     final status = parseString(map['status'], fallback: 'In Progress');
-    final normalizedStatus = kSubphaseStatuses.contains(status)
-        ? status
-        : 'In Progress';
+    final normalizedStatus =
+        kSubphaseStatuses.contains(status) ? status : 'In Progress';
 
     return SelectedSubphase(
       code: parseString(map['code']),
@@ -48,12 +47,12 @@ class SelectedSubphase {
   }
 
   Map<String, dynamic> toMap() => {
-    'code': code,
-    'name': name,
-    if (responsibility != null) 'responsibility': responsibility,
-    'isDeliverable': isDeliverable,
-    'status': status,
-  };
+        'code': code,
+        'name': name,
+        if (responsibility != null) 'responsibility': responsibility,
+        'isDeliverable': isDeliverable,
+        'status': status,
+      };
 
   SelectedSubphase copyWith({
     String? code,
@@ -112,6 +111,9 @@ class Project {
   /// External partner todos stored on the project doc.
   final List<ExternalTask>? externalTasks;
 
+  /// Whether this project currently has any external tasks.
+  final bool hasExternalTasks;
+
   const Project({
     required this.id,
     required this.name,
@@ -140,6 +142,7 @@ class Project {
     this.selectedSubphases,
     this.externalTasks,
     this.isArchived = false,
+    this.hasExternalTasks = false,
   });
 
   static String _resolveStatus(String? rawStatus, bool archivedFlag) {
@@ -173,9 +176,8 @@ class Project {
         return null;
       },
     );
-    final selectedSubphases = (selectedList == null || selectedList.isEmpty)
-        ? null
-        : selectedList;
+    final selectedSubphases =
+        (selectedList == null || selectedList.isEmpty) ? null : selectedList;
 
     final externalList = readListOrNull<ExternalTask>(data, 'externalTasks', (
       value,
@@ -186,9 +188,12 @@ class Project {
       }
       return null;
     });
-    final externalTasks = (externalList == null || externalList.isEmpty)
-        ? null
-        : externalList;
+    final externalTasks =
+        (externalList == null || externalList.isEmpty) ? null : externalList;
+    final hasExternalTasksFlag = parseBool(
+      data['hasExternalTasks'],
+      fallback: externalTasks != null && externalTasks.isNotEmpty,
+    );
 
     return Project(
       id: doc.id,
@@ -218,6 +223,7 @@ class Project {
       selectedSubphases: selectedSubphases,
       externalTasks: externalTasks,
       isArchived: archivedFlag || resolvedStatus == 'Archive',
+      hasExternalTasks: hasExternalTasksFlag,
     );
   }
 
@@ -267,6 +273,7 @@ class Project {
 
       // Persist archived flag (always include so new docs default false explicitly)
       'isArchived': isArchived,
+      'hasExternalTasks': hasExternalTasks,
 
       if (createdAt != null) 'createdAt': timestampFromDate(createdAt),
       if (updatedAt != null) 'updatedAt': timestampFromDate(updatedAt),
@@ -301,6 +308,7 @@ class Project {
     List<SelectedSubphase>? selectedSubphases,
     List<ExternalTask>? externalTasks,
     bool? isArchived,
+    bool? hasExternalTasks,
   }) {
     final resolvedStatus = status ?? this.status;
     final resolvedIsArchived = isArchived ?? (resolvedStatus == 'Archive');
@@ -333,6 +341,7 @@ class Project {
       selectedSubphases: selectedSubphases ?? this.selectedSubphases,
       externalTasks: externalTasks ?? this.externalTasks,
       isArchived: resolvedIsArchived,
+      hasExternalTasks: hasExternalTasks ?? this.hasExternalTasks,
     );
   }
 }

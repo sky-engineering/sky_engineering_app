@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../data/models/client.dart';
 import '../data/repositories/client_repository.dart';
 import '../dialogs/client_editor_dialog.dart';
+import '../app/shell.dart';
+
+const _accentYellow = Color(0xFFF1C400);
 
 class ClientsPage extends StatelessWidget {
   ClientsPage({super.key});
@@ -12,6 +15,7 @@ class ClientsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Clients')),
+      bottomNavigationBar: const ShellBottomNav(popCurrentRoute: true),
       body: StreamBuilder<List<ClientRecord>>(
         stream: _repo.streamAll(),
         builder: (context, snapshot) {
@@ -43,10 +47,11 @@ class ClientsPage extends StatelessWidget {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         onPressed: () => showClientEditorDialog(context),
-        icon: const Icon(Icons.add),
-        label: const Text('Add Client'),
+        backgroundColor: _accentYellow,
+        foregroundColor: Colors.black,
+        child: const Icon(Icons.add),
       ),
     );
   }

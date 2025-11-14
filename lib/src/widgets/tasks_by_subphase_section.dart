@@ -44,11 +44,10 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
   @override
   Widget build(BuildContext context) {
     final repo = TaskRepository();
-    final sel =
-        (widget.selectedSubphases ?? <SelectedSubphase>[])
-            .where((s) => _isValidCode(s.code))
-            .toList()
-          ..sort((a, b) => a.code.compareTo(b.code));
+    final sel = (widget.selectedSubphases ?? <SelectedSubphase>[])
+        .where((s) => _isValidCode(s.code))
+        .toList()
+      ..sort((a, b) => a.code.compareTo(b.code));
 
     final statusByCode = {for (final s in sel) s.code: s.status};
 
@@ -161,9 +160,9 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                   child: Text(
                     _activeOnly ? 'Show Inactive Tasks' : 'Hide Inactive Tasks',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: _accentYellow,
-                      fontWeight: FontWeight.w600,
-                    ),
+                          color: _accentYellow,
+                          fontWeight: FontWeight.w600,
+                        ),
                   ),
                 ),
               ],
@@ -182,7 +181,6 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
             final boxes = <Widget>[
               header,
               const SizedBox(height: 4),
-
               if (sel.isEmpty)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
@@ -191,7 +189,6 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
-
               ...sel.map((s) {
                 final rawStatus = statusByCode[s.code]?.trim();
                 final status = (rawStatus != null && rawStatus.isNotEmpty)
@@ -214,8 +211,7 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                     await _updateSubphaseStatus(
                       context,
                       projectId: widget.projectId,
-                      selected:
-                          widget.selectedSubphases ??
+                      selected: widget.selectedSubphases ??
                           const <SelectedSubphase>[],
                       code: s.code,
                       newStatus: newStatus,
@@ -223,7 +219,6 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                   },
                 );
               }),
-
               if (otherTasks.isNotEmpty)
                 _SubphaseBox(
                   projectId: widget.projectId,
@@ -235,17 +230,17 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                   currentStatus: null,
                   onChangeStatus: null,
                 ),
-
               const SizedBox(height: 4),
-
               if (widget.isOwner)
                 Align(
-                  alignment: Alignment.centerLeft,
-                  child: FilledButton.icon(
+                  alignment: Alignment.centerRight,
+                  child: FloatingActionButton(
+                    heroTag: null,
                     onPressed: () =>
                         _showAddTaskDialog(context, widget.projectId, sel),
-                    icon: const Icon(Icons.add),
-                    label: const Text('New Task'),
+                    backgroundColor: _accentYellow,
+                    foregroundColor: Colors.black,
+                    child: const Icon(Icons.add),
                   ),
                 ),
             ];
@@ -303,8 +298,8 @@ class _SubphaseBox extends StatelessWidget {
     ).colorScheme.outlineVariant.withValues(alpha: 0.4);
     final statusLabel =
         (currentStatus != null && currentStatus!.trim().isNotEmpty)
-        ? currentStatus!.trim()
-        : 'In Progress';
+            ? currentStatus!.trim()
+            : 'In Progress';
     final hasSubphase = subphase != null;
 
     return Container(
@@ -326,8 +321,8 @@ class _SubphaseBox extends StatelessWidget {
                       }
                       final dialogStatus =
                           _kSubphaseStatuses.contains(statusLabel)
-                          ? statusLabel
-                          : 'In Progress';
+                              ? statusLabel
+                              : 'In Progress';
                       _showSubphaseStatusDialog(
                         context,
                         code: subphase!.code,
@@ -384,10 +379,10 @@ class _SubphaseBox extends StatelessWidget {
                         alignment: Alignment.topCenter,
                         onPressed: isOwner
                             ? () => _insertDefaultsForSubphase(
-                                context,
-                                projectId,
-                                subphase!.code,
-                              )
+                                  context,
+                                  projectId,
+                                  subphase!.code,
+                                )
                             : () => _viewOnlySnack(context),
                         icon: const Icon(
                           Icons.playlist_add,
@@ -729,8 +724,7 @@ class _CompactTaskTileState extends State<_CompactTaskTile> {
       secondaryBackground: _buildSwipeBackground(context, isStartToEnd: false),
       onUpdate: (details) {
         final progress = details.progress.abs().clamp(0.0, 1.0);
-        final direction =
-            details.direction == DismissDirection.startToEnd ||
+        final direction = details.direction == DismissDirection.startToEnd ||
                 details.direction == DismissDirection.endToStart
             ? details.direction
             : null;
@@ -812,9 +806,8 @@ class _CompactTaskTileState extends State<_CompactTaskTile> {
                               splashRadius: 18,
                               onPressed: _toggleExpansion,
                               icon: Icon(_expanded ? Icons.remove : Icons.add),
-                              tooltip: _expanded
-                                  ? 'Hide subtasks'
-                                  : 'Show subtasks',
+                              tooltip:
+                                  _expanded ? 'Hide subtasks' : 'Show subtasks',
                             ),
                           ),
                         const SizedBox(width: 6),
@@ -898,8 +891,7 @@ class _CompactTaskTileState extends State<_CompactTaskTile> {
     required bool isStartToEnd,
   }) {
     final theme = Theme.of(context);
-    final isActive =
-        _currentDirection ==
+    final isActive = _currentDirection ==
         (isStartToEnd
             ? DismissDirection.startToEnd
             : DismissDirection.endToStart);
@@ -918,22 +910,19 @@ class _CompactTaskTileState extends State<_CompactTaskTile> {
     final iconOpacity = isStartToEnd
         ? (progress / _completeThreshold).clamp(0.0, 1.0)
         : progress <= _completeThreshold
-        ? 0.0
-        : ((progress - _completeThreshold) /
-                  (_deleteThreshold - _completeThreshold))
-              .clamp(0.0, 1.0);
+            ? 0.0
+            : ((progress - _completeThreshold) /
+                    (_deleteThreshold - _completeThreshold))
+                .clamp(0.0, 1.0);
 
-    final alignment = isStartToEnd
-        ? Alignment.centerLeft
-        : Alignment.centerRight;
-    final rowAlignment = isStartToEnd
-        ? MainAxisAlignment.start
-        : MainAxisAlignment.end;
+    final alignment =
+        isStartToEnd ? Alignment.centerLeft : Alignment.centerRight;
+    final rowAlignment =
+        isStartToEnd ? MainAxisAlignment.start : MainAxisAlignment.end;
 
     final icon = isStartToEnd ? Icons.check_circle : Icons.delete_forever;
-    final iconColor = isStartToEnd
-        ? theme.colorScheme.primary
-        : theme.colorScheme.error;
+    final iconColor =
+        isStartToEnd ? theme.colorScheme.primary : theme.colorScheme.error;
 
     return Container(
       alignment: alignment,

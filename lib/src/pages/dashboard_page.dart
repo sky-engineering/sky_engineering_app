@@ -2,9 +2,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'subphases_page.dart';
 import 'checklists_page.dart';
 import 'proposals_page.dart';
+import 'subphases_page.dart';
 import '../dialogs/city_inspect_links_dialog.dart';
 import '../dialogs/other_links_dialog.dart';
 import '../pages/clients_page.dart';
@@ -75,28 +75,25 @@ class DashboardPage extends StatelessWidget {
                 ).push(MaterialPageRoute(builder: (_) => ProposalsPage()));
               }),
               const SizedBox(height: 16),
-
               linkButton('Checklists', () {
                 Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const ChecklistsPage()),
                 );
               }),
               const SizedBox(height: 16),
-
               linkButton('Clients', () {
                 Navigator.of(
                   context,
                 ).push(MaterialPageRoute(builder: (_) => ClientsPage()));
               }),
               const SizedBox(height: 16),
-
               linkButton('Task Structure', () {
                 Navigator.of(
                   context,
-                ).push(MaterialPageRoute(builder: (_) => SubphasesPage()));
+                ).push(
+                    MaterialPageRoute(builder: (_) => const SubphasesPage()));
               }),
               const SizedBox(height: 24),
-
               linkButton('Sky Engineering Dropbox', () {
                 _launchExternal(
                   context,
@@ -104,12 +101,10 @@ class DashboardPage extends StatelessWidget {
                 );
               }),
               const SizedBox(height: 16),
-
               linkButton('City Inspect Links', () {
                 showCityInspectLinksDialog(context);
               }),
               const SizedBox(height: 16),
-
               linkButton('Washington County GIS', () {
                 _launchExternal(
                   context,
@@ -117,7 +112,6 @@ class DashboardPage extends StatelessWidget {
                 );
               }),
               const SizedBox(height: 16),
-
               linkButton('Other Links', () {
                 showOtherLinksDialog(context);
               }),

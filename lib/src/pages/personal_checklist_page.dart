@@ -153,7 +153,7 @@ class _PersonalChecklistPageState extends State<PersonalChecklistPage> {
       );
     } else {
       content = ReorderableListView.builder(
-        padding: const EdgeInsets.fromLTRB(0, 8, 0, 96),
+        padding: const EdgeInsets.fromLTRB(0, 8, 0, 140),
         buildDefaultDragHandles: false,
         proxyDecorator: (child, index, animation) {
           final radius = BorderRadius.circular(16);

@@ -27,15 +27,43 @@ class Shell extends StatefulWidget {
 }
 
 class _ShellState extends State<Shell> with TickerProviderStateMixin {
-  final _pages = <Widget>[];
+  static const int _starredTasksPageIndex = 2;
+  static const int _taskOverviewPageIndex = 5;
+  static const int _externalTasksPageIndex = 6;
+  static const int _personalTasksPageIndex = 7;
+  static const int _pageCount = 8;
+  static const List<NavigationDestination> _navDestinations = [
+    NavigationDestination(
+      icon: Icon(Icons.home_outlined),
+      selectedIcon: Icon(Icons.home),
+      label: 'Home',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.person_outline),
+      selectedIcon: Icon(Icons.person),
+      label: 'Profile',
+    ),
+    NavigationDestination(
+      icon: _StarTabIcon(isSelected: false),
+      selectedIcon: _StarTabIcon(isSelected: true),
+      label: 'Tasks',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.work_outline),
+      selectedIcon: Icon(Icons.work),
+      label: 'Projects',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.receipt_long_outlined),
+      selectedIcon: Icon(Icons.receipt_long),
+      label: 'Invoices',
+    ),
+  ];
 
   bool _ready = false;
   int _navIndex = 0;
   int _bodyIndex = 0;
   int _previousIndex = 0;
-  static const int _taskOverviewPageIndex = 5;
-  static const int _externalTasksPageIndex = 6;
-  static const int _personalTasksPageIndex = 7;
   bool _quickMenuVisible = false;
 
   late final AnimationController _taskMenuController;
@@ -49,16 +77,6 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _pages.addAll([
-      DashboardPage(),
-      const ProfilePage(),
-      const StarredTasksPage(),
-      const ProjectsPage(),
-      InvoicesPage(),
-      TaskOverviewPage(),
-      const ExternalTasksOverviewPage(),
-      const PersonalChecklistPage(),
-    ]);
 
     _taskMenuController = AnimationController(
       vsync: this,
@@ -157,10 +175,7 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
       _closeQuickMenu();
     }
 
-    setState(() {
-      _navIndex = index;
-      _bodyIndex = index;
-    });
+    _setActivePage(index, navIndex: index);
   }
 
   void _openTaskMenu() {
@@ -194,28 +209,16 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
 
     switch (action) {
       case _TaskAction.starred:
-        setState(() {
-          _navIndex = 2;
-          _bodyIndex = 2;
-        });
+        _setActivePage(_starredTasksPageIndex, navIndex: 2);
         break;
       case _TaskAction.overview:
-        setState(() {
-          _navIndex = 2;
-          _bodyIndex = _taskOverviewPageIndex;
-        });
+        _setActivePage(_taskOverviewPageIndex, navIndex: 2);
         break;
       case _TaskAction.personal:
-        setState(() {
-          _navIndex = 2;
-          _bodyIndex = _personalTasksPageIndex;
-        });
+        _setActivePage(_personalTasksPageIndex, navIndex: 2);
         break;
       case _TaskAction.external:
-        setState(() {
-          _navIndex = 2;
-          _bodyIndex = _externalTasksPageIndex;
-        });
+        _setActivePage(_externalTasksPageIndex, navIndex: 2);
         break;
     }
   }
@@ -445,9 +448,15 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    final pages = List<Widget>.generate(
+      _pageCount,
+      (index) => _buildPageForIndex(index),
+      growable: false,
+    );
+
     final scaffold = Scaffold(
       appBar: AppBar(title: _buildAppBarTitle(context)),
-      body: IndexedStack(index: _bodyIndex, children: _pages),
+      body: IndexedStack(index: _bodyIndex, children: pages),
       floatingActionButton: _bodyIndex == 0
           ? FloatingActionButton(
               heroTag: 'dashboard-quick',
@@ -458,46 +467,71 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
             )
           : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _navIndex,
-        onDestinationSelected: _handleDestinationSelected,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-          NavigationDestination(
-            icon: _StarTabIcon(isSelected: false),
-            selectedIcon: _StarTabIcon(isSelected: true),
-            label: 'Tasks',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.work_outline),
-            selectedIcon: Icon(Icons.work),
-            label: 'Projects',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long),
-            label: 'Invoices',
-          ),
+      bottomNavigationBar: const ShellBottomNav(),
+    );
+
+    return _ShellScope(
+      state: this,
+      navIndex: _navIndex,
+      child: Stack(
+        children: [
+          scaffold,
+          _buildTaskMenuOverlay(context),
+          _buildQuickMenuOverlay(context),
         ],
       ),
     );
+  }
 
-    return Stack(
-      children: [
-        scaffold,
-        _buildTaskMenuOverlay(context),
-        _buildQuickMenuOverlay(context),
-      ],
-    );
+  int get navigationIndex => _navIndex;
+
+  void handleDestinationSelected(int index) {
+    _handleDestinationSelected(index);
+  }
+
+  void handleDestinationSelectedFromChild(
+      int index, BuildContext childContext) {
+    if (Navigator.of(childContext).canPop()) {
+      Navigator.of(childContext).popUntil((route) => route.isFirst);
+    }
+    _handleDestinationSelected(index);
+  }
+
+  void _setActivePage(int bodyIndex, {int? navIndex}) {
+    setState(() {
+      _bodyIndex = bodyIndex;
+      if (navIndex != null) {
+        _navIndex = navIndex;
+      }
+    });
+  }
+
+  Widget _buildPageForIndex(int index) {
+    final isActive = _bodyIndex == index;
+    switch (index) {
+      case 0:
+        return DashboardPage();
+      case 1:
+        return const ProfilePage();
+      case _starredTasksPageIndex:
+        return isActive ? const StarredTasksPage() : const SizedBox.shrink();
+      case 3:
+        return const ProjectsPage();
+      case 4:
+        return InvoicesPage();
+      case _taskOverviewPageIndex:
+        return isActive ? TaskOverviewPage() : const SizedBox.shrink();
+      case _externalTasksPageIndex:
+        return isActive
+            ? const ExternalTasksOverviewPage()
+            : const SizedBox.shrink();
+      case _personalTasksPageIndex:
+        return isActive
+            ? const PersonalChecklistPage()
+            : const SizedBox.shrink();
+      default:
+        return const SizedBox.shrink();
+    }
   }
 }
 
@@ -742,6 +776,49 @@ class _StarTabIcon extends StatelessWidget {
         color: iconColor,
         size: 26,
       ),
+    );
+  }
+}
+
+class _ShellScope extends InheritedWidget {
+  const _ShellScope({
+    required this.state,
+    required this.navIndex,
+    required super.child,
+  });
+
+  final _ShellState state;
+  final int navIndex;
+
+  static _ShellScope? of(BuildContext context) {
+    return context.dependOnInheritedWidgetOfExactType<_ShellScope>();
+  }
+
+  @override
+  bool updateShouldNotify(covariant _ShellScope oldWidget) =>
+      navIndex != oldWidget.navIndex || state != oldWidget.state;
+}
+
+class ShellBottomNav extends StatelessWidget {
+  const ShellBottomNav({super.key, this.popCurrentRoute = false});
+
+  final bool popCurrentRoute;
+
+  @override
+  Widget build(BuildContext context) {
+    final scope = _ShellScope.of(context);
+    if (scope == null) return const SizedBox.shrink();
+    final state = scope.state;
+    return NavigationBar(
+      selectedIndex: scope.navIndex,
+      onDestinationSelected: (index) {
+        if (popCurrentRoute) {
+          state.handleDestinationSelectedFromChild(index, context);
+        } else {
+          state.handleDestinationSelected(index);
+        }
+      },
+      destinations: _ShellState._navDestinations,
     );
   }
 }

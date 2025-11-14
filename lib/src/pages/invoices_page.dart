@@ -7,14 +7,12 @@ import '../data/models/invoice.dart';
 import '../data/models/project.dart';
 import '../data/repositories/invoice_repository.dart';
 import '../data/repositories/project_repository.dart';
+import '../dialogs/quick_actions.dart';
 
 enum _InvoiceSort {
-  numberDesc,
-  numberAsc,
-  amountDesc,
-  amountAsc,
-  projectDesc,
-  projectAsc,
+  projectNumberAsc,
+  invoiceNumberAsc,
+  dateDesc,
 }
 
 class InvoicesPage extends StatefulWidget {
@@ -28,7 +26,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
   static const _accentYellow = Color(0xFFF1C400);
 
   /// When true, only invoices with balance > 0 are shown.
-  bool _unpaidOnly = false;
+  bool _unpaidOnly = true;
 
   /// Cache of projectId -> display project number string (from Project.projectNumber).
   final Map<String, String> _projectNumById = <String, String>{};
@@ -41,7 +39,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  _InvoiceSort _sortMode = _InvoiceSort.numberDesc;
+  _InvoiceSort _sortMode = _InvoiceSort.projectNumberAsc;
 
   final _invoiceRepo = InvoiceRepository();
   final _projectRepo = ProjectRepository();
@@ -55,8 +53,16 @@ class _InvoicesPageState extends State<InvoicesPage> {
   @override
   Widget build(BuildContext context) {
     final currency = NumberFormat.simpleCurrency();
+    final dateFormat = DateFormat('MM/dd/yy');
 
     return Scaffold(
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => showQuickAddInvoiceDialog(context),
+        backgroundColor: _accentYellow,
+        foregroundColor: Colors.black,
+        child: const Icon(Icons.add),
+      ),
       body: Column(
         children: [
           Padding(
@@ -75,9 +81,9 @@ class _InvoicesPageState extends State<InvoicesPage> {
                   child: Text(
                     _unpaidOnly ? 'Show Paid Invoices' : 'Hide Paid Invoices',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: _accentYellow,
-                      fontWeight: FontWeight.w600,
-                    ),
+                          color: _accentYellow,
+                          fontWeight: FontWeight.w600,
+                        ),
                   ),
                 ),
               ],
@@ -103,28 +109,35 @@ class _InvoicesPageState extends State<InvoicesPage> {
           const SizedBox(height: 6),
 
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search),
+                hintText: 'Search invoices...',
+                border: const OutlineInputBorder(),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        tooltip: 'Clear search',
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                        icon: const Icon(Icons.clear),
+                      )
+                    : null,
+              ),
+              onChanged: (value) => setState(() => _searchQuery = value),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      labelText: 'Search invoices',
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              tooltip: 'Clear search',
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() => _searchQuery = '');
-                              },
-                              icon: const Icon(Icons.clear),
-                            )
-                          : null,
-                    ),
-                    onChanged: (value) => setState(() => _searchQuery = value),
-                  ),
+                Text(
+                  'Sort by:',
+                  style: Theme.of(context).textTheme.labelLarge,
                 ),
                 const SizedBox(width: 12),
                 DropdownButton<_InvoiceSort>(
@@ -135,27 +148,22 @@ class _InvoicesPageState extends State<InvoicesPage> {
                   },
                   items: const [
                     DropdownMenuItem(
-                      value: _InvoiceSort.numberDesc,
-                      child: Text('Number (desc)'),
+                      value: _InvoiceSort.projectNumberAsc,
+                      child: Text('Project Number'),
                     ),
                     DropdownMenuItem(
-                      value: _InvoiceSort.numberAsc,
-                      child: Text('Number (asc)'),
+                      value: _InvoiceSort.invoiceNumberAsc,
+                      child: Text('Invoice Number'),
                     ),
                     DropdownMenuItem(
-                      value: _InvoiceSort.amountDesc,
-                      child: Text('Amount (desc)'),
-                    ),
-                    DropdownMenuItem(
-                      value: _InvoiceSort.amountAsc,
-                      child: Text('Amount (asc)'),
+                      value: _InvoiceSort.dateDesc,
+                      child: Text('Date (newest first)'),
                     ),
                   ],
                 ),
               ],
             ),
           ),
-
           // Everything below (summary + list) reacts to projects and invoices.
           Expanded(
             child: StreamBuilder<List<Project>>(
@@ -193,9 +201,8 @@ class _InvoicesPageState extends State<InvoicesPage> {
 
                     // Apply unpaid filter
                     if (_unpaidOnly) {
-                      invoices = invoices
-                          .where((i) => i.balance > 0.0001)
-                          .toList();
+                      invoices =
+                          invoices.where((i) => i.balance > 0.0001).toList();
                     }
 
                     if (_searchQuery.trim().isNotEmpty) {
@@ -227,7 +234,9 @@ class _InvoicesPageState extends State<InvoicesPage> {
                             ),
                             child: Text(
                               '$summaryLabel: ${currency.format(totalUnpaid)}',
-                              style: Theme.of(context).textTheme.bodyMedium
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
                                   ?.copyWith(fontWeight: FontWeight.w600),
                             ),
                           ),
@@ -256,14 +265,16 @@ class _InvoicesPageState extends State<InvoicesPage> {
                           padding: const EdgeInsets.symmetric(horizontal: 12.0),
                           child: Text(
                             '$summaryLabel: ${currency.format(totalUnpaid)}',
-                            style: Theme.of(context).textTheme.bodyMedium
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
                                 ?.copyWith(fontWeight: FontWeight.w600),
                           ),
                         ),
                         const SizedBox(height: 6),
                         Expanded(
                           child: ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
+                            padding: const EdgeInsets.fromLTRB(10, 6, 10, 96),
                             itemCount: invoices.length,
                             separatorBuilder: (_, __) =>
                                 const SizedBox(height: 6),
@@ -272,8 +283,11 @@ class _InvoicesPageState extends State<InvoicesPage> {
                               final projNum = _projectNumById[inv.projectId];
                               final displayProj =
                                   (projNum != null && projNum.isNotEmpty)
-                                  ? projNum
-                                  : (inv.projectNumber?.toString() ?? '—');
+                                      ? projNum
+                                      : (inv.projectNumber?.toString() ?? '—');
+                              final invoiceDateLabel = inv.invoiceDate != null
+                                  ? dateFormat.format(inv.invoiceDate!)
+                                  : '--/--/--';
 
                               // Title row: [Invoice NNN]  (link icon)      Balance: $X
                               // Subtitle:  Project: 026-01 • Original: $Y
@@ -312,7 +326,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
                                     ],
                                   ),
                                   subtitle: Text(
-                                    'Project: $displayProj • Original: ${currency.format(inv.invoiceAmount)}',
+                                    'Project: $displayProj • Original: ${currency.format(inv.invoiceAmount)} • $invoiceDateLabel',
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -384,31 +398,14 @@ class _InvoicesPageState extends State<InvoicesPage> {
 
   int _compareInvoices(Invoice a, Invoice b) {
     return switch (_sortMode) {
-      _InvoiceSort.numberDesc => _compareByNumberDesc(a, b),
-      _InvoiceSort.numberAsc => _compareByNumberAsc(a, b),
-      _InvoiceSort.amountDesc => _compareByAmountDesc(a, b),
-      _InvoiceSort.amountAsc => _compareByAmountAsc(a, b),
-      _InvoiceSort.projectDesc => _compareByProjectDesc(a, b),
-      _InvoiceSort.projectAsc => _compareByProjectAsc(a, b),
+      _InvoiceSort.projectNumberAsc => _compareByProjectAsc(a, b),
+      _InvoiceSort.invoiceNumberAsc => _compareByNumberAsc(a, b),
+      _InvoiceSort.dateDesc => _compareByDateDesc(a, b),
     };
   }
 
   String _projectNumberFor(Invoice invoice) {
     return (_projectNumById[invoice.projectId]?.trim() ?? '').toLowerCase();
-  }
-
-  int _compareByProjectDesc(Invoice a, Invoice b) {
-    final aNumber = _projectNumberFor(a);
-    final bNumber = _projectNumberFor(b);
-    final aEmpty = aNumber.isEmpty;
-    final bEmpty = bNumber.isEmpty;
-    if (aEmpty && !bEmpty) return 1;
-    if (!aEmpty && bEmpty) return -1;
-    if (!aEmpty && !bEmpty) {
-      final cmp = bNumber.toLowerCase().compareTo(aNumber.toLowerCase());
-      if (cmp != 0) return cmp;
-    }
-    return _compareByNumberDesc(a, b);
   }
 
   int _compareByProjectAsc(Invoice a, Invoice b) {
@@ -423,32 +420,6 @@ class _InvoicesPageState extends State<InvoicesPage> {
       if (cmp != 0) return cmp;
     }
     return _compareByNumberAsc(a, b);
-  }
-
-  int _compareByNumberDesc(Invoice a, Invoice b) {
-    final aDigits = _invoiceNumberDigits(a.invoiceNumber);
-    final bDigits = _invoiceNumberDigits(b.invoiceNumber);
-
-    if (aDigits != null && bDigits != null && aDigits != bDigits) {
-      return bDigits.compareTo(aDigits);
-    }
-
-    if (aDigits == null && bDigits != null) {
-      return 1;
-    }
-
-    if (aDigits != null && bDigits == null) {
-      return -1;
-    }
-
-    final textCmp = b.invoiceNumber.toLowerCase().compareTo(
-      a.invoiceNumber.toLowerCase(),
-    );
-    if (textCmp != 0) {
-      return textCmp;
-    }
-
-    return _compareByDateDesc(a, b);
   }
 
   int _compareByNumberAsc(Invoice a, Invoice b) {
@@ -468,33 +439,13 @@ class _InvoicesPageState extends State<InvoicesPage> {
     }
 
     final textCmp = a.invoiceNumber.toLowerCase().compareTo(
-      b.invoiceNumber.toLowerCase(),
-    );
+          b.invoiceNumber.toLowerCase(),
+        );
     if (textCmp != 0) {
       return textCmp;
     }
 
     return _compareByDateDesc(a, b);
-  }
-
-  int _compareByAmountDesc(Invoice a, Invoice b) {
-    final cmp = b.invoiceAmount.compareTo(a.invoiceAmount);
-
-    if (cmp != 0) {
-      return cmp;
-    }
-
-    return _compareByNumberDesc(a, b);
-  }
-
-  int _compareByAmountAsc(Invoice a, Invoice b) {
-    final cmp = a.invoiceAmount.compareTo(b.invoiceAmount);
-
-    if (cmp != 0) {
-      return cmp;
-    }
-
-    return _compareByNumberAsc(a, b);
   }
 
   int _compareByDateDesc(Invoice a, Invoice b) {
@@ -553,8 +504,8 @@ class _InvoicesPageState extends State<InvoicesPage> {
       final seed = (which == 'invoice')
           ? (invoiceDate ?? DateTime.now())
           : (which == 'due')
-          ? (dueDate ?? DateTime.now())
-          : (paidDate ?? DateTime.now());
+              ? (dueDate ?? DateTime.now())
+              : (paidDate ?? DateTime.now());
       final d = await showDatePicker(
         context: context,
         initialDate: seed,
@@ -738,13 +689,12 @@ class _InvoicesPageState extends State<InvoicesPage> {
                   onPressed: () async {
                     if (!(formKey.currentState?.validate() ?? false)) return;
 
-                    final amt =
-                        double.tryParse(invoiceAmountCtl.text.trim()) ??
+                    final amt = double.tryParse(invoiceAmountCtl.text.trim()) ??
                         inv.invoiceAmount;
                     final paid = amountPaidCtl.text.trim().isEmpty
                         ? inv.amountPaid
                         : (double.tryParse(amountPaidCtl.text.trim()) ??
-                              inv.amountPaid);
+                            inv.amountPaid);
 
                     // We keep the existing projectId; editing the human-readable
                     // "Project Number" string here does not move the invoice.
