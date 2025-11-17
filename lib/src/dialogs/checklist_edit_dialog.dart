@@ -6,12 +6,16 @@ import '../data/models/checklist.dart';
 Future<ChecklistEditResult?> showChecklistEditDialog(
   BuildContext context, {
   Checklist? initial,
+  Future<void> Function()? onDelete,
 }) {
   return showDialog<ChecklistEditResult?>(
     context: context,
     barrierDismissible: false,
     builder: (dialogContext) {
-      return _ChecklistEditDialog(initial: initial);
+      return _ChecklistEditDialog(
+        initial: initial,
+        onDelete: onDelete,
+      );
     },
   );
 }
@@ -24,9 +28,10 @@ class ChecklistEditResult {
 }
 
 class _ChecklistEditDialog extends StatefulWidget {
-  const _ChecklistEditDialog({this.initial});
+  const _ChecklistEditDialog({this.initial, this.onDelete});
 
   final Checklist? initial;
+  final Future<void> Function()? onDelete;
 
   @override
   State<_ChecklistEditDialog> createState() => _ChecklistEditDialogState();
@@ -48,9 +53,8 @@ class _ChecklistEditDialogState extends State<_ChecklistEditDialog> {
         _EditableChecklistItem(ChecklistItem.create(title: '')),
       ];
     } else {
-      _items = existing
-          .map(_EditableChecklistItem.fromItem)
-          .toList(growable: true);
+      _items =
+          existing.map(_EditableChecklistItem.fromItem).toList(growable: true);
     }
   }
 
@@ -80,6 +84,35 @@ class _ChecklistEditDialogState extends State<_ChecklistEditDialog> {
         removed.dispose();
       }
     });
+  }
+
+  Future<void> _confirmRemoveAt(int index) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete checklist item?'),
+          content: const Text(
+            'This will remove the item from the template checklist.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      _removeAt(index);
+    }
   }
 
   void _onReorder(int oldIndex, int newIndex) {
@@ -165,56 +198,72 @@ class _ChecklistEditDialogState extends State<_ChecklistEditDialog> {
                   buildDefaultDragHandles: false,
                   onReorder: _onReorder,
                   padding: const EdgeInsets.symmetric(vertical: 4),
+                  proxyDecorator: (child, index, animation) {
+                    return FadeTransition(
+                      opacity: animation.drive(
+                        CurveTween(curve: Curves.easeInOutCubic),
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: child,
+                      ),
+                    );
+                  },
                   itemBuilder: (context, index) {
                     final entry = _items[index];
-                    return Card(
+                    final theme = Theme.of(context);
+                    return Container(
                       key: ValueKey('editable-item-${entry.item.id}'),
-                      margin: const EdgeInsets.symmetric(vertical: 2),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
+                      margin: const EdgeInsets.symmetric(vertical: 1),
+                      decoration: BoxDecoration(
+                        color: theme.cardColor,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: theme.dividerColor.withValues(alpha: 0.4),
                         ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            ReorderableDragStartListener(
-                              index: index,
-                              child: const Icon(Icons.drag_handle, size: 20),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: TextFormField(
-                                controller: entry.controller,
-                                textInputAction: TextInputAction.next,
-                                decoration: const InputDecoration(
-                                  hintText: 'Add item',
-                                  border: InputBorder.none,
-                                  isDense: true,
-                                  contentPadding: EdgeInsets.symmetric(
-                                    vertical: 8,
-                                  ),
-                                ),
-                                validator: (value) {
-                                  if ((value ?? '').trim().isEmpty) {
-                                    return 'Enter text or remove this row.';
-                                  }
-                                  return null;
-                                },
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          ReorderableDelayedDragStartListener(
+                            index: index,
+                            child: const Icon(Icons.drag_handle, size: 18),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: TextFormField(
+                              controller: entry.controller,
+                              textInputAction: TextInputAction.next,
+                              decoration: InputDecoration(
+                                hintText: 'Add item',
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                isDense: true,
+                                contentPadding: EdgeInsets.zero,
+                                filled: true,
+                                fillColor: theme.cardColor,
                               ),
+                              validator: (value) {
+                                if ((value ?? '').trim().isEmpty) {
+                                  return 'Enter text or remove this row.';
+                                }
+                                return null;
+                              },
                             ),
-                            IconButton(
-                              tooltip: 'Remove item',
-                              padding: const EdgeInsets.all(4),
-                              constraints: const BoxConstraints(
-                                minWidth: 36,
-                                minHeight: 36,
-                              ),
-                              onPressed: () => _removeAt(index),
-                              icon: const Icon(Icons.delete_outline, size: 20),
+                          ),
+                          IconButton(
+                            tooltip: 'Remove item',
+                            padding: const EdgeInsets.all(2),
+                            constraints: const BoxConstraints(
+                              minWidth: 32,
+                              minHeight: 32,
                             ),
-                          ],
-                        ),
+                            onPressed: () => _confirmRemoveAt(index),
+                            icon: const Icon(Icons.delete_outline, size: 18),
+                          ),
+                        ],
                       ),
                     );
                   },
@@ -252,6 +301,47 @@ class _ChecklistEditDialogState extends State<_ChecklistEditDialog> {
         ),
       ),
       actions: [
+        if (widget.initial != null && widget.onDelete != null)
+          TextButton(
+            onPressed: () async {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (dialogContext) {
+                  return AlertDialog(
+                    title: const Text('Delete checklist template?'),
+                    content: const Text(
+                      'This permanently deletes the template. Continue?',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(false),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red,
+                        ),
+                        onPressed: () => Navigator.of(dialogContext).pop(true),
+                        child: const Text('Delete'),
+                      ),
+                    ],
+                  );
+                },
+              );
+              if (confirmed == true) {
+                await widget.onDelete!.call();
+                if (!mounted) return;
+                Navigator.of(context).pop();
+              }
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
+            ),
+            child: const Text('Delete'),
+          ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           style: TextButton.styleFrom(
@@ -277,7 +367,7 @@ class _ChecklistEditDialogState extends State<_ChecklistEditDialog> {
 
 class _EditableChecklistItem {
   _EditableChecklistItem(this.item)
-    : controller = TextEditingController(text: item.title);
+      : controller = TextEditingController(text: item.title);
 
   factory _EditableChecklistItem.fromItem(ChecklistItem item) {
     return _EditableChecklistItem(item);

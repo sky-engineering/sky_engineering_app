@@ -1,5 +1,6 @@
 // lib/src/pages/task_overview_page.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../data/models/external_task.dart';
 import '../data/models/project.dart';
 import '../data/models/task.dart';
@@ -121,6 +122,7 @@ class _TaskOverviewPageState extends State<TaskOverviewPage> {
                     project: visibleProjects[i],
                     taskRepo: _taskRepo,
                     externalRepo: _externalRepo,
+                    projectRepo: _projectRepo,
                   ),
                 );
                 if (i != visibleProjects.length - 1) {
@@ -159,10 +161,12 @@ class _ProjectTaskCard extends StatelessWidget {
     required this.project,
     required this.taskRepo,
     required this.externalRepo,
+    required this.projectRepo,
   });
   final Project project;
   final TaskRepository taskRepo;
   final ExternalTaskRepository externalRepo;
+  final ProjectRepository projectRepo;
   @override
   Widget build(BuildContext context) {
     final projectNumber = project.projectNumber?.trim();
@@ -171,6 +175,10 @@ class _ProjectTaskCard extends StatelessWidget {
         : project.name;
     final titleColor = _statusTextColor(context, project);
     final externalSection = _buildExternalTasksSection(context, titleColor);
+    final comment = project.taskOverviewComment?.trim() ?? '';
+    final hasComment = comment.isNotEmpty;
+    final messenger = ScaffoldMessenger.of(context);
+
     Future<void> toggleStar(TaskItem task) async {
       try {
         await taskRepo.setStarred(task, !task.isStarred);
@@ -182,87 +190,205 @@ class _ProjectTaskCard extends StatelessWidget {
       }
     }
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            InkWell(
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => ProjectDetailPage(projectId: project.id),
-                  ),
-                );
-              },
-              child: Text(
-                title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: titleColor,
+    Future<void> persistComment(String? value) async {
+      final trimmed = value?.trim();
+      final payload = trimmed == null || trimmed.isEmpty ? null : trimmed;
+      try {
+        await projectRepo.update(project.id, {
+          'taskOverviewComment': payload,
+        });
+      } catch (e) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Failed to update comment: $e')),
+        );
+      }
+    }
+
+    Future<void> openCreateCommentDialog() async {
+      final result = await showDialog<_ProjectCommentDialogResult>(
+        context: context,
+        builder: (dialogContext) => const _ProjectCommentDialog(
+          mode: _ProjectCommentDialogMode.create,
+        ),
+      );
+      if (result == null) return;
+      if (result.deleted) {
+        await persistComment(null);
+        return;
+      }
+      final value = result.comment;
+      if (value == null || value.isEmpty) return;
+      await persistComment(value);
+    }
+
+    Future<void> openEditCommentDialog() async {
+      final result = await showDialog<_ProjectCommentDialogResult>(
+        context: context,
+        builder: (dialogContext) => _ProjectCommentDialog(
+          mode: _ProjectCommentDialogMode.edit,
+          initialValue: comment,
+        ),
+      );
+      if (result == null) return;
+      if (result.deleted) {
+        await persistComment(null);
+        return;
+      }
+      final value = result.comment;
+      if (value == null || value.isEmpty) {
+        await persistComment(null);
+        return;
+      }
+      await persistComment(value);
+    }
+
+    final card = SizedBox(
+      width: double.infinity,
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              InkWell(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ProjectDetailPage(projectId: project.id),
                     ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            StreamBuilder<List<TaskItem>>(
-              stream: taskRepo.streamByProject(project.id),
-              builder: (context, snapshot) {
-                final tasks = (snapshot.data ?? const <TaskItem>[])
-                    .where((t) => _kWatchedStatuses.contains(t.taskStatus))
-                    .toList();
-                if (tasks.isEmpty) {
-                  return const SizedBox.shrink();
-                }
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: tasks.take(6).map((task) {
-                    return InkWell(
-                      onTap: () => toggleStar(task),
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.only(top: 3),
-                              child: Icon(
-                                task.isStarred ? Icons.star : Icons.star_border,
-                                size: 12,
-                                color: task.isStarred
-                                    ? const Color(0xFFF1C400)
-                                    : titleColor.withValues(alpha: 0.7),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                task.title,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      color: titleColor.withValues(alpha: 0.85),
-                                    ),
-                              ),
-                            ),
-                          ],
-                        ),
+                  );
+                },
+                child: Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: titleColor,
                       ),
-                    );
-                  }).toList(),
-                );
-              },
-            ),
-            if (externalSection != null) externalSection,
-          ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              StreamBuilder<List<TaskItem>>(
+                stream: taskRepo.streamByProject(project.id),
+                builder: (context, snapshot) {
+                  final tasks = (snapshot.data ?? const <TaskItem>[])
+                      .where((t) => _kWatchedStatuses.contains(t.taskStatus))
+                      .toList();
+                  if (tasks.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: tasks.take(6).map((task) {
+                      return InkWell(
+                        onTap: () => toggleStar(task),
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(top: 3),
+                                child: Icon(
+                                  task.isStarred
+                                      ? Icons.star
+                                      : Icons.star_border,
+                                  size: 12,
+                                  color: task.isStarred
+                                      ? const Color(0xFFF1C400)
+                                      : titleColor.withValues(alpha: 0.7),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  task.title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color:
+                                            titleColor.withValues(alpha: 0.85),
+                                      ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
+              if (externalSection != null) externalSection,
+            ],
+          ),
         ),
       ),
+    );
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        card,
+        if (!hasComment)
+          Positioned(
+            top: 0,
+            right: 0,
+            child: IconButton(
+              tooltip: 'Add comment',
+              onPressed: openCreateCommentDialog,
+              iconSize: 20,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+              splashRadius: 18,
+              icon: const Icon(
+                Icons.chat_bubble_outline,
+                color: Color(0xFFF1C400),
+              ),
+            ),
+          ),
+        if (hasComment)
+          Positioned(
+            top: 18,
+            right: 0,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: openEditCommentDialog,
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF1C400),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(10),
+                      bottomLeft: Radius.circular(10),
+                    ),
+                  ),
+                  constraints: const BoxConstraints(maxWidth: 150),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  child: Text(
+                    comment,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Colors.black.withValues(alpha: 0.9),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 11,
+                          height: 1.1,
+                        ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -287,7 +413,6 @@ class _ProjectTaskCard extends StatelessWidget {
       return ad.compareTo(bd);
     });
     final theme = Theme.of(context);
-    final mutedColor = titleColor.withValues(alpha: 0.7);
     final visible = tasks.take(3).toList();
     final remaining = tasks.length - visible.length;
     Widget buildRow(ExternalTask task) {
@@ -386,6 +511,105 @@ class _ProjectTaskCard extends StatelessWidget {
       return maxOrder + 1;
     }
     return starredCount;
+  }
+}
+
+class _ProjectCommentDialogResult {
+  const _ProjectCommentDialogResult({this.comment, this.deleted = false});
+
+  final String? comment;
+  final bool deleted;
+}
+
+enum _ProjectCommentDialogMode { create, edit }
+
+class _ProjectCommentDialog extends StatefulWidget {
+  const _ProjectCommentDialog({
+    required this.mode,
+    this.initialValue,
+  });
+
+  final _ProjectCommentDialogMode mode;
+  final String? initialValue;
+
+  @override
+  State<_ProjectCommentDialog> createState() => _ProjectCommentDialogState();
+}
+
+class _ProjectCommentDialogState extends State<_ProjectCommentDialog> {
+  late final TextEditingController _controller;
+
+  bool get _canSubmit => _controller.text.trim().isNotEmpty;
+
+  bool get _isEdit => widget.mode == _ProjectCommentDialogMode.edit;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue ?? '');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleSubmit() {
+    final text = _controller.text.trim();
+    Navigator.of(context).pop(
+      _ProjectCommentDialogResult(comment: text, deleted: false),
+    );
+  }
+
+  void _handleDelete() {
+    Navigator.of(context).pop(
+      const _ProjectCommentDialogResult(comment: null, deleted: true),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = _isEdit ? 'Edit Comment' : 'Add Comment';
+    final primaryLabel = _isEdit ? 'OK' : 'Create';
+    return AlertDialog(
+      title: Text(title),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        maxLength: 40,
+        maxLines: 2,
+        minLines: 1,
+        maxLengthEnforcement: MaxLengthEnforcement.enforced,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: const InputDecoration(
+          labelText: 'Overlay comment',
+        ),
+        inputFormatters: [LengthLimitingTextInputFormatter(40)],
+        onChanged: (_) => setState(() {}),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _handleDelete,
+          style: TextButton.styleFrom(
+            foregroundColor: Colors.red,
+          ),
+          child: const Text('Delete'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFFF1C400),
+            foregroundColor: Colors.black,
+          ),
+          onPressed: _canSubmit ? _handleSubmit : null,
+          child: Text(primaryLabel),
+        ),
+      ],
+    );
   }
 }
 

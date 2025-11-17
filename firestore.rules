@@ -78,10 +78,18 @@ service cloud.firestore {
         && resource.data.ownerUid == request.auth.uid;
     }
 
-    // CHECKLIST TEMPLATES - owner-only writes; readers limited to owner
+    // CHECKLIST TEMPLATES - owner-only writes; all authenticated users can read
     match /checklistTemplates/{id} {
-      allow read: if signedIn()
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if signedIn()
         && resource.data.ownerUid == request.auth.uid;
+    }
+
+    // PROJECT CHECKLISTS - owner-only writes; all authenticated users can read
+    match /checklistProjects/{id} {
+      allow read: if signedIn();
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid;
       allow update, delete: if signedIn()

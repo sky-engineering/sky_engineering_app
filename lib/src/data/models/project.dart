@@ -98,6 +98,7 @@ class Project {
   final String? ownerUid;
   final String? projectNumber;
   final String? folderName;
+  final String? taskOverviewComment;
 
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -137,6 +138,7 @@ class Project {
     this.ownerUid,
     this.projectNumber,
     this.folderName,
+    this.taskOverviewComment,
     this.createdAt,
     this.updatedAt,
     this.selectedSubphases,
@@ -218,6 +220,7 @@ class Project {
       ownerUid: readStringOrNull(data, 'ownerUid'),
       projectNumber: readStringOrNull(data, 'projectNumber'),
       folderName: readStringOrNull(data, 'folderName'),
+      taskOverviewComment: readStringOrNull(data, 'taskOverviewComment'),
       createdAt: readDateTime(data, 'createdAt'),
       updatedAt: readDateTime(data, 'updatedAt'),
       selectedSubphases: selectedSubphases,
@@ -265,6 +268,8 @@ class Project {
         'projectNumber': projectNumber,
       if (folderName != null && folderName!.isNotEmpty)
         'folderName': folderName,
+      if (taskOverviewComment != null && taskOverviewComment!.isNotEmpty)
+        'taskOverviewComment': taskOverviewComment,
 
       if (selectedSubphases != null)
         'selectedSubphases': selectedSubphases!.map((s) => s.toMap()).toList(),
@@ -303,6 +308,7 @@ class Project {
     String? ownerUid,
     String? projectNumber,
     String? folderName,
+    String? taskOverviewComment,
     DateTime? createdAt,
     DateTime? updatedAt,
     List<SelectedSubphase>? selectedSubphases,
@@ -336,6 +342,7 @@ class Project {
       ownerUid: ownerUid ?? this.ownerUid,
       projectNumber: projectNumber ?? this.projectNumber,
       folderName: folderName ?? this.folderName,
+      taskOverviewComment: taskOverviewComment ?? this.taskOverviewComment,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       selectedSubphases: selectedSubphases ?? this.selectedSubphases,

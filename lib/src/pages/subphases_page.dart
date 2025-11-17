@@ -731,7 +731,7 @@ Future<void> _showEditDialog(
       return StatefulBuilder(
         builder: (context, setState) {
           return AlertDialog(
-            title: const Text('Edit subphase'),
+            title: const Text('Edit Subphase'),
             content: Form(
               key: formKey,
               child: SizedBox(
@@ -774,75 +774,78 @@ Future<void> _showEditDialog(
                 ),
               ),
             ),
+            actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
             actions: [
-              TextButton(
-                style: TextButton.styleFrom(foregroundColor: Colors.red),
-                onPressed: () async {
-                  final ok = await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('Delete subphase?'),
-                      content: const Text(
-                        'This removes it from your template list.',
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: const Text('Cancel'),
-                        ),
-                        TextButton(
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.red,
+              Row(
+                children: [
+                  TextButton(
+                    style: TextButton.styleFrom(foregroundColor: Colors.red),
+                    onPressed: () async {
+                      final ok = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Delete subphase?'),
+                          content: const Text(
+                            'This removes it from your template list.',
                           ),
-                          onPressed: () => Navigator.pop(ctx, true),
-                          child: const Text('Delete'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Cancel'),
+                            ),
+                            TextButton(
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.red,
+                              ),
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: const Text('Delete'),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  );
-                  if (ok == true) {
-                    await repo.delete(t.id);
-                    if (!context.mounted) {
-                      return;
-                    }
-                    Navigator.pop(context);
-                  }
-                },
-                child: const Text('Delete'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () async {
-                  if (!(formKey.currentState?.validate() ?? false)) {
-                    return;
-                  }
+                      );
+                      if (ok == true) {
+                        await repo.delete(t.id);
+                        if (!context.mounted) {
+                          return;
+                        }
+                        Navigator.pop(context);
+                      }
+                    },
+                    child: const Text('Delete'),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 12),
+                  FilledButton(
+                    onPressed: () async {
+                      if (!(formKey.currentState?.validate() ?? false)) {
+                        return;
+                      }
 
-                  final newCode = codeCtl.text.trim();
-                  final newPhaseCode =
-                      (newCode.length >= 2) ? newCode.substring(0, 2) : '';
-                  final defaults = parseDefaults(defaultsCtl.text);
+                      final newCode = codeCtl.text.trim();
+                      final newPhaseCode =
+                          (newCode.length >= 2) ? newCode.substring(0, 2) : '';
+                      final defaults = parseDefaults(defaultsCtl.text);
 
-                  await repo.update(t.id, {
-                    'subphaseCode': newCode,
-                    'taskCode': newCode, // legacy mirror
-                    'subphaseName': nameCtl.text.trim(),
-                    'taskName': nameCtl.text.trim(), // legacy mirror
-                    'phaseCode': newPhaseCode,
-                    'defaultTasks': defaults,
-                  });
-                  if (!context.mounted) {
-                    return;
-                  }
-                  Navigator.pop(context);
-                },
-                child: const Text('Save'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
+                      await repo.update(t.id, {
+                        'subphaseCode': newCode,
+                        'taskCode': newCode, // legacy mirror
+                        'subphaseName': nameCtl.text.trim(),
+                        'taskName': nameCtl.text.trim(), // legacy mirror
+                        'phaseCode': newPhaseCode,
+                        'defaultTasks': defaults,
+                      });
+                      if (!context.mounted) {
+                        return;
+                      }
+                      Navigator.pop(context);
+                    },
+                    child: const Text('Save'),
+                  ),
+                ],
               ),
             ],
           );

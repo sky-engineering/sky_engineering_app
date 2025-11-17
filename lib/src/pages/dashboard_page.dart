@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'checklists_page.dart';
+import 'template_checklists_page.dart';
 import 'proposals_page.dart';
 import 'subphases_page.dart';
 import '../dialogs/city_inspect_links_dialog.dart';
@@ -77,7 +77,9 @@ class DashboardPage extends StatelessWidget {
               const SizedBox(height: 16),
               linkButton('Checklists', () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ChecklistsPage()),
+                  MaterialPageRoute(
+                    builder: (_) => const TemplateChecklistsPage(),
+                  ),
                 );
               }),
               const SizedBox(height: 16),
