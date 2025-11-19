@@ -114,10 +114,10 @@ class _ProjectsPageState extends State<ProjectsPage> {
                 emptySelectionAllowed: true,
                 showSelectedIcon: false,
                 style: ButtonStyle(
-                  padding: MaterialStateProperty.all(
+                  padding: WidgetStateProperty.all(
                     const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                   ),
-                  minimumSize: MaterialStateProperty.all(const Size(0, 32)),
+                  minimumSize: WidgetStateProperty.all(const Size(0, 32)),
                 ),
                 onSelectionChanged: (newSelection) {
                   setState(() {

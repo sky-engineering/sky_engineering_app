@@ -304,6 +304,7 @@ class _ChecklistEditDialogState extends State<_ChecklistEditDialog> {
         if (widget.initial != null && widget.onDelete != null)
           TextButton(
             onPressed: () async {
+              final navigator = Navigator.of(context);
               final confirmed = await showDialog<bool>(
                 context: context,
                 builder: (dialogContext) {
@@ -331,7 +332,7 @@ class _ChecklistEditDialogState extends State<_ChecklistEditDialog> {
               if (confirmed == true) {
                 await widget.onDelete!.call();
                 if (!mounted) return;
-                Navigator.of(context).pop();
+                navigator.pop();
               }
             },
             style: TextButton.styleFrom(

@@ -15,12 +15,12 @@ const _kTaskStatuses = <String>[
 
 class TasksSection extends StatelessWidget {
   final String projectId;
-  final bool isOwner;
+  final bool canEdit;
 
   const TasksSection({
     super.key,
     required this.projectId,
-    required this.isOwner,
+    required this.canEdit,
   });
 
   @override
@@ -58,7 +58,7 @@ class TasksSection extends StatelessWidget {
                         child: Text('No tasks yet'),
                       ),
                       const SizedBox(height: 8),
-                      if (isOwner)
+                      if (canEdit)
                         Align(
                           alignment: Alignment.centerLeft,
                           child: FilledButton.icon(
@@ -84,9 +84,9 @@ class TasksSection extends StatelessWidget {
 
                         return _CompactTaskTile(
                           task: t,
-                          isOwner: isOwner,
+                          canEdit: canEdit,
                           onToggleStar: () async {
-                            if (!isOwner) {
+                            if (!canEdit) {
                               _viewOnlySnack(context);
                               return;
                             }
@@ -103,7 +103,7 @@ class TasksSection extends StatelessWidget {
                             }
                           },
                           onChangeStatus: (newStatus) async {
-                            if (!isOwner) return _viewOnlySnack(context);
+                            if (!canEdit) return _viewOnlySnack(context);
                             await repo.update(t.id, {
                               'taskStatus': newStatus,
                               // legacy mirror for any old code still reading 'status'
@@ -111,12 +111,12 @@ class TasksSection extends StatelessWidget {
                             });
                           },
                           onTap: () =>
-                              showTaskEditDialog(context, t, canEdit: isOwner),
+                              showTaskEditDialog(context, t, canEdit: canEdit),
                         );
                       },
                     ),
                     const SizedBox(height: 8),
-                    if (isOwner)
+                    if (canEdit)
                       Align(
                         alignment: Alignment.centerLeft,
                         child: FilledButton.icon(
@@ -139,7 +139,8 @@ class TasksSection extends StatelessWidget {
   static void _viewOnlySnack(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('View-only: only the project owner can modify tasks.'),
+        content: Text(
+            'View-only: only the project owner or an admin can modify tasks.'),
       ),
     );
   }
@@ -195,14 +196,14 @@ class TasksSection extends StatelessWidget {
 // ===== Compact tile =====
 class _CompactTaskTile extends StatelessWidget {
   final TaskItem task;
-  final bool isOwner;
+  final bool canEdit;
   final VoidCallback onToggleStar;
   final ValueChanged<String> onChangeStatus;
   final VoidCallback onTap;
 
   const _CompactTaskTile({
     required this.task,
-    required this.isOwner,
+    required this.canEdit,
     required this.onToggleStar,
     required this.onChangeStatus,
     required this.onTap,
@@ -227,9 +228,8 @@ class _CompactTaskTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
         child: Row(
           // Align to top when there IS a description, else center with title line.
-          crossAxisAlignment: hasDesc
-              ? CrossAxisAlignment.start
-              : CrossAxisAlignment.center,
+          crossAxisAlignment:
+              hasDesc ? CrossAxisAlignment.start : CrossAxisAlignment.center,
           children: [
             // Star icon (hollow vs solid)
             Padding(
@@ -268,7 +268,7 @@ class _CompactTaskTile extends StatelessWidget {
                       const SizedBox(width: 8),
                       _InlineStatusDropdown(
                         value: task.taskStatus,
-                        enabled: isOwner,
+                        enabled: canEdit,
                         onChanged: (v) {
                           if (v == null) return;
                           onChangeStatus(v);

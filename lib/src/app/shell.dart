@@ -4,6 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../services/user_service.dart';
+import '../data/models/user_profile.dart';
+import '../data/repositories/user_repository.dart';
+import 'user_access_scope.dart';
+
 import '../pages/dashboard_page.dart';
 import '../pages/projects_page.dart';
 import '../pages/profile_page.dart';
@@ -65,6 +69,7 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
   int _bodyIndex = 0;
   int _previousIndex = 0;
   bool _quickMenuVisible = false;
+  final _userRepo = UserRepository();
 
   late final AnimationController _taskMenuController;
   late final Animation<double> _taskMenuAnimation;
@@ -115,6 +120,7 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
   void dispose() {
     _taskMenuController.dispose();
     _quickMenuController.dispose();
+    UserAccessController.instance.clear();
     super.dispose();
   }
 
@@ -448,6 +454,20 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    return StreamBuilder<UserProfile?>(
+      stream: _userRepo.streamByUid(widget.user.uid),
+      builder: (context, snap) {
+        final access = UserAccess(user: widget.user, profile: snap.data);
+        UserAccessController.instance.update(access);
+        return UserAccessScope(
+          access: access,
+          child: _buildShellContents(context),
+        );
+      },
+    );
+  }
+
+  Widget _buildShellContents(BuildContext context) {
     final pages = List<Widget>.generate(
       _pageCount,
       (index) => _buildPageForIndex(index),

@@ -213,6 +213,7 @@ class _TemplateChecklistsPageState extends State<TemplateChecklistsPage> {
       initial: template,
       onDelete: () => _deleteTemplate(template),
     );
+    if (!mounted) return;
     if (result == null) return;
 
     final messenger = ScaffoldMessenger.of(context);
@@ -256,6 +257,7 @@ class _TemplateChecklistsPageState extends State<TemplateChecklistsPage> {
 
   Future<void> _createTemplate() async {
     final result = await showChecklistEditDialog(context);
+    if (!mounted) return;
     if (result == null) return;
 
     final user = FirebaseAuth.instance.currentUser;
@@ -275,10 +277,12 @@ class _TemplateChecklistsPageState extends State<TemplateChecklistsPage> {
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
+      if (!mounted) return;
       messenger.showSnackBar(
         const SnackBar(content: Text('Checklist created')),
       );
     } catch (error) {
+      if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(content: Text('Failed to create checklist: $error')),
       );
@@ -346,12 +350,13 @@ class _TemplateChecklistsPageState extends State<TemplateChecklistsPage> {
 
     final sortedProjects = [...projects]..sort(_compareProjectsByNumber);
 
-    final result = await showProjectChecklistDialog(
+    final result = await _showProjectChecklistDialog(
       context,
       projects: sortedProjects,
       templates: _templatesCache,
     );
 
+    if (!mounted) return;
     if (result == null) return;
 
     final template = _templatesCache.firstWhere(
@@ -370,10 +375,12 @@ class _TemplateChecklistsPageState extends State<TemplateChecklistsPage> {
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
+      if (!mounted) return;
       messenger.showSnackBar(
         const SnackBar(content: Text('Project checklist created')),
       );
     } catch (error) {
+      if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(content: Text('Failed to create project checklist: $error')),
       );
@@ -391,6 +398,7 @@ class _TemplateChecklistsPageState extends State<TemplateChecklistsPage> {
       onDelete: () => _deleteProjectChecklist(checklist),
     );
 
+    if (!mounted) return;
     if (result == null) return;
 
     final messenger = ScaffoldMessenger.of(context);
@@ -400,10 +408,12 @@ class _TemplateChecklistsPageState extends State<TemplateChecklistsPage> {
         'items': result.items.map((item) => item.toMap()).toList(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
+      if (!mounted) return;
       messenger.showSnackBar(
         const SnackBar(content: Text('Project checklist updated')),
       );
     } catch (error) {
+      if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(content: Text('Failed to update checklist: $error')),
       );
@@ -833,7 +843,7 @@ class _ProjectChecklistCreationResult {
   final String templateId;
 }
 
-Future<_ProjectChecklistCreationResult?> showProjectChecklistDialog(
+Future<_ProjectChecklistCreationResult?> _showProjectChecklistDialog(
   BuildContext context, {
   required List<Project> projects,
   required List<Checklist> templates,
@@ -907,7 +917,7 @@ class _ProjectChecklistDialogState extends State<_ProjectChecklistDialog> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<Project?>(
-              value: _selectedProject,
+              initialValue: _selectedProject,
               isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Project',
@@ -925,7 +935,7 @@ class _ProjectChecklistDialogState extends State<_ProjectChecklistDialog> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<Checklist?>(
-              value: _selectedTemplate,
+              initialValue: _selectedTemplate,
               isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Template Checklist',

@@ -6,6 +6,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../data/models/task.dart';
 import '../data/models/project.dart';
 import '../data/repositories/project_repository.dart';
+import '../app/user_access_scope.dart';
+
 import '../data/repositories/task_repository.dart';
 import 'project_detail_page.dart';
 import '../dialogs/task_edit_dialog.dart';
@@ -24,6 +26,8 @@ class ActiveTasksPage extends StatelessWidget {
         body: Center(child: Text('Please sign in to view tasks')),
       );
     }
+
+    final access = UserAccessScope.maybeOf(context);
 
     final tasksQuery = FirebaseFirestore.instance
         .collection('tasks')
@@ -48,12 +52,11 @@ class ActiveTasksPage extends StatelessWidget {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              final list =
-                  (snap.data?.docs ??
-                          const <QueryDocumentSnapshot<Map<String, dynamic>>>[])
-                      .map((d) => TaskItem.fromDoc(d))
-                      .toList()
-                    ..sort(_taskComparator);
+              final list = (snap.data?.docs ??
+                      const <QueryDocumentSnapshot<Map<String, dynamic>>>[])
+                  .map((d) => TaskItem.fromDoc(d))
+                  .toList()
+                ..sort(_taskComparator);
 
               if (list.isEmpty) {
                 return const _Empty();
@@ -68,9 +71,8 @@ class ActiveTasksPage extends StatelessWidget {
                   final projNum = projectNumById[t.projectId];
                   return _ActiveTile(
                     task: t,
-                    projectNumber: (projNum != null && projNum.isNotEmpty)
-                        ? projNum
-                        : '—',
+                    projectNumber:
+                        (projNum != null && projNum.isNotEmpty) ? projNum : '—',
                     onOpenProject: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
@@ -95,7 +97,8 @@ class ActiveTasksPage extends StatelessWidget {
                     onTap: () => showTaskEditDialog(
                       context,
                       t,
-                      canEdit: t.ownerUid == me.uid,
+                      canEdit: access?.canEditOwnedContent(t.ownerUid) ??
+                          (t.ownerUid == me.uid),
                     ),
                     onComplete: () async {
                       try {

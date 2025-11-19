@@ -14,7 +14,7 @@ class InvoicesSection extends StatelessWidget {
   final String projectId;
 
   /// Whether current user owns the project (enables editing).
-  final bool isOwner;
+  final bool canEdit;
 
   /// Used to prefill in the Add dialog (we’ll show this exact string first).
   final String? projectNumberString;
@@ -38,7 +38,7 @@ class InvoicesSection extends StatelessWidget {
   const InvoicesSection({
     super.key,
     required this.projectId,
-    required this.isOwner,
+    required this.canEdit,
     this.projectNumberString,
     this.title,
     this.invoiceTypeFilter,
@@ -85,9 +85,8 @@ class InvoicesSection extends StatelessWidget {
 
               // filter by unpaid
               if (unpaidOnly) {
-                invoices = invoices
-                    .where((inv) => (inv.balance) > 0.0001)
-                    .toList();
+                invoices =
+                    invoices.where((inv) => (inv.balance) > 0.0001).toList();
               }
 
               if (invoices.isEmpty) {
@@ -100,12 +99,12 @@ class InvoicesSection extends StatelessWidget {
                         invoiceTypeFilter == 'Vendor'
                             ? 'No vendor invoices yet'
                             : invoiceTypeFilter == 'Client'
-                            ? 'No client invoices yet'
-                            : 'No invoices yet',
+                                ? 'No client invoices yet'
+                                : 'No invoices yet',
                       ),
                     ),
                     const SizedBox(height: 8),
-                    if (isOwner && showNewButton)
+                    if (canEdit && showNewButton)
                       Align(
                         alignment: Alignment.centerLeft,
                         child: FilledButton.icon(
@@ -136,7 +135,7 @@ class InvoicesSection extends StatelessWidget {
                         onTap: () => _showEditInvoiceDialog(
                           context,
                           inv,
-                          canEdit: isOwner,
+                          canEdit: canEdit,
                         ),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
@@ -198,7 +197,7 @@ class InvoicesSection extends StatelessWidget {
                     },
                   ),
                   const SizedBox(height: 8),
-                  if (isOwner && showNewButton)
+                  if (canEdit && showNewButton)
                     Align(
                       alignment: Alignment.centerLeft,
                       child: FilledButton.icon(
@@ -253,10 +252,8 @@ Future<bool> _projectNumberExists(String text) async {
   final projects = FirebaseFirestore.instance.collection('projects');
 
   // 1) Try exact match first (fast, indexed).
-  final exact = await projects
-      .where('projectNumber', isEqualTo: text)
-      .limit(1)
-      .get();
+  final exact =
+      await projects.where('projectNumber', isEqualTo: text).limit(1).get();
   if (exact.docs.isNotEmpty) return true;
 
   // 2) Fallback: scan a reasonable number and compare digits-only client-side.
@@ -302,9 +299,8 @@ Future<void> _showAddInvoiceDialog(
       selectedProjectId = projectMap.keys.first;
     }
   }
-  Project? selectedProject = selectedProjectId != null
-      ? projectMap[selectedProjectId]
-      : null;
+  Project? selectedProject =
+      selectedProjectId != null ? projectMap[selectedProjectId] : null;
 
   final now = DateTime.now();
   DateTime? invoiceDate = DateTime(now.year, now.month, now.day);
@@ -340,8 +336,8 @@ Future<void> _showAddInvoiceDialog(
     final seed = (which == 'invoice')
         ? (invoiceDate ?? DateTime.now())
         : (which == 'due')
-        ? (dueDate ?? DateTime.now())
-        : (paidDate ?? DateTime.now());
+            ? (dueDate ?? DateTime.now())
+            : (paidDate ?? DateTime.now());
     final d = await showDatePicker(
       context: context,
       initialDate: seed,
@@ -407,10 +403,10 @@ Future<void> _showAddInvoiceDialog(
                                 projectNumberCtl.text = suggestion;
                                 projectNumberCtl.selection =
                                     TextSelection.fromPosition(
-                                      TextPosition(
-                                        offset: projectNumberCtl.text.length,
-                                      ),
-                                    );
+                                  TextPosition(
+                                    offset: projectNumberCtl.text.length,
+                                  ),
+                                );
                               }
                             });
                           },
@@ -640,8 +636,8 @@ Future<void> _showEditInvoiceDialog(
     final seed = (which == 'invoice')
         ? (invoiceDate ?? DateTime.now())
         : (which == 'due')
-        ? (dueDate ?? DateTime.now())
-        : (paidDate ?? DateTime.now());
+            ? (dueDate ?? DateTime.now())
+            : (paidDate ?? DateTime.now());
     final d = await showDatePicker(
       context: context,
       initialDate: seed,
@@ -668,7 +664,7 @@ Future<void> _showEditInvoiceDialog(
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'View-only: only the project owner can modify invoices.',
+            'View-only: only the project owner or an admin can modify invoices.',
           ),
         ),
       );
@@ -774,7 +770,7 @@ Future<void> _showEditInvoiceDialog(
                         ],
                         onChanged: canEdit
                             ? (v) =>
-                                  setState(() => invoiceType = v ?? invoiceType)
+                                setState(() => invoiceType = v ?? invoiceType)
                             : (v) => viewOnlyTap(),
                         decoration: const InputDecoration(
                           labelText: 'Invoice Type',
@@ -838,18 +834,16 @@ Future<void> _showEditInvoiceDialog(
                       return;
                     }
 
-                    final amt =
-                        double.tryParse(invoiceAmountCtl.text.trim()) ??
+                    final amt = double.tryParse(invoiceAmountCtl.text.trim()) ??
                         inv.invoiceAmount;
                     final paid = amountPaidCtl.text.trim().isEmpty
                         ? inv.amountPaid
                         : (double.tryParse(amountPaidCtl.text.trim()) ??
-                              inv.amountPaid);
+                            inv.amountPaid);
 
                     // Store the project number exactly as entered so formatting is preserved.
-                    final projectNumberValue = pnText.isNotEmpty
-                        ? pnText
-                        : null;
+                    final projectNumberValue =
+                        pnText.isNotEmpty ? pnText : null;
 
                     try {
                       await repo.update(inv.id, {

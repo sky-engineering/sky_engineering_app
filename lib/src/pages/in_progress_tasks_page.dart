@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../data/models/task.dart';
+import '../app/user_access_scope.dart';
+
 import '../data/repositories/task_repository.dart';
 import 'project_detail_page.dart';
 import '../dialogs/task_edit_dialog.dart';
@@ -21,6 +23,7 @@ class InProgressTasksPage extends StatelessWidget {
         body: Center(child: Text('Please sign in to view tasks')),
       );
     }
+    final access = UserAccessScope.maybeOf(context);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Current Tasks')),
@@ -65,7 +68,8 @@ class InProgressTasksPage extends StatelessWidget {
                 onEdit: () => showTaskEditDialog(
                   context,
                   t,
-                  canEdit: t.ownerUid == me.uid,
+                  canEdit: access?.canEditOwnedContent(t.ownerUid) ??
+                      (t.ownerUid == me.uid),
                 ),
                 onComplete: () async {
                   try {
@@ -178,9 +182,7 @@ class _TaskTile extends StatelessWidget {
                     tooltip: task.isStarred ? 'Unstar' : 'Star',
                   ),
                 ),
-
                 const SizedBox(width: 6),
-
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -204,9 +206,7 @@ class _TaskTile extends StatelessWidget {
                     ],
                   ),
                 ),
-
                 const SizedBox(width: 4),
-
                 IconButton(
                   tooltip: 'Open project',
                   onPressed: onOpenProject,

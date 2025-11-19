@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../app/user_access_scope.dart';
+
 class OtherLink {
   final String id;
   final String name;
@@ -49,6 +51,8 @@ class _OtherLinksDialog extends StatelessWidget {
           stream: col.snapshots(),
           builder: (context, snap) {
             final me = FirebaseAuth.instance.currentUser;
+            final access = UserAccessScope.maybeOf(context);
+            final isAdmin = access?.isAdmin ?? false;
 
             if (snap.hasError) {
               return _OtherLinksDialogMessage(
@@ -63,12 +67,12 @@ class _OtherLinksDialog extends StatelessWidget {
               return const Center(child: CircularProgressIndicator());
             }
 
-            final items =
-                (snap.data?.docs ?? const []).map(OtherLink.fromDoc).toList()
-                  ..sort(
-                    (a, b) =>
-                        a.name.toLowerCase().compareTo(b.name.toLowerCase()),
-                  );
+            final items = (snap.data?.docs ?? const [])
+                .map(OtherLink.fromDoc)
+                .toList()
+              ..sort(
+                (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+              );
 
             if (items.isEmpty) {
               return _OtherLinksDialogMessage(
@@ -85,7 +89,8 @@ class _OtherLinksDialog extends StatelessWidget {
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (_, i) {
                 final it = items[i];
-                final canEdit = me != null && me.uid == it.ownerUid;
+                final canEdit =
+                    (me != null && me.uid == it.ownerUid) || isAdmin;
                 return ListTile(
                   dense: true,
                   title: Text(
@@ -102,9 +107,8 @@ class _OtherLinksDialog extends StatelessWidget {
                   trailing: IconButton(
                     tooltip: 'Edit',
                     icon: const Icon(Icons.edit),
-                    onPressed: canEdit
-                        ? () => _showEdit(context, link: it)
-                        : null,
+                    onPressed:
+                        canEdit ? () => _showEdit(context, link: it) : null,
                   ),
                 );
               },
@@ -189,6 +193,7 @@ Future<void> _open(String url) async {
 Future<void> _showEdit(BuildContext context, {OtherLink? link}) async {
   final me = FirebaseAuth.instance.currentUser;
   if (me == null) return;
+  final access = UserAccessScope.maybeOf(context);
 
   final nameCtl = TextEditingController(text: link?.name ?? '');
   final urlCtl = TextEditingController(text: link?.url ?? '');
@@ -231,7 +236,8 @@ Future<void> _showEdit(BuildContext context, {OtherLink? link}) async {
           ),
         ),
         actions: [
-          if (link != null && link.ownerUid == me.uid)
+          if (link != null &&
+              (access?.canEditOwnedContent(link.ownerUid) ?? false))
             TextButton(
               onPressed: () async {
                 try {
@@ -264,7 +270,7 @@ Future<void> _showEdit(BuildContext context, {OtherLink? link}) async {
               final data = {
                 'name': nameCtl.text.trim(),
                 'url': urlCtl.text.trim(),
-                'ownerUid': me.uid,
+                'ownerUid': link?.ownerUid ?? me.uid,
                 'updatedAt': FieldValue.serverTimestamp(),
                 if (link == null) 'createdAt': FieldValue.serverTimestamp(),
               };

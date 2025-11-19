@@ -24,13 +24,13 @@ const _accentYellow = Color(0xFFF1C400);
 
 class TasksBySubphaseSection extends StatefulWidget {
   final String projectId;
-  final bool isOwner;
+  final bool canEdit;
   final List<SelectedSubphase>? selectedSubphases;
 
   const TasksBySubphaseSection({
     super.key,
     required this.projectId,
-    required this.isOwner,
+    required this.canEdit,
     required this.selectedSubphases,
   });
 
@@ -114,7 +114,7 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                         'Tasks',
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
-                      if (widget.isOwner)
+                      if (widget.canEdit)
                         IconButton(
                           tooltip: 'Select Subphases',
                           visualDensity: VisualDensity.compact,
@@ -201,11 +201,11 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                   label: displayLabel,
                   tasks: maybeFilter(byCode[s.code] ?? const <TaskItem>[]),
                   allSubphases: sel,
-                  isOwner: widget.isOwner,
+                  canEdit: widget.canEdit,
                   subphase: s,
                   currentStatus: status,
                   onChangeStatus: (newStatus) async {
-                    if (!widget.isOwner) {
+                    if (!widget.canEdit) {
                       return _SubphaseBox._viewOnlySnack(context);
                     }
                     await _updateSubphaseStatus(
@@ -225,13 +225,13 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                   label: 'Other',
                   tasks: otherTasks,
                   allSubphases: sel,
-                  isOwner: widget.isOwner,
+                  canEdit: widget.canEdit,
                   subphase: null,
                   currentStatus: null,
                   onChangeStatus: null,
                 ),
               const SizedBox(height: 4),
-              if (widget.isOwner)
+              if (widget.canEdit)
                 Align(
                   alignment: Alignment.centerRight,
                   child: FloatingActionButton(
@@ -274,7 +274,7 @@ class _SubphaseBox extends StatelessWidget {
   final String label; // "0201  Concept Site Plan" or "Other"
   final List<TaskItem> tasks;
   final List<SelectedSubphase> allSubphases;
-  final bool isOwner;
+  final bool canEdit;
 
   final SelectedSubphase? subphase; // null for Other
   final String? currentStatus; // null for Other
@@ -285,7 +285,7 @@ class _SubphaseBox extends StatelessWidget {
     required this.label,
     required this.tasks,
     required this.allSubphases,
-    required this.isOwner,
+    required this.canEdit,
     required this.subphase,
     required this.currentStatus,
     required this.onChangeStatus,
@@ -315,7 +315,7 @@ class _SubphaseBox extends StatelessWidget {
             child: InkWell(
               onTap: hasSubphase
                   ? () {
-                      if (!isOwner) {
+                      if (!canEdit) {
                         _viewOnlySnack(context);
                         return;
                       }
@@ -377,7 +377,7 @@ class _SubphaseBox extends StatelessWidget {
                           minHeight: 32,
                         ),
                         alignment: Alignment.topCenter,
-                        onPressed: isOwner
+                        onPressed: canEdit
                             ? () => _insertDefaultsForSubphase(
                                   context,
                                   projectId,
@@ -407,9 +407,9 @@ class _SubphaseBox extends StatelessWidget {
                   final t = tasks[i];
                   return _CompactTaskTile(
                     task: t,
-                    isOwner: isOwner,
+                    canEdit: canEdit,
                     onToggleStar: () async {
-                      if (!isOwner) return _viewOnlySnack(context);
+                      if (!canEdit) return _viewOnlySnack(context);
                       try {
                         await TaskRepository().setStarred(t, !t.isStarred);
                       } catch (e) {
@@ -423,7 +423,7 @@ class _SubphaseBox extends StatelessWidget {
                       }
                     },
                     onChangeStatus: (newStatus) async {
-                      if (!isOwner) return _viewOnlySnack(context);
+                      if (!canEdit) return _viewOnlySnack(context);
                       await TaskRepository().update(t.id, {
                         'taskStatus': newStatus,
                         'status': _legacyFromNew(newStatus), // mirror
@@ -432,11 +432,11 @@ class _SubphaseBox extends StatelessWidget {
                     onTap: () => showTaskEditDialog(
                       context,
                       t,
-                      canEdit: isOwner,
+                      canEdit: canEdit,
                       subphases: allSubphases,
                     ),
                     onCompleteSwipe: () async {
-                      if (!isOwner) {
+                      if (!canEdit) {
                         _viewOnlySnack(context);
                         return false;
                       }
@@ -458,7 +458,7 @@ class _SubphaseBox extends StatelessWidget {
                       }
                     },
                     onDeleteSwipe: () async {
-                      if (!isOwner) {
+                      if (!canEdit) {
                         _viewOnlySnack(context);
                         return false;
                       }
@@ -493,7 +493,8 @@ class _SubphaseBox extends StatelessWidget {
   static void _viewOnlySnack(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('View-only: only the project owner can modify tasks.'),
+        content: Text(
+            'View-only: only the project owner or an admin can modify tasks.'),
       ),
     );
   }
@@ -562,7 +563,7 @@ class _SubphaseBox extends StatelessWidget {
 
 class _CompactTaskTile extends StatefulWidget {
   final TaskItem task;
-  final bool isOwner;
+  final bool canEdit;
   final VoidCallback onToggleStar;
   final ValueChanged<String> onChangeStatus;
   final VoidCallback onTap;
@@ -571,7 +572,7 @@ class _CompactTaskTile extends StatefulWidget {
 
   const _CompactTaskTile({
     required this.task,
-    required this.isOwner,
+    required this.canEdit,
     required this.onToggleStar,
     required this.onChangeStatus,
     required this.onTap,
@@ -638,8 +639,9 @@ class _CompactTaskTileState extends State<_CompactTaskTile> {
   }
 
   Future<void> _handleSubtaskTap(int index) async {
-    if (!widget.isOwner) {
-      _showSnack('View-only: only the project owner can modify tasks.');
+    if (!widget.canEdit) {
+      _showSnack(
+          'View-only: only the project owner or an admin can modify tasks.');
       return;
     }
     if (_subtaskUpdateInProgress || index < 0 || index >= _subtasks.length) {
@@ -700,7 +702,7 @@ class _CompactTaskTileState extends State<_CompactTaskTile> {
     final theme = Theme.of(context);
     final small = theme.textTheme.bodySmall?.copyWith(fontSize: 12);
     final task = widget.task;
-    final isOwner = widget.isOwner;
+    final canEdit = widget.canEdit;
     final hasDesc = (task.description ?? '').trim().isNotEmpty;
     final hasSubtasks = _hasSubtasks;
 
@@ -824,7 +826,7 @@ class _CompactTaskTileState extends State<_CompactTaskTile> {
                                   ),
                                 )
                                 .toList(),
-                            onChanged: isOwner
+                            onChanged: canEdit
                                 ? (v) {
                                     if (v != null) {
                                       widget.onChangeStatus(v);

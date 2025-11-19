@@ -18,6 +18,8 @@ import '../dialogs/edit_project_dialog.dart';
 import '../utils/phone_utils.dart';
 import '../app/shell.dart';
 
+import '../app/user_access_scope.dart';
+
 class _TeamFieldConfig {
   const _TeamFieldConfig({required this.key, required this.label});
 
@@ -199,6 +201,8 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
     }
 
     final isOwner = project.ownerUid != null && project.ownerUid == me?.uid;
+    final access = UserAccessScope.maybeOf(context);
+    final canManageProject = isOwner || (access?.isAdmin ?? false);
     final ownerUser = isOwner ? me : null;
     final assigneeOptions = _buildExternalAssigneeOptions(project, ownerUser);
     final phoneDisplay = formatPhoneForDisplay(project.contactPhone);
@@ -206,7 +210,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
       if (value == null) return false;
       return value.trim().isNotEmpty;
     });
-    final showTeamCard = isOwner || hasTeamEntries;
+    final showTeamCard = canManageProject || hasTeamEntries;
     final externalTasks = project.externalTasks ?? const <ExternalTask>[];
 
     return Scaffold(
@@ -221,7 +225,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
           overflow: TextOverflow.visible,
         ),
         actions: [
-          if (isOwner)
+          if (canManageProject)
             IconButton(
               tooltip: 'Edit',
               onPressed: () => showEditProjectDialog(context, project),
@@ -266,18 +270,18 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
             ),
           const SizedBox(height: 16),
           if (showTeamCard) ...[
-            _projectTeamCard(context, project, isOwner: isOwner),
+            _projectTeamCard(context, project, canEdit: canManageProject),
             const SizedBox(height: 16),
           ],
           TasksBySubphaseSection(
             projectId: project.id,
-            isOwner: isOwner,
+            canEdit: canManageProject,
             selectedSubphases: project.selectedSubphases,
           ),
           const SizedBox(height: 12),
           _ExternalTasksSection(
             projectId: project.id,
-            isOwner: isOwner,
+            canEdit: canManageProject,
             assigneeOptions: assigneeOptions,
             tasks: externalTasks,
           ),
@@ -336,7 +340,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                   ),
                   inv.InvoicesSection(
                     projectId: project.id,
-                    isOwner: isOwner,
+                    canEdit: canManageProject,
                     projectNumberString: project.projectNumber,
                     title: '',
                     invoiceTypeFilter: 'Client',
@@ -358,7 +362,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                   ),
                   inv.InvoicesSection(
                     projectId: project.id,
-                    isOwner: isOwner,
+                    canEdit: canManageProject,
                     projectNumberString: project.projectNumber,
                     title: '',
                     invoiceTypeFilter: 'Vendor',
@@ -367,7 +371,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                     unpaidOnly: _unpaidOnly,
                   ),
                   const SizedBox(height: 12),
-                  if (isOwner)
+                  if (canManageProject)
                     Align(
                       alignment: Alignment.centerRight,
                       child: FloatingActionButton(
@@ -400,7 +404,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                   ),
                 ),
               ),
-              if (isOwner)
+              if (canManageProject)
                 TextButton.icon(
                   icon: const Icon(
                     Icons.delete_forever,
@@ -433,7 +437,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
   Widget _projectTeamCard(
     BuildContext context,
     Project project, {
-    required bool isOwner,
+    required bool canEdit,
   }) {
     final theme = Theme.of(context);
     final values = _teamValueMap(project);
@@ -456,12 +460,12 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
     );
 
     final prompt =
-        isOwner ? 'Tap to add project partners' : 'No project partners listed';
+        canEdit ? 'Tap to add project partners' : 'No project partners listed';
 
     return Card(
       color: _subtleSurfaceTint(context),
       child: InkWell(
-        onTap: isOwner ? () => _editProjectTeam(project) : null,
+        onTap: canEdit ? () => _editProjectTeam(project) : null,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -471,7 +475,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
               Row(
                 children: [
                   Expanded(child: Text('Project Team', style: headerStyle)),
-                  if (isOwner)
+                  if (canEdit)
                     Icon(
                       Icons.edit_outlined,
                       size: 18,
@@ -651,13 +655,13 @@ class _EditProjectTeamDialogState extends State<_EditProjectTeamDialog> {
 class _ExternalTasksSection extends StatelessWidget {
   const _ExternalTasksSection({
     required this.projectId,
-    required this.isOwner,
+    required this.canEdit,
     required this.assigneeOptions,
     required this.tasks,
   });
 
   final String projectId;
-  final bool isOwner;
+  final bool canEdit;
   final List<_AssigneeOption> assigneeOptions;
   final List<ExternalTask> tasks;
   static const _fabColor = Color(0xFFF1C400);
@@ -667,7 +671,7 @@ class _ExternalTasksSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final canEdit = isOwner && assigneeOptions.isNotEmpty;
+    final bool enableEditing = canEdit && assigneeOptions.isNotEmpty;
     final items = [...tasks];
     items.sort((a, b) {
       if (a.isDone != b.isDone) {
@@ -690,7 +694,7 @@ class _ExternalTasksSection extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(
-                  canEdit
+                  enableEditing
                       ? 'No external tasks yet.'
                       : 'No external tasks to display.',
                   style: theme.textTheme.bodyMedium,
@@ -708,13 +712,13 @@ class _ExternalTasksSection extends StatelessWidget {
                     key: ValueKey('external-${task.id}'),
                     dismissibleKey: ValueKey('external-${task.id}'),
                     task: task,
-                    isOwner: isOwner,
+                    canEdit: enableEditing,
                     onSetDone: (value) => _setDone(context, task, value),
                     onDelete: () => _delete(context, task),
                   );
                 },
               ),
-            if (canEdit) ...[
+            if (enableEditing) ...[
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerRight,
@@ -897,14 +901,14 @@ class _ExternalTaskTile extends StatefulWidget {
     super.key,
     required this.dismissibleKey,
     required this.task,
-    required this.isOwner,
+    required this.canEdit,
     required this.onSetDone,
     required this.onDelete,
   });
 
   final Key dismissibleKey;
   final ExternalTask task;
-  final bool isOwner;
+  final bool canEdit;
   final Future<bool> Function(bool) onSetDone;
   final Future<bool> Function() onDelete;
 
@@ -955,7 +959,7 @@ class _ExternalTaskTileState extends State<_ExternalTaskTile> {
     return Dismissible(
       key: widget.dismissibleKey,
       direction:
-          widget.isOwner ? DismissDirection.horizontal : DismissDirection.none,
+          widget.canEdit ? DismissDirection.horizontal : DismissDirection.none,
       dismissThresholds: const {
         DismissDirection.startToEnd: _completeThreshold,
         DismissDirection.endToStart: _deleteThreshold,
@@ -976,7 +980,7 @@ class _ExternalTaskTileState extends State<_ExternalTaskTile> {
         }
       },
       confirmDismiss: (direction) async {
-        if (!widget.isOwner) return false;
+        if (!widget.canEdit) return false;
         final progress = _dragProgress;
         _resetDrag();
         if (direction == DismissDirection.startToEnd &&
@@ -997,7 +1001,7 @@ class _ExternalTaskTileState extends State<_ExternalTaskTile> {
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: widget.isOwner
+          onTap: widget.canEdit
               ? () {
                   final next = !task.isDone;
                   widget.onSetDone(next);
@@ -1010,7 +1014,7 @@ class _ExternalTaskTileState extends State<_ExternalTaskTile> {
               children: [
                 Checkbox(
                   value: task.isDone,
-                  onChanged: widget.isOwner
+                  onChanged: widget.canEdit
                       ? (value) {
                           final newValue = value ?? false;
                           if (newValue != task.isDone) {

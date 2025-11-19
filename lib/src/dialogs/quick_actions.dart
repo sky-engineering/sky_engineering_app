@@ -7,6 +7,8 @@ import '../data/models/task.dart';
 import '../data/repositories/project_repository.dart';
 import '../data/repositories/task_repository.dart';
 import '../widgets/invoices_section.dart';
+import '../app/user_access_scope.dart';
+
 import '../pages/project_detail_page.dart';
 
 Future<List<Project>> _loadProjectsForCurrentUser() async {
@@ -14,10 +16,15 @@ Future<List<Project>> _loadProjectsForCurrentUser() async {
   final repo = ProjectRepository();
   try {
     final all = await repo.streamAll().first;
-    if (me == null) {
+    final access = UserAccessController.instance;
+    if (access.isAdmin) {
       return all;
     }
-    return all.where((p) => (p.ownerUid ?? '') == me.uid).toList();
+    final uid = access.uid ?? me?.uid;
+    if (uid == null) {
+      return all;
+    }
+    return all.where((p) => (p.ownerUid ?? '') == uid).toList();
   } catch (_) {
     return const <Project>[];
   }
@@ -89,8 +96,8 @@ Future<void> showQuickAddTaskDialog(BuildContext context) async {
   String selectedProjectId = selectedProject.id;
   String? selectedTaskCode =
       (selectedProject.selectedSubphases?.isNotEmpty ?? false)
-      ? selectedProject.selectedSubphases!.first.code
-      : null;
+          ? selectedProject.selectedSubphases!.first.code
+          : null;
   var starTask = false;
 
   final titleCtl = TextEditingController();
@@ -143,7 +150,7 @@ Future<void> showQuickAddTaskDialog(BuildContext context) async {
                         );
                         final nextSubphases =
                             selectedProject.selectedSubphases ??
-                            const <SelectedSubphase>[];
+                                const <SelectedSubphase>[];
                         selectedTaskCode = nextSubphases.isNotEmpty
                             ? nextSubphases.first.code
                             : null;
@@ -193,8 +200,8 @@ Future<void> showQuickAddTaskDialog(BuildContext context) async {
                     ),
                     validator: (value) =>
                         (value == null || value.trim().isEmpty)
-                        ? 'Required'
-                        : null,
+                            ? 'Required'
+                            : null,
                   ),
                   const SizedBox(height: 10),
                   TextFormField(
