@@ -75,8 +75,6 @@ class _ProfilePageState extends State<ProfilePage> {
         final profile = snap.data;
         _seedIfNeeded(profile);
 
-        final email = u.email ?? '—';
-
         return Scaffold(
           body: SafeArea(
             child: Form(
@@ -101,8 +99,6 @@ class _ProfilePageState extends State<ProfilePage> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        _kvReadOnlyRow(context, label: 'Email', value: email),
                         const SizedBox(height: 8),
                         _kvInputRow(
                           context,
@@ -163,8 +159,8 @@ class _ProfilePageState extends State<ProfilePage> {
                           child: DropdownButtonFormField<String>(
                             initialValue:
                                 UserProfile.allowedUserTypes.contains(_userType)
-                                ? _userType
-                                : null,
+                                    ? _userType
+                                    : null,
                             items: UserProfile.allowedUserTypes
                                 .map(
                                   (t) => DropdownMenuItem(
@@ -186,40 +182,44 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                   const SizedBox(height: 24),
 
-                  // Save
-                  FilledButton.icon(
-                    onPressed: _onSave,
-                    icon: const Icon(Icons.save),
-                    label: const Text('Save'),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextButton.icon(
+                          onPressed: _signOut,
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 6,
+                            ),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          icon: const Icon(Icons.logout_outlined, size: 18),
+                          label: const Text('Sign Out'),
+                        ),
+                        const SizedBox(width: 12),
+                        FilledButton.icon(
+                          onPressed: _onSave,
+                          icon: const Icon(Icons.save),
+                          label: const Text('Save'),
+                        ),
+                      ],
+                    ),
                   ),
 
                   const SizedBox(height: 16),
 
-                  // UID small text
-                  SelectableText(
-                    'UID ${u.uid}',
-                    style: Theme.of(context).textTheme.bodySmall,
+                  _kvReadOnlyRow(
+                    context,
+                    label: 'UID',
+                    value: u.uid,
                   ),
 
                   const SizedBox(height: 32),
 
                   const Divider(),
-                  const SizedBox(height: 16),
-
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: _signOut,
-                      style: TextButton.styleFrom(
-                        foregroundColor: Theme.of(
-                          context,
-                        ).colorScheme.onSurfaceVariant,
-                      ),
-                      icon: const Icon(Icons.logout_outlined, size: 18),
-                      label: const Text('Sign Out'),
-                    ),
-                  ),
-
                   const SizedBox(height: 8),
 
                   Align(
@@ -254,9 +254,8 @@ class _ProfilePageState extends State<ProfilePage> {
       clientNumber: _clientNumberCtl.text.trim().isNotEmpty
           ? _clientNumberCtl.text.trim()
           : null,
-      userName: _userNameCtl.text.trim().isNotEmpty
-          ? _userNameCtl.text.trim()
-          : null,
+      userName:
+          _userNameCtl.text.trim().isNotEmpty ? _userNameCtl.text.trim() : null,
       userPhone: normalizedPhone,
       userAddress: _userAddressCtl.text.trim().isNotEmpty
           ? _userAddressCtl.text.trim()
@@ -374,9 +373,8 @@ class _ProfilePageState extends State<ProfilePage> {
   }) {
     final labelWidth = _labelWidthFor(context);
     return Row(
-      crossAxisAlignment: alignTop
-          ? CrossAxisAlignment.start
-          : CrossAxisAlignment.center,
+      crossAxisAlignment:
+          alignTop ? CrossAxisAlignment.start : CrossAxisAlignment.center,
       children: [
         SizedBox(
           width: labelWidth,

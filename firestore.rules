@@ -3,7 +3,47 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+
     function signedIn() { return request.auth != null; }
+
+    function profileDocPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function isAdminUserType(value) {
+      return value == 'Admin'
+        || value == 'admin'
+        || value == 'ADMIN';
+    }
+
+    function hasAdminProfile() {
+      let path = profileDocPath();
+      return signedIn()
+        && exists(path)
+        && isAdminUserType(get(path).data.userType);
+    }
+
+    function hasAdminClaim() {
+      return signedIn()
+        && (
+          request.auth.token.admin == true
+          || (request.auth.token.userType != null
+              && isAdminUserType(request.auth.token.userType))
+        );
+    }
+
+    function isAdmin() {
+      return hasAdminClaim() || hasAdminProfile();
+    }
+
+
+    function canWriteOwner(ownerUid) {
+      return signedIn()
+        && ((ownerUid == null || ownerUid == '')
+            ? isAdmin()
+            : (ownerUid == request.auth.uid || isAdmin()));
+    }
+
 
     // USERS — only the user can read/write their own doc
     match /users/{uid} {
@@ -18,109 +58,87 @@ service cloud.firestore {
     // Top-level client docs MUST include: { ownerUid: string, ... }
     match /clients/{clientId} {
       allow read: if signedIn();
-      allow create: if signedIn()
-        && request.resource.data.ownerUid == request.auth.uid;
-      allow update, delete: if signedIn()
-        && resource.data.ownerUid == request.auth.uid;
+      allow create: if canWriteOwner(request.resource.data.ownerUid);
+      allow update, delete: if canWriteOwner(resource.data.ownerUid);
     }
 
     // CLIENT SUBCOLLECTIONS — attach writes to the PARENT client's owner
     // Subcollection docs do NOT need their own ownerUid.
     match /clients/{clientId}/{document=**} {
       allow read: if signedIn();
-      allow create, update, delete: if signedIn()
-        && get(/databases/$(database)/documents/clients/$(clientId)).data.ownerUid == request.auth.uid;
+      allow create, update, delete: if canWriteOwner(
+        get(/databases/$(database)/documents/clients/$(clientId)).data.ownerUid
+      );
     }
 
     // PROJECTS — any signed-in user can read; only owner can write
     match /projects/{projectId} {
       allow read: if signedIn();
-      allow create: if signedIn()
-        && request.resource.data.ownerUid == request.auth.uid;
-      allow update, delete: if signedIn()
-        && resource.data.ownerUid == request.auth.uid;
+      allow create: if canWriteOwner(request.resource.data.ownerUid);
+      allow update, delete: if canWriteOwner(resource.data.ownerUid);
     }
 
     // INVOICES — owner-only writes; everyone signed-in can read
     match /invoices/{invoiceId} {
       allow read: if signedIn();
-      allow create: if signedIn()
-        && request.resource.data.ownerUid == request.auth.uid;
-      allow update, delete: if signedIn()
-        && resource.data.ownerUid == request.auth.uid;
+      allow create: if canWriteOwner(request.resource.data.ownerUid);
+      allow update, delete: if canWriteOwner(resource.data.ownerUid);
     }
 
 
     // CITY INSPECT LINKS -- allow signed-in read; only owners can write
     match /city_inspect/{linkId} {
       allow read: if signedIn();
-      allow create: if signedIn()
-        && request.resource.data.ownerUid == request.auth.uid;
-      allow update, delete: if signedIn()
-        && resource.data.ownerUid == request.auth.uid;
+      allow create: if canWriteOwner(request.resource.data.ownerUid);
+      allow update, delete: if canWriteOwner(resource.data.ownerUid);
     }
 
     // OTHER LINKS -- allow signed-in read; only owners can write
     match /other_links/{linkId} {
       allow read: if signedIn();
-      allow create: if signedIn()
-        && request.resource.data.ownerUid == request.auth.uid;
-      allow update, delete: if signedIn()
-        && resource.data.ownerUid == request.auth.uid;
+      allow create: if canWriteOwner(request.resource.data.ownerUid);
+      allow update, delete: if canWriteOwner(resource.data.ownerUid);
     }
     // PROJECT TASK CHECKLISTS - owner-only access
     match /projectTaskChecklists/{id} {
-      allow read: if signedIn()
-        && resource.data.ownerUid == request.auth.uid;
-      allow create: if signedIn()
-        && request.resource.data.ownerUid == request.auth.uid;
-      allow update, delete: if signedIn()
-        && resource.data.ownerUid == request.auth.uid;
+      allow read: if canWriteOwner(resource.data.ownerUid);
+      allow create: if canWriteOwner(request.resource.data.ownerUid);
+      allow update, delete: if canWriteOwner(resource.data.ownerUid);
     }
 
     // CHECKLIST TEMPLATES - owner-only writes; all authenticated users can read
     match /checklistTemplates/{id} {
       allow read: if signedIn();
-      allow create: if signedIn()
-        && request.resource.data.ownerUid == request.auth.uid;
-      allow update, delete: if signedIn()
-        && resource.data.ownerUid == request.auth.uid;
+      allow create: if canWriteOwner(request.resource.data.ownerUid);
+      allow update, delete: if canWriteOwner(resource.data.ownerUid);
     }
 
     // PROJECT CHECKLISTS - owner-only writes; all authenticated users can read
     match /checklistProjects/{id} {
       allow read: if signedIn();
-      allow create: if signedIn()
-        && request.resource.data.ownerUid == request.auth.uid;
-      allow update, delete: if signedIn()
-        && resource.data.ownerUid == request.auth.uid;
+      allow create: if canWriteOwner(request.resource.data.ownerUid);
+      allow update, delete: if canWriteOwner(resource.data.ownerUid);
     }
 
     // TASKS — owner-only writes; everyone signed-in can read
     match /tasks/{taskId} {
       allow read: if signedIn();
-      allow create: if signedIn()
-        && request.resource.data.ownerUid == request.auth.uid;
-      allow update, delete: if signedIn()
-        && resource.data.ownerUid == request.auth.uid;
+      allow create: if canWriteOwner(request.resource.data.ownerUid);
+      allow update, delete: if canWriteOwner(resource.data.ownerUid);
     }
 
     // SUBPHASE TEMPLATES — owner-only writes; everyone signed-in can read
     match /task_templates/{id} {
       allow read: if signedIn();
-      allow create: if signedIn()
-        && request.resource.data.ownerUid == request.auth.uid;
-      allow update, delete: if signedIn()
-        && resource.data.ownerUid == request.auth.uid;
+      allow create: if canWriteOwner(request.resource.data.ownerUid);
+      allow update, delete: if canWriteOwner(resource.data.ownerUid);
     }
 
     // PHASES — owner-only writes; everyone signed-in can read
     match /phases/{phaseId} {
       allow read: if signedIn();
-      allow create: if signedIn()
-        && request.resource.data.ownerUid == request.auth.uid;
-      allow update, delete: if signedIn()
-        && resource.data.ownerUid == request.auth.uid;
+      allow create: if canWriteOwner(request.resource.data.ownerUid);
+      allow update, delete: if canWriteOwner(resource.data.ownerUid);
     }
   }
 }

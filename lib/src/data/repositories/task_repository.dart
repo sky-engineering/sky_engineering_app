@@ -24,10 +24,9 @@ class TaskRepository {
     });
   }
 
-  /// Stream all starred tasks for a user (kept as-is).
-  Stream<List<TaskItem>> streamStarredForUser(String ownerUid) {
+  /// Stream all starred tasks regardless of owner.
+  Stream<List<TaskItem>> streamStarred() {
     return _col
-        .where('ownerUid', isEqualTo: ownerUid)
         .where('isStarred', isEqualTo: true)
         .snapshots()
         .map((snap) => snap.docs.map(TaskItem.fromDoc).toList());

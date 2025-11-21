@@ -26,12 +26,14 @@ class TasksBySubphaseSection extends StatefulWidget {
   final String projectId;
   final bool canEdit;
   final List<SelectedSubphase>? selectedSubphases;
+  final String ownerUidForWrites;
 
   const TasksBySubphaseSection({
     super.key,
     required this.projectId,
     required this.canEdit,
     required this.selectedSubphases,
+    required this.ownerUidForWrites,
   });
 
   @override
@@ -202,6 +204,7 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                   tasks: maybeFilter(byCode[s.code] ?? const <TaskItem>[]),
                   allSubphases: sel,
                   canEdit: widget.canEdit,
+                  ownerUidForWrites: widget.ownerUidForWrites,
                   subphase: s,
                   currentStatus: status,
                   onChangeStatus: (newStatus) async {
@@ -226,6 +229,7 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                   tasks: otherTasks,
                   allSubphases: sel,
                   canEdit: widget.canEdit,
+                  ownerUidForWrites: widget.ownerUidForWrites,
                   subphase: null,
                   currentStatus: null,
                   onChangeStatus: null,
@@ -236,8 +240,8 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                   alignment: Alignment.centerRight,
                   child: FloatingActionButton(
                     heroTag: null,
-                    onPressed: () =>
-                        _showAddTaskDialog(context, widget.projectId, sel),
+                    onPressed: () => _showAddTaskDialog(context,
+                        widget.projectId, sel, widget.ownerUidForWrites),
                     backgroundColor: _accentYellow,
                     foregroundColor: Colors.black,
                     child: const Icon(Icons.add),
@@ -275,6 +279,7 @@ class _SubphaseBox extends StatelessWidget {
   final List<TaskItem> tasks;
   final List<SelectedSubphase> allSubphases;
   final bool canEdit;
+  final String ownerUidForWrites;
 
   final SelectedSubphase? subphase; // null for Other
   final String? currentStatus; // null for Other
@@ -286,6 +291,7 @@ class _SubphaseBox extends StatelessWidget {
     required this.tasks,
     required this.allSubphases,
     required this.canEdit,
+    required this.ownerUidForWrites,
     required this.subphase,
     required this.currentStatus,
     required this.onChangeStatus,
@@ -382,6 +388,7 @@ class _SubphaseBox extends StatelessWidget {
                                   context,
                                   projectId,
                                   subphase!.code,
+                                  ownerUidForWrites,
                                 )
                             : () => _viewOnlySnack(context),
                         icon: const Icon(
@@ -947,6 +954,7 @@ Future<void> _showAddTaskDialog(
   BuildContext context,
   String projectId,
   List<SelectedSubphase> subphases,
+  String ownerUid,
 ) async {
   final titleCtl = TextEditingController();
   final notesCtl = TextEditingController();
@@ -956,8 +964,9 @@ Future<void> _showAddTaskDialog(
   final me = FirebaseAuth.instance.currentUser;
   final repo = TaskRepository();
   final formKey = GlobalKey<FormState>();
+  final resolvedOwnerUid = ownerUid.isNotEmpty ? ownerUid : me?.uid ?? '';
 
-  if (me == null) {
+  if (resolvedOwnerUid.isEmpty) {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('You must be signed in.')));
@@ -1053,7 +1062,7 @@ Future<void> _showAddTaskDialog(
                   final t = TaskItem(
                     id: '_',
                     projectId: projectId,
-                    ownerUid: me.uid,
+                    ownerUid: resolvedOwnerUid,
                     title: titleCtl.text.trim(),
                     description: notesCtl.text.trim().isEmpty
                         ? null
@@ -1088,9 +1097,11 @@ Future<void> _insertDefaultsForSubphase(
   BuildContext context,
   String projectId,
   String subphaseCode,
+  String ownerUid,
 ) async {
   final me = FirebaseAuth.instance.currentUser;
-  if (me == null) {
+  final resolvedOwnerUid = ownerUid.isNotEmpty ? ownerUid : me?.uid ?? '';
+  if (resolvedOwnerUid.isEmpty) {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('You must be signed in.')));
@@ -1102,7 +1113,8 @@ Future<void> _insertDefaultsForSubphase(
 
   try {
     LoadingOverlay.show(context, message: 'Adding tasks...');
-    final tpl = await templatesRepo.getByOwnerAndCode(me.uid, subphaseCode);
+    final tpl =
+        await templatesRepo.getByOwnerAndCode(resolvedOwnerUid, subphaseCode);
     if (tpl == null || tpl.defaultTasks.isEmpty) {
       messenger?.showSnackBar(
         const SnackBar(
@@ -1147,7 +1159,7 @@ Future<void> _insertDefaultsForSubphase(
       final task = TaskItem(
         id: ref.id,
         projectId: projectId,
-        ownerUid: me.uid,
+        ownerUid: resolvedOwnerUid,
         title: title,
         description: null,
         taskStatus: 'In Progress',

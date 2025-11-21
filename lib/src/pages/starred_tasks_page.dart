@@ -52,7 +52,7 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
     super.initState();
     _user = FirebaseAuth.instance.currentUser;
     if (_user != null) {
-      _sub = _repo.streamStarredForUser(_user!.uid).listen(
+      _sub = _repo.streamStarred().listen(
         _onTasks,
         onError: (_) {
           if (mounted) {

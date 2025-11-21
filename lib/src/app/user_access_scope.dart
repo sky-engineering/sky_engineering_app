@@ -20,7 +20,7 @@ class UserAccess {
   String? get uid => user?.uid;
 
   bool get isAdmin =>
-      profile != null && profile!.userType.toLowerCase() == 'admin';
+      profile?.userType.toLowerCase() == 'admin';
 
   /// Returns true if the current user should be treated as the owner for the
   /// provided [ownerUid]. Admins automatically pass.

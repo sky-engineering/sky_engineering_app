@@ -8,7 +8,10 @@ class PhaseTemplateRepository {
 
   /// Fetch all phases for a user, ordered by sortOrder then phaseCode.
   Future<List<PhaseTemplate>> getAllForUser(String ownerUid) async {
-    final baseQuery = _col.where('ownerUid', isEqualTo: ownerUid);
+    Query<Map<String, dynamic>> baseQuery = _col;
+    if (ownerUid.isNotEmpty) {
+      baseQuery = baseQuery.where('ownerUid', isEqualTo: ownerUid);
+    }
     QuerySnapshot<Map<String, dynamic>> qs;
     try {
       qs = await baseQuery.orderBy('sortOrder').get();

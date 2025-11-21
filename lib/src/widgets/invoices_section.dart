@@ -35,6 +35,9 @@ class InvoicesSection extends StatelessWidget {
   /// When true, shows only invoices with a positive balance.
   final bool unpaidOnly;
 
+  /// Owner UID used when admins create invoices on others' behalf.
+  final String? ownerUidForWrites;
+
   const InvoicesSection({
     super.key,
     required this.projectId,
@@ -45,6 +48,7 @@ class InvoicesSection extends StatelessWidget {
     this.wrapInCard = true,
     this.showNewButton = true,
     this.unpaidOnly = false,
+    this.ownerUidForWrites,
   });
 
   @override
@@ -233,6 +237,7 @@ Future<void> showAddInvoiceDialog(
   String? defaultProjectNumber,
   String initialInvoiceType = 'Client',
   List<Project>? projectChoices,
+  String? ownerUid,
 }) {
   return _showAddInvoiceDialog(
     context,
@@ -240,6 +245,7 @@ Future<void> showAddInvoiceDialog(
     defaultProjectNumber: defaultProjectNumber,
     initialInvoiceType: initialInvoiceType,
     projectChoices: projectChoices,
+    ownerUid: ownerUid,
   );
 }
 
@@ -274,6 +280,7 @@ Future<void> _showAddInvoiceDialog(
   String? defaultProjectNumber,
   String initialInvoiceType = 'Client',
   List<Project>? projectChoices,
+  String? ownerUid,
 }) async {
   // Reordered fields per request:
   // 1) Project Number (defaults to current project's projectNumber string)
@@ -551,10 +558,22 @@ Future<void> _showAddInvoiceDialog(
                   }
 
                   final me = FirebaseAuth.instance.currentUser;
+                  final providedOwner = ownerUid;
+                  final projectOwner = selectedProject?.ownerUid;
+                  final ownerForInvoice =
+                      (providedOwner != null && providedOwner.isNotEmpty)
+                          ? providedOwner
+                          : ((projectOwner != null && projectOwner.isNotEmpty)
+                              ? projectOwner
+                              : (me?.uid ?? ''));
+                  final resolvedOwner = ownerForInvoice.isNotEmpty
+                      ? ownerForInvoice
+                      : (me?.uid ?? '');
                   final inv = Invoice(
                     id: '_',
                     projectId: targetProjectId,
-                    ownerUid: me?.uid,
+                    ownerUid:
+                        resolvedOwner.isNotEmpty ? resolvedOwner : me?.uid,
                     invoiceNumber: invoiceNumberCtl.text.trim(),
                     projectNumber: projectNumberValue,
                     invoiceAmount: amt,

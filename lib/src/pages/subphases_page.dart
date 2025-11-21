@@ -1,6 +1,7 @@
-// lib/src/pages/subphases_page.dart
+﻿// lib/src/pages/subphases_page.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../data/models/subphase_template.dart';
 import '../data/repositories/subphase_template_repository.dart';
@@ -8,6 +9,7 @@ import '../data/repositories/subphase_template_repository.dart';
 import '../data/models/phase_template.dart';
 import '../data/repositories/phase_template_repository.dart';
 import '../app/shell.dart';
+import '../app/user_access_scope.dart';
 
 const _accentYellow = Color(0xFFF1C400);
 
@@ -23,6 +25,97 @@ class _SubphasesPageState extends State<SubphasesPage> {
   final _phaseRepo = PhaseTemplateRepository();
   List<String>? _phaseOrder;
   bool _fabExpanded = false;
+  String? _ownerOverride;
+  bool _ownerListLoading = false;
+  bool _ownerListRequested = false;
+  List<String> _ownerOptions = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _ownerOverride = '';
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final access = UserAccessScope.maybeOf(context);
+    if ((access?.isAdmin ?? false) && !_ownerListRequested) {
+      _ownerListRequested = true;
+      _refreshOwnerOptions();
+    }
+  }
+
+  Future<void> _refreshOwnerOptions() async {
+    if (!mounted) return;
+    setState(() => _ownerListLoading = true);
+    final owners = <String>{};
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null && currentUser.uid.isNotEmpty) {
+      owners.add(currentUser.uid);
+    }
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final phaseSnap = await firestore.collection('phases').get();
+      for (final doc in phaseSnap.docs) {
+        final data = doc.data();
+        final owner = (data['ownerUid'] ?? '') as String? ?? '';
+        if (owner.isNotEmpty) {
+          owners.add(owner);
+        }
+      }
+      final subphaseSnap = await firestore.collection('task_templates').get();
+      for (final doc in subphaseSnap.docs) {
+        final data = doc.data();
+        final owner = (data['ownerUid'] ?? '') as String? ?? '';
+        if (owner.isNotEmpty) {
+          owners.add(owner);
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to load template owners: $e');
+    }
+    if (!mounted) return;
+    final list = owners.where((o) => o.isNotEmpty).toList()..sort();
+    setState(() {
+      _ownerOptions = list;
+      _ownerListLoading = false;
+      _ownerOverride ??= '';
+    });
+  }
+
+  List<String> _ownerChoices(String myUid) {
+    final owners = <String>{..._ownerOptions};
+    owners.add('');
+    if (myUid.isNotEmpty) {
+      owners.add(myUid);
+    }
+    final selected = _ownerOverride ?? '';
+    owners.add(selected);
+    final list = owners.toList()..sort();
+    if (list.remove('')) {
+      list.insert(0, '');
+    }
+    if (myUid.isNotEmpty && list.remove(myUid)) {
+      list.insert(list.isNotEmpty ? 1 : 0, myUid);
+    }
+    return list;
+  }
+
+  String _ownerLabel(String ownerUid, String myUid) {
+    if (ownerUid.isEmpty) return 'All';
+    if (ownerUid == myUid) return 'You';
+    if (ownerUid.length <= 8) return ownerUid;
+    final head = ownerUid.substring(0, 4);
+    final tail = ownerUid.substring(ownerUid.length - 2);
+    return '$head...$tail';
+  }
+
+  String _ownerMenuLabel(String ownerUid, String myUid) {
+    if (ownerUid.isEmpty) return 'All owners';
+    if (ownerUid == myUid) return '$ownerUid (you)';
+    return ownerUid;
+  }
 
   void _refreshPhases() {
     if (mounted) {
@@ -55,15 +148,66 @@ class _SubphasesPageState extends State<SubphasesPage> {
       );
     }
 
-    final isOwner = me.uid.isNotEmpty;
+    final access = UserAccessScope.maybeOf(context);
+    final isAdmin = access?.isAdmin ?? false;
+    final ownerUid = isAdmin ? (_ownerOverride ?? '') : '';
+    final canEdit = isAdmin && ownerUid.isNotEmpty;
+    final ownerChoices = isAdmin ? _ownerChoices(me.uid) : const <String>[];
+    final ownerTextColor = Theme.of(context).colorScheme.onPrimary;
+    final editableOwnerUid = canEdit ? ownerUid : me.uid;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Task Structure')),
+      appBar: AppBar(
+        title: const Text('Task Structure'),
+        actions: [
+          if (isAdmin && ownerChoices.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: PopupMenuButton<String>(
+                tooltip: 'Select template owner',
+                onSelected: (value) {
+                  if (value == ownerUid) return;
+                  setState(() {
+                    _ownerOverride = value;
+                    _phaseOrder = null;
+                  });
+                },
+                itemBuilder: (context) => ownerChoices
+                    .map(
+                      (uid) => PopupMenuItem<String>(
+                        value: uid,
+                        child: Text(_ownerMenuLabel(uid, me.uid)),
+                      ),
+                    )
+                    .toList(),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_ownerListLoading)
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    else
+                      const Icon(Icons.manage_accounts_outlined),
+                    const SizedBox(width: 6),
+                    Text(
+                      _ownerLabel(ownerUid, me.uid),
+                      style: TextStyle(color: ownerTextColor),
+                    ),
+                    Icon(Icons.arrow_drop_down, color: ownerTextColor),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
       bottomNavigationBar: const ShellBottomNav(popCurrentRoute: true),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      floatingActionButton: isOwner ? _buildFab(me.uid) : null,
+      floatingActionButton: canEdit ? _buildFab(editableOwnerUid) : null,
       body: FutureBuilder<List<PhaseTemplate>>(
-        future: _phaseRepo.getAllForUser(me.uid),
+        future: _phaseRepo.getAllForUser(ownerUid),
         builder: (context, phaseSnap) {
           final phases = (phaseSnap.data ?? const <PhaseTemplate>[]);
           // Fast lookup: phaseCode -> label (e.g., "02 - Preliminary Design")
@@ -73,7 +217,7 @@ class _SubphasesPageState extends State<SubphasesPage> {
           };
 
           return StreamBuilder<List<SubphaseTemplate>>(
-            stream: _subRepo.streamForUser(me.uid),
+            stream: _subRepo.streamForUser(ownerUid),
             builder: (context, snap) {
               if (snap.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
@@ -106,12 +250,12 @@ class _SubphasesPageState extends State<SubphasesPage> {
 
               return _buildPhaseList(
                 context: context,
-                ownerUid: me.uid,
+                ownerUid: editableOwnerUid,
                 phases: phases,
                 phaseLabelByCode: phaseLabelByCode,
                 grouped: grouped,
                 orderedPhaseKeys: phaseKeys,
-                isOwner: isOwner,
+                canEdit: canEdit,
               );
             },
           );
@@ -127,7 +271,7 @@ class _SubphasesPageState extends State<SubphasesPage> {
     required Map<String, String> phaseLabelByCode,
     required Map<String, List<SubphaseTemplate>> grouped,
     required List<String> orderedPhaseKeys,
-    required bool isOwner,
+    required bool canEdit,
   }) {
     final keys = _phaseOrder ?? orderedPhaseKeys;
     final normalizedKeys = <String>[
@@ -135,7 +279,7 @@ class _SubphasesPageState extends State<SubphasesPage> {
       ...orderedPhaseKeys.where((code) => !keys.contains(code)),
     ];
 
-    if (isOwner && _phaseOrder == null) {
+    if (canEdit && _phaseOrder == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           setState(() => _phaseOrder = List<String>.from(normalizedKeys));
@@ -168,7 +312,7 @@ class _SubphasesPageState extends State<SubphasesPage> {
             children: [
               InkWell(
                 borderRadius: BorderRadius.circular(6),
-                onTap: template.id.isEmpty
+                onTap: (!canEdit || template.id.isEmpty)
                     ? null
                     : () => _showEditPhaseDialog(
                           context,
@@ -183,7 +327,12 @@ class _SubphasesPageState extends State<SubphasesPage> {
               ),
               const SizedBox(height: 6),
               ...list.map(
-                (t) => _RowTile(t: t, repo: _subRepo, meUid: ownerUid),
+                (t) => _RowTile(
+                  t: t,
+                  repo: _subRepo,
+                  meUid: ownerUid,
+                  canEdit: canEdit,
+                ),
               ),
             ],
           ),
@@ -192,7 +341,7 @@ class _SubphasesPageState extends State<SubphasesPage> {
     }
 
     final padding = const EdgeInsets.fromLTRB(12, 12, 12, 120);
-    if (isOwner) {
+    if (canEdit) {
       return ReorderableListView.builder(
         padding: padding,
         buildDefaultDragHandles: false,
@@ -324,8 +473,14 @@ class _RowTile extends StatelessWidget {
   final SubphaseTemplate t;
   final SubphaseTemplateRepository repo;
   final String meUid;
+  final bool canEdit;
 
-  const _RowTile({required this.t, required this.repo, required this.meUid});
+  const _RowTile({
+    required this.t,
+    required this.repo,
+    required this.meUid,
+    required this.canEdit,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -347,7 +502,7 @@ class _RowTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontWeight: FontWeight.w500),
       ),
-      onTap: () => _showEditDialog(context, t, meUid),
+      onTap: canEdit ? () => _showEditDialog(context, t, meUid) : null,
     );
   }
 }

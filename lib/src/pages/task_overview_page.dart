@@ -289,16 +289,19 @@ class _ProjectTaskCard extends StatelessWidget {
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Padding(
-                                padding: const EdgeInsets.only(top: 3),
-                                child: Icon(
-                                  task.isStarred
-                                      ? Icons.star
-                                      : Icons.star_border,
-                                  size: 12,
-                                  color: task.isStarred
-                                      ? const Color(0xFFF1C400)
-                                      : titleColor.withValues(alpha: 0.7),
+                              SizedBox(
+                                width: 20,
+                                child: Align(
+                                  alignment: Alignment.topCenter,
+                                  child: Icon(
+                                    task.isStarred
+                                        ? Icons.star
+                                        : Icons.star_border,
+                                    size: 14,
+                                    color: task.isStarred
+                                        ? const Color(0xFFF1C400)
+                                        : titleColor.withValues(alpha: 0.7),
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 6),
@@ -429,14 +432,17 @@ class _ProjectTaskCard extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 3),
-                child: Icon(
-                  task.isStarred ? Icons.star : Icons.star_border,
-                  size: 12,
-                  color: task.isStarred
-                      ? const Color(0xFFF1C400)
-                      : titleColor.withValues(alpha: 0.7),
+              SizedBox(
+                width: 20,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: Icon(
+                    task.isStarred ? Icons.star : Icons.star_border,
+                    size: 14,
+                    color: task.isStarred
+                        ? const Color(0xFFF1C400)
+                        : titleColor.withValues(alpha: 0.7),
+                  ),
                 ),
               ),
               const SizedBox(width: 6),

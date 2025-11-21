@@ -201,10 +201,18 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
     }
 
     final isOwner = project.ownerUid != null && project.ownerUid == me?.uid;
-    final access = UserAccessScope.maybeOf(context);
-    final canManageProject = isOwner || (access?.isAdmin ?? false);
+    final scopedAccess = UserAccessScope.maybeOf(context);
+    final access = scopedAccess ?? UserAccessController.instance.current;
+    final isAdmin = access?.isAdmin ?? false;
+    final canManageProject = isOwner || isAdmin;
+    debugPrint(
+        "Project ${project.id} owner=${project.ownerUid ?? '(none)'} isOwner=$isOwner isAdmin=$isAdmin (user=${me?.uid ?? '(none)'} type=${access?.profile?.userType ?? '(null)'})");
     final ownerUser = isOwner ? me : null;
     final assigneeOptions = _buildExternalAssigneeOptions(project, ownerUser);
+    final editorOwnerUid =
+        (project.ownerUid != null && project.ownerUid!.isNotEmpty)
+            ? project.ownerUid!
+            : (me?.uid ?? '');
     final phoneDisplay = formatPhoneForDisplay(project.contactPhone);
     final hasTeamEntries = _teamValueMap(project).values.any((value) {
       if (value == null) return false;
@@ -277,6 +285,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
             projectId: project.id,
             canEdit: canManageProject,
             selectedSubphases: project.selectedSubphases,
+            ownerUidForWrites: editorOwnerUid,
           ),
           const SizedBox(height: 12),
           _ExternalTasksSection(
@@ -347,6 +356,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                     wrapInCard: false,
                     showNewButton: false,
                     unpaidOnly: _unpaidOnly,
+                    ownerUidForWrites: editorOwnerUid,
                   ),
                   const SizedBox(height: 10),
                   const Padding(
@@ -369,6 +379,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                     wrapInCard: false,
                     showNewButton: false,
                     unpaidOnly: _unpaidOnly,
+                    ownerUidForWrites: editorOwnerUid,
                   ),
                   const SizedBox(height: 12),
                   if (canManageProject)
@@ -383,6 +394,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                           project.id,
                           defaultProjectNumber: project.projectNumber,
                           initialInvoiceType: 'Client',
+                          ownerUid: editorOwnerUid,
                         ),
                         child: const Icon(Icons.add),
                       ),

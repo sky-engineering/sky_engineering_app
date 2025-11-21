@@ -9,7 +9,11 @@ class SubphaseTemplateRepository {
 
   /// Stream all subphases for a user (client-side sorted by code).
   Stream<List<SubphaseTemplate>> streamForUser(String ownerUid) {
-    return _col.where('ownerUid', isEqualTo: ownerUid).snapshots().map((snap) {
+    Query<Map<String, dynamic>> query = _col;
+    if (ownerUid.isNotEmpty) {
+      query = query.where('ownerUid', isEqualTo: ownerUid);
+    }
+    return query.snapshots().map((snap) {
       final list = snap.docs.map(SubphaseTemplate.fromDoc).toList();
       list.sort((a, b) => a.subphaseCode.compareTo(b.subphaseCode));
       return list;
@@ -18,7 +22,11 @@ class SubphaseTemplateRepository {
 
   /// One-shot fetch (used by project subphase selector).
   Future<List<SubphaseTemplate>> getAllForUser(String ownerUid) async {
-    final qs = await _col.where('ownerUid', isEqualTo: ownerUid).get();
+    Query<Map<String, dynamic>> query = _col;
+    if (ownerUid.isNotEmpty) {
+      query = query.where('ownerUid', isEqualTo: ownerUid);
+    }
+    final qs = await query.get();
     final list = qs.docs.map(SubphaseTemplate.fromDoc).toList();
     list.sort((a, b) => a.subphaseCode.compareTo(b.subphaseCode));
     return list;

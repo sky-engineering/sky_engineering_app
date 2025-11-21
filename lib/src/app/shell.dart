@@ -457,7 +457,9 @@ class _ShellState extends State<Shell> with TickerProviderStateMixin {
     return StreamBuilder<UserProfile?>(
       stream: _userRepo.streamByUid(widget.user.uid),
       builder: (context, snap) {
-        final access = UserAccess(user: widget.user, profile: snap.data);
+        final profile = snap.data;
+        debugPrint('Profile for ' + widget.user.uid + ': ' + (profile?.userType ?? '(null)'));
+        final access = UserAccess(user: widget.user, profile: profile);
         UserAccessController.instance.update(access);
         return UserAccessScope(
           access: access,
