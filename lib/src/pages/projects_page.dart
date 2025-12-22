@@ -313,6 +313,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
       project.teamContractor,
       project.teamArchitect,
       project.teamMechanical,
+      project.teamStructural,
       project.teamElectrical,
       project.teamPlumbing,
       project.teamLandscape,

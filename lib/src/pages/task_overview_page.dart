@@ -132,6 +132,7 @@ class _TaskOverviewPageState extends State<TaskOverviewPage> {
             }
             return ListView(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+              physics: const ClampingScrollPhysics(),
               children: children,
             );
           },

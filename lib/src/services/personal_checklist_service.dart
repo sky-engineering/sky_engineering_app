@@ -10,6 +10,8 @@ import '../data/models/personal_checklist_item.dart';
 class PersonalChecklistService extends ChangeNotifier {
   PersonalChecklistService._();
 
+  static const _starredOrderUpdateSentinel = Object();
+
   static final PersonalChecklistService instance = PersonalChecklistService._();
 
   factory PersonalChecklistService() => instance;
@@ -67,8 +69,14 @@ class PersonalChecklistService extends ChangeNotifier {
     return _updateItemFields(id, isDone: isDone);
   }
 
-  Future<void> setStarred(String id, bool isStarred) {
-    return _updateItemFields(id, isStarred: isStarred);
+  Future<void> setStarred(String id, bool isStarred, {int? starredOrder}) {
+    final resolvedOrder =
+        isStarred ? (starredOrder ?? _nextStarredOrderValue()) : null;
+    return _updateItemFields(
+      id,
+      isStarred: isStarred,
+      starredOrder: resolvedOrder,
+    );
   }
 
   Future<void> updateItem({
@@ -85,7 +93,8 @@ class PersonalChecklistService extends ChangeNotifier {
     );
   }
 
-  Future<void> reorderItems(List<String> orderedIds) async {
+  Future<void> reorderItems(List<String> orderedIds,
+      {Map<String, int?>? starredOrdering}) async {
     await ensureLoaded();
     if (orderedIds.isEmpty) return;
 
@@ -113,6 +122,7 @@ class PersonalChecklistService extends ChangeNotifier {
     _items
       ..clear()
       ..addAll(reordered);
+    _applyStarredOrdering(starredOrdering);
     await _persistItems();
     notifyListeners();
   }
@@ -140,6 +150,7 @@ class PersonalChecklistService extends ChangeNotifier {
     String? title,
     bool? isDone,
     bool? isStarred,
+    Object? starredOrder = _starredOrderUpdateSentinel,
   }) async {
     await ensureLoaded();
     final index = _items.indexWhere((item) => item.id == id);
@@ -149,18 +160,70 @@ class PersonalChecklistService extends ChangeNotifier {
       return;
     }
     final current = _items[index];
-    final updated = current.copyWith(
+    var updated = current.copyWith(
       title: trimmedTitle ?? current.title,
       isDone: isDone ?? current.isDone,
       isStarred: isStarred ?? current.isStarred,
     );
+    if (!identical(starredOrder, _starredOrderUpdateSentinel)) {
+      updated = updated.copyWith(starredOrder: starredOrder as int?);
+    }
     final changed = updated.title != current.title ||
         updated.isDone != current.isDone ||
-        updated.isStarred != current.isStarred;
+        updated.isStarred != current.isStarred ||
+        updated.starredOrder != current.starredOrder;
     if (!changed) return;
     _items[index] = updated;
     await _persistItems();
     notifyListeners();
+  }
+
+  void _applyStarredOrdering(Map<String, int?>? starredOrdering) {
+    if (starredOrdering == null || starredOrdering.isEmpty) {
+      var order = 0;
+      for (var i = 0; i < _items.length; i++) {
+        final item = _items[i];
+        final nextOrder = item.isStarred ? order++ : null;
+        if (item.starredOrder != nextOrder) {
+          _items[i] = item.copyWith(starredOrder: nextOrder);
+        }
+      }
+      return;
+    }
+
+    var fallbackOrder = -1;
+    for (final value in starredOrdering.values) {
+      if (value != null && value > fallbackOrder) {
+        fallbackOrder = value;
+      }
+    }
+    fallbackOrder += 1;
+
+    for (var i = 0; i < _items.length; i++) {
+      final item = _items[i];
+      int? nextOrder;
+      if (starredOrdering.containsKey(item.id)) {
+        nextOrder = starredOrdering[item.id];
+      } else if (item.isStarred) {
+        nextOrder = fallbackOrder++;
+      } else {
+        nextOrder = null;
+      }
+      if (item.starredOrder != nextOrder) {
+        _items[i] = item.copyWith(starredOrder: nextOrder);
+      }
+    }
+  }
+
+  int _nextStarredOrderValue() {
+    var maxOrder = -1;
+    for (final item in _items) {
+      final value = item.starredOrder;
+      if (item.isStarred && value != null && value > maxOrder) {
+        maxOrder = value;
+      }
+    }
+    return maxOrder + 1;
   }
 
   Future<void> _persistItems() async {

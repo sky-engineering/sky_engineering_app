@@ -13,11 +13,18 @@ Future<void> showSelectSubphasesDialog(
   BuildContext context, {
   required String projectId,
   required String ownerUid,
+  String? fallbackOwnerUid,
 }) async {
   final projRepo = ProjectRepository();
   final tmplRepo = SubphaseTemplateRepository();
 
-  final templates = await tmplRepo.getAllForUser(ownerUid);
+  var templates = await tmplRepo.getAllForUser(ownerUid);
+  if (templates.isEmpty &&
+      fallbackOwnerUid != null &&
+      fallbackOwnerUid.isNotEmpty &&
+      fallbackOwnerUid != ownerUid) {
+    templates = await tmplRepo.getAllForUser(fallbackOwnerUid);
+  }
   final project = await projRepo.getById(projectId);
 
   if (!context.mounted) return;

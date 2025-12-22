@@ -33,6 +33,7 @@ const List<_TeamFieldConfig> _teamFieldConfigs = [
   _TeamFieldConfig(key: 'teamSurveyor', label: 'Surveyor'),
   _TeamFieldConfig(key: 'teamGeotechnical', label: 'Geotechnical'),
   _TeamFieldConfig(key: 'teamMechanical', label: 'Mechanical'),
+  _TeamFieldConfig(key: 'teamStructural', label: 'Structural'),
   _TeamFieldConfig(key: 'teamElectrical', label: 'Electrical'),
   _TeamFieldConfig(key: 'teamPlumbing', label: 'Plumbing'),
   _TeamFieldConfig(key: 'teamLandscape', label: 'Landscape'),
@@ -59,6 +60,7 @@ Map<String, String?> _teamValueMap(Project project) => {
       'teamSurveyor': project.teamSurveyor,
       'teamGeotechnical': project.teamGeotechnical,
       'teamMechanical': project.teamMechanical,
+      'teamStructural': project.teamStructural,
       'teamElectrical': project.teamElectrical,
       'teamPlumbing': project.teamPlumbing,
       'teamLandscape': project.teamLandscape,
@@ -717,7 +719,7 @@ class _ExternalTasksSection extends StatelessWidget {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: items.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                separatorBuilder: (_, __) => const SizedBox(height: 4),
                 itemBuilder: (context, index) {
                   final task = items[index];
                   return _ExternalTaskTile(
@@ -727,6 +729,8 @@ class _ExternalTasksSection extends StatelessWidget {
                     canEdit: enableEditing,
                     onSetDone: (value) => _setDone(context, task, value),
                     onDelete: () => _delete(context, task),
+                    onToggleStar: () => _toggleStar(context, task),
+                    onEdit: () => _showEditExternalTaskDialog(context, task),
                   );
                 },
               ),
@@ -798,6 +802,23 @@ class _ExternalTasksSection extends StatelessWidget {
         SnackBar(content: Text('Failed to delete task: $e')),
       );
       return false;
+    }
+  }
+
+  Future<void> _toggleStar(BuildContext context, ExternalTask task) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final next = !task.isStarred;
+    try {
+      await _repo.setStarred(
+        projectId,
+        task.id,
+        next,
+        starredOrder: next ? DateTime.now().millisecondsSinceEpoch : null,
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Failed to update task: $e')),
+      );
     }
   }
 
@@ -906,6 +927,110 @@ class _ExternalTasksSection extends StatelessWidget {
       messenger.showSnackBar(SnackBar(content: Text('Failed to add task: $e')));
     }
   }
+
+  Future<void> _showEditExternalTaskDialog(
+    BuildContext context,
+    ExternalTask task,
+  ) async {
+    final titleController = TextEditingController(text: task.title);
+    var selectedKey =
+        assigneeOptions.any((option) => option.key == task.assigneeKey)
+            ? task.assigneeKey
+            : (assigneeOptions.isNotEmpty ? assigneeOptions.first.key : null);
+
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setState) {
+            return AlertDialog(
+              title: const Text('Edit External Task'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextField(
+                      controller: titleController,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Task description',
+                      ),
+                      textInputAction: TextInputAction.done,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: DropdownButtonFormField<String>(
+                      value: selectedKey,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Assigned to',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: assigneeOptions
+                          .map(
+                            (option) => DropdownMenuItem<String>(
+                              value: option.key,
+                              child: Text(option.label),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) => setState(() => selectedKey = value),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final title = titleController.text.trim();
+                    if (title.isEmpty || selectedKey == null) {
+                      ScaffoldMessenger.of(dialogContext).showSnackBar(
+                        const SnackBar(
+                          content: Text('Provide a title and assignee.'),
+                        ),
+                      );
+                      return;
+                    }
+                    Navigator.of(dialogContext)
+                        .pop({'title': title, 'assigneeKey': selectedKey!});
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == null) return;
+
+    final option = assigneeOptions.firstWhere(
+      (item) => item.key == result['assigneeKey'],
+      orElse: () => assigneeOptions.first,
+    );
+
+    try {
+      await _repo.update(projectId, task.id, {
+        'title': result['title'],
+        'assigneeKey': option.key,
+        'assigneeName': option.value,
+      });
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Failed to update task: $e')),
+      );
+    }
+  }
 }
 
 class _ExternalTaskTile extends StatefulWidget {
@@ -916,6 +1041,8 @@ class _ExternalTaskTile extends StatefulWidget {
     required this.canEdit,
     required this.onSetDone,
     required this.onDelete,
+    required this.onToggleStar,
+    required this.onEdit,
   });
 
   final Key dismissibleKey;
@@ -923,6 +1050,8 @@ class _ExternalTaskTile extends StatefulWidget {
   final bool canEdit;
   final Future<bool> Function(bool) onSetDone;
   final Future<bool> Function() onDelete;
+  final VoidCallback onToggleStar;
+  final VoidCallback onEdit;
 
   @override
   State<_ExternalTaskTile> createState() => _ExternalTaskTileState();
@@ -967,6 +1096,8 @@ class _ExternalTaskTileState extends State<_ExternalTaskTile> {
             color: doneColor,
           )
         : baseTitleStyle;
+    final filledStarColor = theme.colorScheme.secondary;
+    final hollowStarColor = theme.colorScheme.onSurfaceVariant;
 
     return Dismissible(
       key: widget.dismissibleKey,
@@ -1013,29 +1144,27 @@ class _ExternalTaskTileState extends State<_ExternalTaskTile> {
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: widget.canEdit
-              ? () {
-                  final next = !task.isDone;
-                  widget.onSetDone(next);
-                }
-              : null,
+          onTap: widget.canEdit ? widget.onEdit : null,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Checkbox(
-                  value: task.isDone,
-                  onChanged: widget.canEdit
-                      ? (value) {
-                          final newValue = value ?? false;
-                          if (newValue != task.isDone) {
-                            widget.onSetDone(newValue);
-                          }
-                        }
-                      : null,
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                Padding(
+                  padding: EdgeInsets.only(top: assignee.isNotEmpty ? 4 : 0),
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints:
+                        const BoxConstraints(minWidth: 32, minHeight: 32),
+                    iconSize: 20,
+                    splashRadius: 18,
+                    tooltip: task.isStarred ? 'Unstar task' : 'Star task',
+                    onPressed: widget.canEdit ? widget.onToggleStar : null,
+                    icon: Icon(
+                      task.isStarred ? Icons.star : Icons.star_border,
+                      color: task.isStarred ? filledStarColor : hollowStarColor,
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(

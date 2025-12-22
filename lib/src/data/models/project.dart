@@ -87,6 +87,7 @@ class Project {
   final String? teamContractor;
   final String? teamArchitect;
   final String? teamMechanical;
+  final String? teamStructural;
   final String? teamElectrical;
   final String? teamPlumbing;
   final String? teamLandscape;
@@ -128,6 +129,7 @@ class Project {
     this.teamContractor,
     this.teamArchitect,
     this.teamMechanical,
+    this.teamStructural,
     this.teamElectrical,
     this.teamPlumbing,
     this.teamLandscape,
@@ -210,6 +212,7 @@ class Project {
       teamContractor: readStringOrNull(data, 'teamContractor'),
       teamArchitect: readStringOrNull(data, 'teamArchitect'),
       teamMechanical: readStringOrNull(data, 'teamMechanical'),
+      teamStructural: readStringOrNull(data, 'teamStructural'),
       teamElectrical: readStringOrNull(data, 'teamElectrical'),
       teamPlumbing: readStringOrNull(data, 'teamPlumbing'),
       teamLandscape: readStringOrNull(data, 'teamLandscape'),
@@ -250,6 +253,8 @@ class Project {
         'teamArchitect': teamArchitect,
       if (teamMechanical != null && teamMechanical!.isNotEmpty)
         'teamMechanical': teamMechanical,
+      if (teamStructural != null && teamStructural!.isNotEmpty)
+        'teamStructural': teamStructural,
       if (teamElectrical != null && teamElectrical!.isNotEmpty)
         'teamElectrical': teamElectrical,
       if (teamPlumbing != null && teamPlumbing!.isNotEmpty)
@@ -298,6 +303,7 @@ class Project {
     String? teamContractor,
     String? teamArchitect,
     String? teamMechanical,
+    String? teamStructural,
     String? teamElectrical,
     String? teamPlumbing,
     String? teamLandscape,
@@ -332,6 +338,7 @@ class Project {
       teamContractor: teamContractor ?? this.teamContractor,
       teamArchitect: teamArchitect ?? this.teamArchitect,
       teamMechanical: teamMechanical ?? this.teamMechanical,
+      teamStructural: teamStructural ?? this.teamStructural,
       teamElectrical: teamElectrical ?? this.teamElectrical,
       teamPlumbing: teamPlumbing ?? this.teamPlumbing,
       teamLandscape: teamLandscape ?? this.teamLandscape,

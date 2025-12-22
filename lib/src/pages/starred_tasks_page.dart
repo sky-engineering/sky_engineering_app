@@ -225,7 +225,33 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
       }
     }
 
-    return merged;
+    return _sortEntriesByOrder(merged);
+  }
+
+  List<_StarredEntry> _sortEntriesByOrder(List<_StarredEntry> entries) {
+    final indexed = entries.asMap().entries.toList(growable: false);
+    indexed.sort((a, b) {
+      final ao = _entryOrderValue(a.value);
+      final bo = _entryOrderValue(b.value);
+      final cmp = _compareStarOrder(ao, bo);
+      if (cmp != 0) return cmp;
+      return a.key.compareTo(b.key);
+    });
+    return [for (final entry in indexed) entry.value];
+  }
+
+  int _compareStarOrder(int? ao, int? bo) {
+    if (ao == null && bo == null) return 0;
+    if (ao == null) return 1;
+    if (bo == null) return -1;
+    return ao.compareTo(bo);
+  }
+
+  int? _entryOrderValue(_StarredEntry entry) {
+    if (entry.isTask) return entry.task!.starredOrder;
+    if (entry.isExternal) return entry.external!.starredOrder;
+    if (entry.isPersonal) return entry.personal!.starredOrder;
+    return null;
   }
 
   List<TaskItem> _sortedTasks(List<TaskItem> input) {
@@ -308,24 +334,27 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
     final updatedTasks = <TaskItem>[];
     final updatedExternal = <_ExternalStarredTask>[];
     final updatedPersonal = <PersonalChecklistItem>[];
+    final personalOrdering = <String, int>{};
     var order = 0;
     for (final entry in updatedEntries) {
       if (entry.isTask) {
-        final updatedTask = entry.task!.copyWith(starredOrder: order++);
+        final updatedTask = entry.task!.copyWith(starredOrder: order);
         updatedTasks.add(updatedTask);
         normalizedEntries.add(_StarredEntry.task(updatedTask));
       } else if (entry.isExternal) {
         final project = entry.externalProject!;
-        final updatedTask = entry.external!.copyWith(starredOrder: order++);
+        final updatedTask = entry.external!.copyWith(starredOrder: order);
         final externalEntry =
             _ExternalStarredTask(project: project, task: updatedTask);
         updatedExternal.add(externalEntry);
         normalizedEntries.add(_StarredEntry.external(updatedTask, project));
       } else {
-        final item = entry.personal!;
-        updatedPersonal.add(item);
-        normalizedEntries.add(_StarredEntry.personal(item));
+        final updatedItem = entry.personal!.copyWith(starredOrder: order);
+        updatedPersonal.add(updatedItem);
+        normalizedEntries.add(_StarredEntry.personal(updatedItem));
+        personalOrdering[updatedItem.id] = order;
       }
+      order++;
     }
 
     setState(() {
@@ -353,6 +382,7 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
       futures.add(
         _personalService.reorderItems(
           updatedPersonal.map((item) => item.id).toList(growable: false),
+          starredOrdering: personalOrdering,
         ),
       );
     }
@@ -616,7 +646,11 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
 
   Future<void> _togglePersonalStar(PersonalChecklistItem item) async {
     try {
-      await _personalService.setStarred(item.id, !item.isStarred);
+      await _personalService.setStarred(
+        item.id,
+        !item.isStarred,
+        starredOrder: !item.isStarred ? _entries.length : null,
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)

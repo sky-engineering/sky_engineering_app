@@ -462,6 +462,8 @@ class _ExternalTasksOverviewPageState extends State<ExternalTasksOverviewPage> {
         return 'Geotechnical';
       case 'teammechanical':
         return 'Mechanical';
+      case 'teamstructural':
+        return 'Structural';
       case 'teamelectrical':
         return 'Electrical';
       case 'teamplumbing':
@@ -492,6 +494,8 @@ class _ExternalTasksOverviewPageState extends State<ExternalTasksOverviewPage> {
         return project.teamGeotechnical;
       case 'teammechanical':
         return project.teamMechanical;
+      case 'teamstructural':
+        return project.teamStructural;
       case 'teamelectrical':
         return project.teamElectrical;
       case 'teamplumbing':

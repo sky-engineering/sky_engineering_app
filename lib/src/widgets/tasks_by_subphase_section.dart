@@ -139,10 +139,13 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                               return;
                             }
                             if (!context.mounted) return;
+                            final fallbackOwnerUid =
+                                FirebaseAuth.instance.currentUser?.uid ?? '';
                             await showSelectSubphasesDialog(
                               context,
                               projectId: widget.projectId,
                               ownerUid: owner,
+                              fallbackOwnerUid: fallbackOwnerUid,
                             );
                           },
                           icon: const Icon(Icons.tune),
@@ -185,7 +188,7 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
               const SizedBox(height: 4),
               if (sel.isEmpty)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.only(bottom: 4),
                   child: Text(
                     'No subphases selected for this project yet.',
                     style: Theme.of(context).textTheme.bodySmall,

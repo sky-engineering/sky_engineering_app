@@ -1,28 +1,36 @@
 // lib/src/data/models/personal_checklist_item.dart
+const _starredOrderSentinel = Object();
+
 class PersonalChecklistItem {
   const PersonalChecklistItem({
     required this.id,
     required this.title,
     this.isDone = false,
     this.isStarred = false,
+    this.starredOrder,
   });
 
   final String id;
   final String title;
   final bool isDone;
   final bool isStarred;
+  final int? starredOrder;
 
   PersonalChecklistItem copyWith({
     String? id,
     String? title,
     bool? isDone,
     bool? isStarred,
+    Object? starredOrder = _starredOrderSentinel,
   }) {
     return PersonalChecklistItem(
       id: id ?? this.id,
       title: title ?? this.title,
       isDone: isDone ?? this.isDone,
       isStarred: isStarred ?? this.isStarred,
+      starredOrder: identical(starredOrder, _starredOrderSentinel)
+          ? this.starredOrder
+          : starredOrder as int?,
     );
   }
 
@@ -32,6 +40,7 @@ class PersonalChecklistItem {
       'title': title,
       'isDone': isDone,
       'isStarred': isStarred,
+      if (starredOrder != null) 'starredOrder': starredOrder,
     };
   }
 
@@ -45,6 +54,9 @@ class PersonalChecklistItem {
       isStarred: map['isStarred'] is bool
           ? map['isStarred'] as bool
           : (map['isStarred']?.toString().toLowerCase() == 'true'),
+      starredOrder: map['starredOrder'] is num
+          ? (map['starredOrder'] as num).toInt()
+          : null,
     );
   }
 }
