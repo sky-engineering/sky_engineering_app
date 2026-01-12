@@ -546,6 +546,7 @@ Future<void> _showAddDialog(BuildContext context, String ownerUid) async {
   final codeCtl = TextEditingController();
   final nameCtl = TextEditingController();
   final defaultsCtl = TextEditingController(); // one-per-line
+  final externalDefaultsCtl = TextEditingController();
 
   final formKey = GlobalKey<FormState>();
   final subRepo = SubphaseTemplateRepository();
@@ -614,7 +615,18 @@ Future<void> _showAddDialog(BuildContext context, String ownerUid) async {
                               'e.g.\nKickoff meeting\nCollect survey\nPrelim grading',
                           border: OutlineInputBorder(),
                         ),
-                        maxLines: 3,
+                        maxLines: 5,
+                      ),
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        controller: externalDefaultsCtl,
+                        decoration: const InputDecoration(
+                          labelText: 'Default external tasks (comma separated)',
+                          hintText:
+                              'e.g.\nSubmit grading permit\nCoordinate markouts',
+                          border: OutlineInputBorder(),
+                        ),
+                        maxLines: 4,
                       ),
                     ],
                   ),
@@ -636,6 +648,8 @@ Future<void> _showAddDialog(BuildContext context, String ownerUid) async {
                   final phaseCode =
                       (code.length >= 2) ? code.substring(0, 2) : '';
                   final defaults = parseDefaults(defaultsCtl.text);
+                  final externalDefaults =
+                      parseDefaults(externalDefaultsCtl.text);
 
                   final t = SubphaseTemplate(
                     id: '_',
@@ -644,6 +658,7 @@ Future<void> _showAddDialog(BuildContext context, String ownerUid) async {
                     subphaseName: nameCtl.text.trim(),
                     phaseCode: phaseCode,
                     defaultTasks: defaults,
+                    defaultExternalTasks: externalDefaults,
                   );
                   await subRepo.add(t);
                   if (!context.mounted) {
@@ -870,7 +885,9 @@ Future<void> _showEditDialog(
 ) async {
   final codeCtl = TextEditingController(text: t.subphaseCode);
   final nameCtl = TextEditingController(text: t.subphaseName);
-  final defaultsCtl = TextEditingController(text: t.defaultTasks.join('\n'));
+  final defaultsCtl = TextEditingController(text: t.defaultTasks.join(', '));
+  final externalDefaultsCtl =
+      TextEditingController(text: t.defaultExternalTasks.join(', '));
 
   final formKey = GlobalKey<FormState>();
   final repo = SubphaseTemplateRepository();
@@ -936,7 +953,16 @@ Future<void> _showEditDialog(
                           labelText: 'Default tasks (comma separated)',
                           border: OutlineInputBorder(),
                         ),
-                        maxLines: 3,
+                        maxLines: 5,
+                      ),
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        controller: externalDefaultsCtl,
+                        decoration: const InputDecoration(
+                          labelText: 'Default external tasks (comma separated)',
+                          border: OutlineInputBorder(),
+                        ),
+                        maxLines: 4,
                       ),
                     ],
                   ),
@@ -998,6 +1024,8 @@ Future<void> _showEditDialog(
                       final newPhaseCode =
                           (newCode.length >= 2) ? newCode.substring(0, 2) : '';
                       final defaults = parseDefaults(defaultsCtl.text);
+                      final externalDefaults =
+                          parseDefaults(externalDefaultsCtl.text);
 
                       await repo.update(t.id, {
                         'subphaseCode': newCode,
@@ -1006,6 +1034,7 @@ Future<void> _showEditDialog(
                         'taskName': nameCtl.text.trim(), // legacy mirror
                         'phaseCode': newPhaseCode,
                         'defaultTasks': defaults,
+                        'defaultExternalTasks': externalDefaults,
                       });
                       if (!context.mounted) {
                         return;

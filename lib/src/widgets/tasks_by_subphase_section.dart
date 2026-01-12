@@ -5,9 +5,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../data/models/project.dart';
 import '../data/models/task.dart';
+import '../data/models/external_task.dart';
 import '../data/repositories/task_repository.dart';
 import '../data/repositories/project_repository.dart';
 import '../data/repositories/subphase_template_repository.dart';
+import '../data/repositories/external_task_repository.dart';
 import '../dialogs/select_subphases_dialog.dart';
 import 'form_helpers.dart';
 import '../dialogs/task_edit_dialog.dart';
@@ -395,12 +397,19 @@ class _SubphaseBox extends StatelessWidget {
                         ),
                         alignment: Alignment.topCenter,
                         onPressed: canEdit
-                            ? () => _insertDefaultsForSubphase(
+                            ? () async {
+                                final confirmed = await confirmDialog(
+                                  context,
+                                  'Add default tasks for "${subphase!.name}"? This also adds any default external tasks.',
+                                );
+                                if (!confirmed) return;
+                                await _insertDefaultsForSubphase(
                                   context,
                                   projectId,
                                   subphase!.code,
                                   ownerUidForWrites,
-                                )
+                                );
+                              }
                             : () => _viewOnlySnack(context),
                         icon: const Icon(
                           Icons.playlist_add,
@@ -1144,11 +1153,15 @@ Future<void> _insertDefaultsForSubphase(
   final templatesRepo = SubphaseTemplateRepository();
   final messenger = ScaffoldMessenger.maybeOf(context);
 
+  List<String> _clean(List<String> values) {
+    return values.map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
+  }
+
   try {
     LoadingOverlay.show(context, message: 'Adding tasks...');
     final tpl =
         await templatesRepo.getByOwnerAndCode(resolvedOwnerUid, subphaseCode);
-    if (tpl == null || tpl.defaultTasks.isEmpty) {
+    if (tpl == null) {
       messenger?.showSnackBar(
         const SnackBar(
           content: Text('No default tasks defined for this subphase.'),
@@ -1157,64 +1170,131 @@ Future<void> _insertDefaultsForSubphase(
       return;
     }
 
-    final existingQs = await FirebaseFirestore.instance
-        .collection('tasks')
-        .where('projectId', isEqualTo: projectId)
-        .where('taskCode', isEqualTo: subphaseCode)
-        .get();
+    final cleanedDefaults = _clean(tpl.defaultTasks);
+    final cleanedExternalDefaults = _clean(tpl.defaultExternalTasks);
 
-    final existingTitleSet = existingQs.docs
-        .map((d) => ((d.data()['title'] as String?) ?? '').trim().toLowerCase())
-        .where((s) => s.isNotEmpty)
-        .toSet();
+    if (cleanedDefaults.isEmpty && cleanedExternalDefaults.isEmpty) {
+      messenger?.showSnackBar(
+        const SnackBar(
+          content: Text('No default tasks defined for this subphase.'),
+        ),
+      );
+      return;
+    }
 
-    final cleanedDefaults = tpl.defaultTasks
-        .map((t) => t.trim())
-        .where((t) => t.isNotEmpty)
-        .toList();
+    var insertedInternal = 0;
+    var insertedExternal = 0;
 
-    final toInsert = cleanedDefaults
-        .where((t) => !existingTitleSet.contains(t.toLowerCase()))
-        .toList();
+    if (cleanedDefaults.isNotEmpty) {
+      final existingQs = await FirebaseFirestore.instance
+          .collection('tasks')
+          .where('projectId', isEqualTo: projectId)
+          .where('taskCode', isEqualTo: subphaseCode)
+          .get();
 
-    if (toInsert.isEmpty) {
+      final existingTitleSet = existingQs.docs
+          .map((d) =>
+              ((d.data()['title'] as String?) ?? '').trim().toLowerCase())
+          .where((s) => s.isNotEmpty)
+          .toSet();
+
+      final toInsert = cleanedDefaults
+          .where((t) => !existingTitleSet.contains(t.toLowerCase()))
+          .toList();
+
+      if (toInsert.isNotEmpty) {
+        final batch = FirebaseFirestore.instance.batch();
+        final tasksCol = FirebaseFirestore.instance.collection('tasks');
+
+        for (final title in toInsert) {
+          final ref = tasksCol.doc();
+          final task = TaskItem(
+            id: ref.id,
+            projectId: projectId,
+            ownerUid: resolvedOwnerUid,
+            title: title,
+            description: null,
+            taskStatus: 'In Progress',
+            isStarred: false,
+            taskCode: subphaseCode,
+            dueDate: null,
+            assigneeName: null,
+            createdAt: null,
+            updatedAt: null,
+          ).toMap();
+
+          batch.set(ref, {
+            ...task,
+            'createdAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+
+        await batch.commit();
+        insertedInternal = toInsert.length;
+      }
+    }
+
+    if (cleanedExternalDefaults.isNotEmpty) {
+      final projectSnap = await FirebaseFirestore.instance
+          .collection('projects')
+          .doc(projectId)
+          .get();
+      final existingExternalTitles = <String>{};
+      final rawList = projectSnap.data()?['externalTasks'];
+      if (rawList is List) {
+        for (final entry in rawList) {
+          if (entry is Map<String, dynamic>) {
+            final title =
+                (entry['title'] as String? ?? '').trim().toLowerCase();
+            if (title.isNotEmpty) {
+              existingExternalTitles.add(title);
+            }
+          }
+        }
+      }
+
+      final externalToInsert = cleanedExternalDefaults
+          .where((t) => !existingExternalTitles.contains(t.toLowerCase()))
+          .toList();
+
+      if (externalToInsert.isNotEmpty) {
+        final externalRepo = ExternalTaskRepository();
+        for (final title in externalToInsert) {
+          final task = ExternalTask(
+            id: '',
+            projectId: projectId,
+            title: title,
+            assigneeKey: '',
+            assigneeName: '',
+            isDone: false,
+            isStarred: false,
+            starredOrder: null,
+            createdAt: null,
+            updatedAt: null,
+          );
+          await externalRepo.add(projectId, task);
+        }
+        insertedExternal = externalToInsert.length;
+      }
+    }
+
+    if (insertedInternal == 0 && insertedExternal == 0) {
       messenger?.showSnackBar(
         const SnackBar(content: Text('All default tasks are already present.')),
       );
       return;
     }
 
-    final batch = FirebaseFirestore.instance.batch();
-    final tasksCol = FirebaseFirestore.instance.collection('tasks');
-
-    for (final title in toInsert) {
-      final ref = tasksCol.doc();
-      final task = TaskItem(
-        id: ref.id,
-        projectId: projectId,
-        ownerUid: resolvedOwnerUid,
-        title: title,
-        description: null,
-        taskStatus: 'In Progress',
-        isStarred: false,
-        taskCode: subphaseCode,
-        dueDate: null,
-        assigneeName: null,
-        createdAt: null,
-        updatedAt: null,
-      ).toMap();
-
-      batch.set(ref, {
-        ...task,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+    final parts = <String>[];
+    if (insertedInternal > 0) {
+      parts.add('$insertedInternal task(s)');
     }
-
-    await batch.commit();
-
+    if (insertedExternal > 0) {
+      parts.add('$insertedExternal external task(s)');
+    }
     messenger?.showSnackBar(
-      SnackBar(content: Text('Inserted ${toInsert.length} task(s).')),
+      SnackBar(content: Text('Inserted ${parts.join(' and ')}.')),
     );
   } catch (e) {
     messenger?.showSnackBar(

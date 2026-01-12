@@ -15,8 +15,11 @@ class SubphaseTemplate {
   /// If absent on disk, we derive from the first 2 digits of subphaseCode.
   final String phaseCode;
 
-  /// NEW: default tasks for this subphase (each string is a task title)
+  /// Default internal tasks for this subphase (each string is a task title)
   final List<String> defaultTasks;
+
+  /// Default external tasks to spin up alongside the subphase.
+  final List<String> defaultExternalTasks;
 
   // Legacy/optional (kept for BC, not used in UI):
   final String? subphaseNote;
@@ -33,6 +36,7 @@ class SubphaseTemplate {
     required this.subphaseName,
     required this.phaseCode,
     this.defaultTasks = const <String>[],
+    this.defaultExternalTasks = const <String>[],
     this.subphaseNote,
     this.responsibility = 'Other',
     this.isDeliverable = false,
@@ -67,12 +71,13 @@ class SubphaseTemplate {
     final derivedPhase = (code.length >= 2) ? code.substring(0, 2) : '';
     final phaseCode = storedPhase.isNotEmpty ? storedPhase : derivedPhase;
 
-    // NEW: defaultTasks list
     final defaults =
         readStringListOrNull(data, 'defaultTasks') ?? const <String>[];
 
-    final note =
-        parseStringOrNull(data['subphaseNote']) ??
+    final defaultExternal =
+        readStringListOrNull(data, 'defaultExternalTasks') ?? const <String>[];
+
+    final note = parseStringOrNull(data['subphaseNote']) ??
         parseStringOrNull(data['taskNote']);
     final responsibility = parseString(
       data['responsibility'] ?? data['taskResponsibility'],
@@ -86,6 +91,7 @@ class SubphaseTemplate {
       subphaseName: name,
       phaseCode: phaseCode,
       defaultTasks: defaults,
+      defaultExternalTasks: defaultExternal,
       subphaseNote: note,
       responsibility: responsibility,
       isDeliverable: parseBool(data['isDeliverable'], fallback: false),
@@ -104,6 +110,7 @@ class SubphaseTemplate {
       // NEW canonical fields
       'phaseCode': phaseCode,
       'defaultTasks': defaultTasks,
+      'defaultExternalTasks': defaultExternalTasks,
 
       'subphaseNote': subphaseNote,
       'responsibility': responsibility,
@@ -127,6 +134,7 @@ class SubphaseTemplate {
     String? subphaseName,
     String? phaseCode,
     List<String>? defaultTasks,
+    List<String>? defaultExternalTasks,
     String? subphaseNote,
     String? responsibility,
     bool? isDeliverable,
@@ -140,6 +148,7 @@ class SubphaseTemplate {
       subphaseName: subphaseName ?? this.subphaseName,
       phaseCode: phaseCode ?? this.phaseCode,
       defaultTasks: defaultTasks ?? this.defaultTasks,
+      defaultExternalTasks: defaultExternalTasks ?? this.defaultExternalTasks,
       subphaseNote: subphaseNote ?? this.subphaseNote,
       responsibility: responsibility ?? this.responsibility,
       isDeliverable: isDeliverable ?? this.isDeliverable,
@@ -148,4 +157,3 @@ class SubphaseTemplate {
     );
   }
 }
-
