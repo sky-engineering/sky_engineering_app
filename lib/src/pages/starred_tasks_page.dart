@@ -1473,8 +1473,15 @@ class _ExternalStarredTile extends StatelessWidget {
       color: labelColor,
       fontWeight: FontWeight.w600,
     );
-    final tertiaryStyle = small.copyWith(color: labelColor);
-    final assignee = task.assigneeName.trim();
+    final hasAssignee = task.hasAssignedTeamMember;
+    final assigneeLabel = task.displayAssigneeLabel;
+    final tertiaryBase = small.copyWith(color: labelColor);
+    final tertiaryStyle = hasAssignee
+        ? tertiaryBase
+        : tertiaryBase.copyWith(
+            fontStyle: FontStyle.italic,
+            color: labelColor.withValues(alpha: 0.75),
+          );
     final projectLabel = _projectLabel();
     final cardColor =
         task.isDone ? theme.colorScheme.surfaceContainerHighest : null;
@@ -1530,16 +1537,15 @@ class _ExternalStarredTile extends StatelessWidget {
                         style: secondaryStyle,
                       ),
                     ),
-                    if (assignee.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          assignee,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: tertiaryStyle,
-                        ),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        assigneeLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tertiaryStyle,
                       ),
+                    ),
                   ],
                 ),
               ),

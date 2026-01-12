@@ -104,3 +104,14 @@ DateTime? _readTimestamp(dynamic value) {
   }
   return null;
 }
+
+extension ExternalTaskDisplay on ExternalTask {
+  static const String _fallbackAssigneeLabel = 'No Team Member Assigned';
+
+  String get displayAssigneeLabel {
+    final trimmed = assigneeName.trim();
+    return trimmed.isEmpty ? _fallbackAssigneeLabel : trimmed;
+  }
+
+  bool get hasAssignedTeamMember => assigneeName.trim().isNotEmpty;
+}

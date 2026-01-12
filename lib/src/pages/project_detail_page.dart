@@ -1086,7 +1086,18 @@ class _ExternalTaskTileState extends State<_ExternalTaskTile> {
     final theme = Theme.of(context);
     final task = widget.task;
     final small = theme.textTheme.bodySmall?.copyWith(fontSize: 12);
-    final assignee = task.assigneeName.trim();
+    final hasAssignee = task.hasAssignedTeamMember;
+    final assigneeLabel = task.displayAssigneeLabel;
+    final baseAssigneeStyle = small ?? const TextStyle(fontSize: 12);
+    final fallbackColor =
+        theme.textTheme.bodySmall?.color?.withValues(alpha: 0.75) ??
+            Colors.black54;
+    final assigneeStyle = hasAssignee
+        ? baseAssigneeStyle
+        : baseAssigneeStyle.copyWith(
+            fontStyle: FontStyle.italic,
+            color: fallbackColor,
+          );
     final baseColor = theme.textTheme.bodyMedium?.color;
     final doneColor = baseColor?.withValues(alpha: 0.6);
     const baseTitleStyle = TextStyle(fontWeight: FontWeight.w600, fontSize: 13);
@@ -1151,7 +1162,7 @@ class _ExternalTaskTileState extends State<_ExternalTaskTile> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
-                  padding: EdgeInsets.only(top: assignee.isNotEmpty ? 4 : 0),
+                  padding: const EdgeInsets.only(top: 4),
                   child: IconButton(
                     padding: EdgeInsets.zero,
                     constraints:
@@ -1177,11 +1188,15 @@ class _ExternalTaskTileState extends State<_ExternalTaskTile> {
                         overflow: TextOverflow.ellipsis,
                         style: titleStyle,
                       ),
-                      if (assignee.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(assignee, style: small),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          assigneeLabel,
+                          style: assigneeStyle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
+                      ),
                     ],
                   ),
                 ),

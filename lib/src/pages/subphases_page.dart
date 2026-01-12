@@ -381,37 +381,31 @@ class _SubphasesPageState extends State<SubphasesPage> {
       child: Stack(
         alignment: Alignment.bottomRight,
         children: [
-          if (_fabExpanded) ...[
-            Positioned(
-              right: 56,
-              bottom: 70,
-              child: _FabOptionButton(
-                label: 'Phase',
-                icon: Icons.layers_outlined,
-                onTap: () {
-                  setState(() => _fabExpanded = false);
-                  _showAddPhaseDialog(
-                    context,
-                    _phaseRepo,
-                    ownerUid,
-                    _refreshPhases,
-                  );
-                },
-              ),
-            ),
-            Positioned(
-              right: 16,
-              bottom: 120,
-              child: _FabOptionButton(
-                label: 'Subphase',
-                icon: Icons.timeline_outlined,
-                onTap: () {
-                  setState(() => _fabExpanded = false);
-                  _showAddDialog(context, ownerUid);
-                },
-              ),
-            ),
-          ],
+          _FannedFabOption(
+            label: 'Phase',
+            icon: Icons.layers_outlined,
+            offset: const Offset(25, 25),
+            visible: _fabExpanded,
+            onTap: () {
+              setState(() => _fabExpanded = false);
+              _showAddPhaseDialog(
+                context,
+                _phaseRepo,
+                ownerUid,
+                _refreshPhases,
+              );
+            },
+          ),
+          _FannedFabOption(
+            label: 'Subphase',
+            icon: Icons.timeline_outlined,
+            offset: const Offset(-20, 90),
+            visible: _fabExpanded,
+            onTap: () {
+              setState(() => _fabExpanded = false);
+              _showAddDialog(context, ownerUid);
+            },
+          ),
           FloatingActionButton(
             heroTag: 'subphases-fab',
             backgroundColor: _accentYellow,
@@ -420,6 +414,45 @@ class _SubphasesPageState extends State<SubphasesPage> {
             child: Icon(_fabExpanded ? Icons.close : Icons.add),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _FannedFabOption extends StatelessWidget {
+  const _FannedFabOption({
+    required this.label,
+    required this.icon,
+    required this.offset,
+    required this.visible,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final Offset offset;
+  final bool visible;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      right: visible ? offset.dx : 0,
+      bottom: visible ? offset.dy : 0,
+      child: IgnorePointer(
+        ignoring: !visible,
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 180),
+          opacity: visible ? 1 : 0,
+          curve: Curves.easeOutCubic,
+          child: _FabOptionButton(
+            label: label,
+            icon: icon,
+            onTap: onTap,
+          ),
+        ),
       ),
     );
   }
@@ -438,33 +471,51 @@ class _FabOptionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.75),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: Colors.white, size: 18),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.2,
-                ),
+    final labelStyle = Theme.of(context)
+        .textTheme
+        .labelSmall
+        ?.copyWith(color: Colors.white, fontWeight: FontWeight.w600);
+
+    return SizedBox(
+      width: 140,
+      height: 110,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: -35,
+            bottom: 60,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.85),
+                borderRadius: BorderRadius.circular(6),
               ),
-            ],
+              child: Text(
+                label,
+                textAlign: TextAlign.left,
+                style: labelStyle ?? const TextStyle(color: Colors.white),
+              ),
+            ),
           ),
-        ),
+          Positioned(
+            left: 0,
+            bottom: 0,
+            child: SizedBox(
+              width: 60,
+              height: 60,
+              child: FloatingActionButton(
+                heroTag: 'subphase-option-' + label,
+                backgroundColor: _accentYellow,
+                foregroundColor: Colors.black,
+                shape: const CircleBorder(),
+                elevation: 4,
+                onPressed: onTap,
+                child: Icon(icon, size: 26),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

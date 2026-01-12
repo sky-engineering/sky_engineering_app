@@ -420,12 +420,8 @@ class _ProjectTaskCard extends StatelessWidget {
     final visible = tasks.take(3).toList();
     final remaining = tasks.length - visible.length;
     Widget buildRow(ExternalTask task) {
-      final assignee = task.assigneeName.trim();
-      final parts = <String>['External', task.title.trim()];
-      if (assignee.isNotEmpty) {
-        parts.add(assignee);
-      }
-      final line = parts.join(' - ');
+      final title = task.title.trim();
+      final line = ['External', title, task.displayAssigneeLabel].join(' - ');
       return InkWell(
         onTap: () => _toggleExternalStar(context, task),
         child: Padding(

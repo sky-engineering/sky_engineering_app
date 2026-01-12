@@ -913,7 +913,8 @@ class _OverviewExternalTaskTileState extends State<_OverviewExternalTaskTile> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final assignee = widget.task.assigneeName.trim();
+    final hasAssignee = widget.task.hasAssignedTeamMember;
+    final assigneeLabel = widget.task.displayAssigneeLabel;
     final projectNumber = widget.project.projectNumber?.trim() ?? '';
     final projectName = widget.project.name.trim();
     final projectLabel = projectNumber.isNotEmpty && projectName.isNotEmpty
@@ -930,11 +931,18 @@ class _OverviewExternalTaskTileState extends State<_OverviewExternalTaskTile> {
           ? theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.75)
           : defaultTitle.color,
     );
-    final subStyle = theme.textTheme.bodySmall?.copyWith(
+    final baseSubStyle = theme.textTheme.bodySmall?.copyWith(
       color: _isDone
           ? theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.65)
           : theme.textTheme.bodySmall?.color,
     );
+    final subStyle = baseSubStyle;
+    final assigneeStyle = hasAssignee
+        ? baseSubStyle
+        : baseSubStyle?.copyWith(
+            fontStyle: FontStyle.italic,
+            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.75),
+          );
     final cardColor = _isDone
         ? theme.colorScheme.surfaceContainerHighest
         : theme.colorScheme.surface;
@@ -1020,11 +1028,10 @@ class _OverviewExternalTaskTileState extends State<_OverviewExternalTaskTile> {
                         overflow: TextOverflow.ellipsis,
                         style: titleStyle,
                       ),
-                      if (assignee.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(assignee, style: subStyle),
-                        ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(assigneeLabel, style: assigneeStyle),
+                      ),
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(projectLabel, style: subStyle),
