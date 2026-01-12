@@ -107,6 +107,7 @@ class Project {
   final String? projectNumber;
   final String? folderName;
   final String? taskOverviewComment;
+  final String? schedulingNotes;
   final String? bigPictureLane;
 
   final DateTime? createdAt;
@@ -149,6 +150,7 @@ class Project {
     this.projectNumber,
     this.folderName,
     this.taskOverviewComment,
+    this.schedulingNotes,
     this.bigPictureLane,
     this.createdAt,
     this.updatedAt,
@@ -241,6 +243,7 @@ class Project {
       projectNumber: readStringOrNull(data, 'projectNumber'),
       folderName: readStringOrNull(data, 'folderName'),
       taskOverviewComment: readStringOrNull(data, 'taskOverviewComment'),
+      schedulingNotes: readStringOrNull(data, 'schedulingNotes'),
       bigPictureLane: _normalizeBigPictureLane(
         readStringOrNull(data, 'bigPictureLane'),
       ),
@@ -295,6 +298,8 @@ class Project {
         'folderName': folderName,
       if (taskOverviewComment != null && taskOverviewComment!.isNotEmpty)
         'taskOverviewComment': taskOverviewComment,
+      if (schedulingNotes != null && schedulingNotes!.isNotEmpty)
+        'schedulingNotes': schedulingNotes,
       if (bigPictureLane != null) 'bigPictureLane': bigPictureLane,
 
       if (selectedSubphases != null)
@@ -336,6 +341,7 @@ class Project {
     String? projectNumber,
     String? folderName,
     String? taskOverviewComment,
+    String? schedulingNotes,
     String? bigPictureLane,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -372,6 +378,7 @@ class Project {
       projectNumber: projectNumber ?? this.projectNumber,
       folderName: folderName ?? this.folderName,
       taskOverviewComment: taskOverviewComment ?? this.taskOverviewComment,
+      schedulingNotes: schedulingNotes ?? this.schedulingNotes,
       bigPictureLane: bigPictureLane ?? this.bigPictureLane,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

@@ -21,246 +21,21 @@ Future<void> showTaskEditDialog(
 }) async {
   final titleCtl = TextEditingController(text: task.title);
   final notesCtl = TextEditingController(text: task.description ?? '');
+  var subtasksText = _formatSubtasksField(task.subtasks);
   String? selectedCode =
       (task.taskCode != null && task.taskCode!.trim().isNotEmpty)
-      ? task.taskCode!.trim()
-      : null;
+          ? task.taskCode!.trim()
+          : null;
   String taskStatus = _kTaskStatuses.contains(task.taskStatus)
       ? task.taskStatus
       : 'In Progress';
   final repo = TaskRepository();
   final formKey = GlobalKey<FormState>();
-  var currentSubtasks = List<SubtaskItem>.from(task.subtasks);
-
   await showDialog<void>(
     context: context,
     builder: (dialogContext) {
       return StatefulBuilder(
         builder: (context, setState) {
-          Future<void> handleAddSubtask() async {
-            final initialSubtasks = List<SubtaskItem>.from(currentSubtasks);
-            final editable = <_EditableSubtaskEntry>[
-              if (initialSubtasks.isEmpty)
-                _EditableSubtaskEntry(SubtaskItem.create(title: ''))
-              else
-                ...initialSubtasks.map(_EditableSubtaskEntry.fromItem),
-            ];
-
-            List<Map<String, Object?>> normalizedSnapshot() {
-              final result = <Map<String, Object?>>[];
-              for (final entry in editable) {
-                final title = entry.controller.text.trim();
-                if (title.isEmpty) continue;
-                result.add({
-                  'id': entry.item.id,
-                  'title': title,
-                  'isDone': entry.item.isDone,
-                });
-              }
-              return result;
-            }
-
-            final initialSnapshot = normalizedSnapshot();
-
-            if (editable.isEmpty) {
-              editable.add(
-                _EditableSubtaskEntry(SubtaskItem.create(title: '')),
-              );
-            }
-
-            final updated = await showDialog<List<SubtaskItem>>(
-              context: context,
-              builder: (innerContext) {
-                return StatefulBuilder(
-                  builder: (innerContext, innerSetState) {
-                    final subtaskFormKey = GlobalKey<FormState>();
-
-                    Future<bool> confirmDiscard() async {
-                      final currentSnapshot = normalizedSnapshot();
-                      final hasChanges =
-                          currentSnapshot.length != initialSnapshot.length ||
-                          currentSnapshot.asMap().entries.any((entry) {
-                            final index = entry.key;
-                            final current = entry.value;
-                            if (index >= initialSnapshot.length) return true;
-                            final initial = initialSnapshot[index];
-                            return current['id'] != initial['id'] ||
-                                current['title'] != initial['title'] ||
-                                current['isDone'] != initial['isDone'];
-                          });
-                      if (!hasChanges) {
-                        return true;
-                      }
-                      final discard = await confirmDialog(
-                        innerContext,
-                        'Discard subtask changes?',
-                      );
-                      return discard;
-                    }
-
-                    void removeAt(int index) {
-                      innerSetState(() {
-                        if (editable.length == 1) {
-                          editable[index].controller.clear();
-                        } else {
-                          final removed = editable.removeAt(index);
-                          removed.dispose();
-                        }
-                      });
-                    }
-
-                    void onReorder(int oldIndex, int newIndex) {
-                      innerSetState(() {
-                        if (newIndex > oldIndex) {
-                          newIndex -= 1;
-                        }
-                        final entry = editable.removeAt(oldIndex);
-                        editable.insert(newIndex, entry);
-                      });
-                    }
-
-                    final listHeight = ((editable.length * 72.0).clamp(
-                      180.0,
-                      360.0,
-                    )).toDouble();
-
-                    return PopScope(
-                      canPop: false,
-                      onPopInvokedWithResult: (didPop, __) async {
-                        if (didPop) return;
-                        final navigator = Navigator.of(innerContext);
-                        if (await confirmDiscard()) {
-                          navigator.pop();
-                        }
-                      },
-                      child: AlertDialog(
-                        title: const Text('Add/Edit Subtasks'),
-                        content: Form(
-                          key: subtaskFormKey,
-                          child: SizedBox(
-                            width: 520,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                SizedBox(
-                                  height: listHeight,
-                                  child: ReorderableListView.builder(
-                                    itemCount: editable.length,
-                                    buildDefaultDragHandles: false,
-                                    itemBuilder: (context, index) {
-                                      final entry = editable[index];
-                                      return ListTile(
-                                        key: ValueKey(
-                                          'editable-${entry.item.id}',
-                                        ),
-                                        leading: ReorderableDragStartListener(
-                                          index: index,
-                                          child: const Icon(Icons.drag_handle),
-                                        ),
-                                        title: TextFormField(
-                                          controller: entry.controller,
-                                          decoration: const InputDecoration(
-                                            labelText: 'Subtask',
-                                          ),
-                                          validator: (value) {
-                                            if ((value ?? '').trim().isEmpty) {
-                                              return 'Enter a title or remove the row';
-                                            }
-                                            return null;
-                                          },
-                                        ),
-                                        trailing: IconButton(
-                                          tooltip: 'Remove',
-                                          onPressed: () => removeAt(index),
-                                          icon: const Icon(
-                                            Icons.delete_outline,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                    onReorder: onReorder,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: TextButton.icon(
-                                    onPressed: () {
-                                      innerSetState(() {
-                                        editable.add(
-                                          _EditableSubtaskEntry(
-                                            SubtaskItem.create(title: ''),
-                                          ),
-                                        );
-                                      });
-                                    },
-                                    icon: const Icon(Icons.add),
-                                    label: const Text('Add subtask'),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () async {
-                              final navigator = Navigator.of(innerContext);
-                              if (!await confirmDiscard()) {
-                                return;
-                              }
-                              navigator.pop();
-                            },
-                            child: const Text('Cancel'),
-                          ),
-                          FilledButton(
-                            onPressed: () {
-                              final trimmed = <SubtaskItem>[];
-                              for (final entry in editable) {
-                                final title = entry.controller.text.trim();
-                                if (title.isEmpty) continue;
-                                trimmed.add(entry.item.copyWith(title: title));
-                              }
-
-                              if (trimmed.isEmpty) {
-                                Navigator.of(innerContext).pop(trimmed);
-                                return;
-                              }
-
-                              if (!(subtaskFormKey.currentState?.validate() ??
-                                  false)) {
-                                return;
-                              }
-
-                              Navigator.of(innerContext).pop(trimmed);
-                            },
-                            child: const Text('Save'),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-            );
-
-            for (final entry in editable) {
-              entry.dispose();
-            }
-
-            if (updated == null || !context.mounted) {
-              return;
-            }
-
-            setState(() {
-              currentSubtasks = updated;
-            });
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Saved ${updated.length} subtask(s).')),
-            );
-          }
-
           return AlertDialog(
             title: Text('Task: ${task.title}'),
             content: Form(
@@ -275,6 +50,19 @@ Future<void> showTaskEditDialog(
                       appTextField('Title', titleCtl, required: true),
                       const SizedBox(height: 10),
                       appTextField('Notes', notesCtl),
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        initialValue: subtasksText,
+                        maxLines: 3,
+                        enabled: canEdit,
+                        onChanged:
+                            canEdit ? (value) => subtasksText = value : null,
+                        decoration: const InputDecoration(
+                          labelText: 'Subtasks (comma separated)',
+                          hintText: 'Survey, permits, final walk',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String?>(
                         // ignore: deprecated_member_use
@@ -343,8 +131,8 @@ Future<void> showTaskEditDialog(
                             .toList(),
                         onChanged: canEdit
                             ? (value) => setState(
-                                () => taskStatus = value ?? taskStatus,
-                              )
+                                  () => taskStatus = value ?? taskStatus,
+                                )
                             : null,
                         decoration: const InputDecoration(
                           labelText: 'Task Status',
@@ -362,15 +150,6 @@ Future<void> showTaskEditDialog(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (canEdit)
-                    Row(
-                      children: [
-                        FilledButton.tonal(
-                          onPressed: handleAddSubtask,
-                          child: const Text('Add/Edit Subtasks'),
-                        ),
-                      ],
-                    ),
                   if (canEdit) const SizedBox(height: 12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
@@ -427,6 +206,12 @@ Future<void> showTaskEditDialog(
                             final navigator = Navigator.of(context);
                             final messenger = ScaffoldMessenger.of(context);
                             try {
+                              final updatedSubtasks = canEdit
+                                  ? _parseSubtasksField(
+                                      subtasksText,
+                                      task.subtasks,
+                                    )
+                                  : task.subtasks;
                               await repo.update(task.id, {
                                 'title': titleCtl.text.trim(),
                                 'description': notesCtl.text.trim().isEmpty
@@ -434,7 +219,7 @@ Future<void> showTaskEditDialog(
                                     : notesCtl.text.trim(),
                                 'taskCode': selectedCode,
                                 'taskStatus': taskStatus,
-                                'subtasks': currentSubtasks,
+                                'subtasks': updatedSubtasks,
                                 'status': _legacyStatusFromNew(taskStatus),
                               });
                               if (navigator.mounted) {
@@ -467,6 +252,34 @@ Future<void> showTaskEditDialog(
   );
 }
 
+String _formatSubtasksField(List<SubtaskItem> subtasks) {
+  return subtasks
+      .map((s) => s.title.trim())
+      .where((title) => title.isNotEmpty)
+      .join(', ');
+}
+
+List<SubtaskItem> _parseSubtasksField(
+  String raw,
+  List<SubtaskItem> existing,
+) {
+  final tokens = raw
+      .split(RegExp(r'[\n,]'))
+      .map((part) => part.trim())
+      .where((part) => part.isNotEmpty)
+      .toList();
+
+  final result = <SubtaskItem>[];
+  for (var i = 0; i < tokens.length; i++) {
+    if (i < existing.length) {
+      result.add(existing[i].copyWith(title: tokens[i]));
+    } else {
+      result.add(SubtaskItem.create(title: tokens[i]));
+    }
+  }
+  return result;
+}
+
 String _legacyStatusFromNew(String taskStatus) {
   switch (taskStatus) {
     case 'In Progress':
@@ -478,21 +291,5 @@ String _legacyStatusFromNew(String taskStatus) {
     case 'Pending':
     default:
       return 'Open';
-  }
-}
-
-class _EditableSubtaskEntry {
-  _EditableSubtaskEntry(this.item)
-    : controller = TextEditingController(text: item.title);
-
-  factory _EditableSubtaskEntry.fromItem(SubtaskItem item) {
-    return _EditableSubtaskEntry(item);
-  }
-
-  final SubtaskItem item;
-  final TextEditingController controller;
-
-  void dispose() {
-    controller.dispose();
   }
 }

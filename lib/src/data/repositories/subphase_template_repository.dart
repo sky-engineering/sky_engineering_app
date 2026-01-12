@@ -38,24 +38,22 @@ class SubphaseTemplateRepository {
     String ownerUid,
     String subphaseCode,
   ) async {
-    // Try new schema key
-    var qs = await _col
-        .where('ownerUid', isEqualTo: ownerUid)
-        .where('subphaseCode', isEqualTo: subphaseCode)
-        .limit(1)
-        .get();
+    Future<QuerySnapshot<Map<String, dynamic>>> runQuery(String codeField) {
+      Query<Map<String, dynamic>> query = _col;
+      if (ownerUid.isNotEmpty) {
+        query = query.where('ownerUid', isEqualTo: ownerUid);
+      }
+      return query.where(codeField, isEqualTo: subphaseCode).limit(1).get();
+    }
 
+    // Try new schema key first.
+    var qs = await runQuery('subphaseCode');
     if (qs.docs.isNotEmpty) {
       return SubphaseTemplate.fromDoc(qs.docs.first);
     }
 
-    // Fallback to legacy key
-    qs = await _col
-        .where('ownerUid', isEqualTo: ownerUid)
-        .where('taskCode', isEqualTo: subphaseCode)
-        .limit(1)
-        .get();
-
+    // Fallback to legacy key.
+    qs = await runQuery('taskCode');
     if (qs.docs.isNotEmpty) {
       return SubphaseTemplate.fromDoc(qs.docs.first);
     }

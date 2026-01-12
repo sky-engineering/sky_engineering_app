@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../data/models/external_task.dart';
-import '../data/repositories/external_task_repository.dart';
 import 'package:intl/intl.dart';
 
 import '../data/models/project.dart';
@@ -13,6 +12,7 @@ import '../data/repositories/invoice_repository.dart';
 
 import '../widgets/form_helpers.dart';
 import '../widgets/tasks_by_subphase_section.dart';
+import '../widgets/external_tasks_section.dart';
 import '../widgets/invoices_section.dart' as inv;
 import '../dialogs/edit_project_dialog.dart';
 import '../utils/phone_utils.dart';
@@ -42,18 +42,6 @@ const List<_TeamFieldConfig> _teamFieldConfigs = [
   _TeamFieldConfig(key: 'teamOther', label: 'Other'),
 ];
 
-class _AssigneeOption {
-  const _AssigneeOption({
-    required this.key,
-    required this.label,
-    required this.value,
-  });
-
-  final String key;
-  final String label;
-  final String value;
-}
-
 Map<String, String?> _teamValueMap(Project project) => {
       'teamOwner': project.teamOwner,
       'teamArchitect': project.teamArchitect,
@@ -69,17 +57,18 @@ Map<String, String?> _teamValueMap(Project project) => {
       'teamOther': project.teamOther,
     };
 
-List<_AssigneeOption> _buildExternalAssigneeOptions(
+List<ExternalAssigneeOption> _buildExternalAssigneeOptions(
   Project project,
   User? owner,
 ) {
-  final options = <_AssigneeOption>[];
+  final options = <ExternalAssigneeOption>[];
 
   if (owner != null) {
     final email = owner.email?.trim();
     final label =
         (email != null && email.isNotEmpty) ? 'Owner ($email)' : 'Owner';
-    options.add(_AssigneeOption(key: 'owner', label: label, value: label));
+    options
+        .add(ExternalAssigneeOption(key: 'owner', label: label, value: label));
   }
 
   final values = _teamValueMap(project);
@@ -90,7 +79,7 @@ List<_AssigneeOption> _buildExternalAssigneeOptions(
       if (trimmed.isNotEmpty) {
         final label = '${field.label} - $trimmed';
         options.add(
-          _AssigneeOption(key: field.key, label: label, value: label),
+          ExternalAssigneeOption(key: field.key, label: label, value: label),
         );
       }
     }
@@ -152,34 +141,39 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
     _projectSub = _projectRepo.streamById(projectId).listen(
       (proj) {
         if (!mounted) return;
+        final offset = _scrollCtrl.hasClients ? _scrollCtrl.offset : null;
         setState(() {
           _project = proj;
           _isLoading = false;
           _notFound = proj == null;
         });
+        _restoreScrollOffset(offset);
       },
       onError: (_) {
         if (!mounted) return;
+        final offset = _scrollCtrl.hasClients ? _scrollCtrl.offset : null;
         setState(() {
           _isLoading = false;
           _notFound = true;
         });
+        _restoreScrollOffset(offset);
       },
     );
   }
 
   void _setUnpaidOnly(bool v) {
-    final offset = _scrollCtrl.hasClients ? _scrollCtrl.offset : 0.0;
+    final offset = _scrollCtrl.hasClients ? _scrollCtrl.offset : null;
     setState(() => _unpaidOnly = v);
+    _restoreScrollOffset(offset);
+  }
+
+  void _restoreScrollOffset(double? offset) {
+    if (offset == null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollCtrl.hasClients) return;
-      var target = offset;
       final maxScroll = _scrollCtrl.position.maxScrollExtent;
-      if (target > maxScroll) {
-        target = maxScroll;
-      } else if (target < 0) {
-        target = 0;
-      }
+      final clamped = offset.clamp(0.0, maxScroll) as num;
+      final target = clamped.toDouble();
       if ((_scrollCtrl.offset - target).abs() > 0.5) {
         _scrollCtrl.jumpTo(target);
       }
@@ -216,10 +210,12 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
             ? project.ownerUid!
             : (me?.uid ?? '');
     final phoneDisplay = formatPhoneForDisplay(project.contactPhone);
+    final schedulingNotes = project.schedulingNotes?.trim() ?? '';
     final hasTeamEntries = _teamValueMap(project).values.any((value) {
       if (value == null) return false;
       return value.trim().isNotEmpty;
     });
+    final showSchedulingCard = canManageProject || schedulingNotes.isNotEmpty;
     final showTeamCard = canManageProject || hasTeamEntries;
     final externalTasks = project.externalTasks ?? const <ExternalTask>[];
 
@@ -265,9 +261,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                   children: [
                     Text(
                       'Contact',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 4),
                     if ((project.contactName ?? '').isNotEmpty)
@@ -275,6 +269,61 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                     if ((project.contactEmail ?? '').isNotEmpty)
                       Text(project.contactEmail!),
                     if (phoneDisplay.isNotEmpty) Text(phoneDisplay),
+                  ],
+                ),
+              ),
+            ),
+          if (showSchedulingCard)
+            Card(
+              color: _subtleSurfaceTint(context),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Scheduling Notes',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                        ),
+                        if (canManageProject)
+                          IconButton(
+                            tooltip: 'Edit scheduling notes',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 32,
+                              minHeight: 32,
+                            ),
+                            icon: Icon(
+                              Icons.edit_outlined,
+                              size: 18,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                            onPressed: () => _showSchedulingNotesDialog(
+                              context,
+                              project,
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    if (schedulingNotes.isNotEmpty)
+                      Text(
+                        schedulingNotes,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      )
+                    else
+                      Text(
+                        canManageProject
+                            ? 'No scheduling notes yet.'
+                            : 'No scheduling notes to display.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                   ],
                 ),
               ),
@@ -291,7 +340,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
             ownerUidForWrites: editorOwnerUid,
           ),
           const SizedBox(height: 12),
-          _ExternalTasksSection(
+          ExternalTasksSection(
             projectId: project.id,
             canEdit: canManageProject,
             assigneeOptions: assigneeOptions,
@@ -339,15 +388,11 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  const Padding(
-                    padding: EdgeInsets.only(left: 4, bottom: 6),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 6),
                     child: Text(
                       'Client Invoices',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                        color: _accentYellow,
-                      ),
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
                   inv.InvoicesSection(
@@ -362,15 +407,11 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                     ownerUidForWrites: editorOwnerUid,
                   ),
                   const SizedBox(height: 10),
-                  const Padding(
-                    padding: EdgeInsets.only(left: 4, bottom: 6),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 6),
                     child: Text(
                       'Vendor Invoices',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                        color: _accentYellow,
-                      ),
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
                   inv.InvoicesSection(
@@ -467,9 +508,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
     }
 
     final hasEntries = entries.isNotEmpty;
-    final headerStyle = theme.textTheme.titleMedium?.copyWith(
-      fontWeight: FontWeight.w600,
-    );
+    final headerStyle = theme.textTheme.titleLarge;
     final labelStyle = theme.textTheme.bodyMedium?.copyWith(
       fontWeight: FontWeight.w600,
     );
@@ -581,7 +620,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
     return Card(
       color: _subtleSurfaceTint(context),
       child: ListTile(
-        title: Text(k, style: const TextStyle(fontWeight: FontWeight.w600)),
+        title: Text(k, style: Theme.of(context).textTheme.titleLarge),
         subtitle: Text(v),
       ),
     );
@@ -663,603 +702,6 @@ class _EditProjectTeamDialogState extends State<_EditProjectTeamDialog> {
           child: const Text('Save'),
         ),
       ],
-    );
-  }
-}
-
-class _ExternalTasksSection extends StatelessWidget {
-  const _ExternalTasksSection({
-    required this.projectId,
-    required this.canEdit,
-    required this.assigneeOptions,
-    required this.tasks,
-  });
-
-  final String projectId;
-  final bool canEdit;
-  final List<_AssigneeOption> assigneeOptions;
-  final List<ExternalTask> tasks;
-  static const _fabColor = Color(0xFFF1C400);
-
-  static final ExternalTaskRepository _repo = ExternalTaskRepository();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final bool enableEditing = canEdit && assigneeOptions.isNotEmpty;
-    final items = [...tasks];
-    items.sort((a, b) {
-      if (a.isDone != b.isDone) {
-        return (a.isDone ? 1 : 0) - (b.isDone ? 1 : 0);
-      }
-      final ad = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final bd = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-      return ad.compareTo(bd);
-    });
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('External Tasks', style: theme.textTheme.titleLarge),
-            const SizedBox(height: 12),
-            if (items.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  enableEditing
-                      ? 'No external tasks yet.'
-                      : 'No external tasks to display.',
-                  style: theme.textTheme.bodyMedium,
-                ),
-              )
-            else
-              ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: items.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 4),
-                itemBuilder: (context, index) {
-                  final task = items[index];
-                  return _ExternalTaskTile(
-                    key: ValueKey('external-${task.id}'),
-                    dismissibleKey: ValueKey('external-${task.id}'),
-                    task: task,
-                    canEdit: enableEditing,
-                    onSetDone: (value) => _setDone(context, task, value),
-                    onDelete: () => _delete(context, task),
-                    onToggleStar: () => _toggleStar(context, task),
-                    onEdit: () => _showEditExternalTaskDialog(context, task),
-                  );
-                },
-              ),
-            if (enableEditing) ...[
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerRight,
-                child: FloatingActionButton(
-                  heroTag: null,
-                  onPressed: () => _showAddExternalTaskDialog(context),
-                  backgroundColor: _fabColor,
-                  foregroundColor: Colors.black,
-                  child: const Icon(Icons.add),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<bool> _setDone(
-    BuildContext context,
-    ExternalTask task,
-    bool value,
-  ) async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await _repo.update(projectId, task.id, {'isDone': value});
-      return true;
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Failed to update task: $e')),
-      );
-      return false;
-    }
-  }
-
-  Future<bool> _delete(BuildContext context, ExternalTask task) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) {
-            return AlertDialog(
-              title: const Text('Delete task'),
-              content: const Text('Delete this external task?'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(true),
-                  child: const Text('Delete'),
-                ),
-              ],
-            );
-          },
-        ) ??
-        false;
-    if (!confirmed) return false;
-
-    try {
-      await _repo.delete(projectId, task.id);
-      return true;
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Failed to delete task: $e')),
-      );
-      return false;
-    }
-  }
-
-  Future<void> _toggleStar(BuildContext context, ExternalTask task) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final next = !task.isStarred;
-    try {
-      await _repo.setStarred(
-        projectId,
-        task.id,
-        next,
-        starredOrder: next ? DateTime.now().millisecondsSinceEpoch : null,
-      );
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Failed to update task: $e')),
-      );
-    }
-  }
-
-  Future<void> _showAddExternalTaskDialog(BuildContext context) async {
-    final titleController = TextEditingController();
-    var selectedKey =
-        assigneeOptions.isNotEmpty ? assigneeOptions.first.key : null;
-
-    final messenger = ScaffoldMessenger.of(context);
-    final result = await showDialog<Map<String, String>>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (dialogContext, setState) {
-            return AlertDialog(
-              title: const Text('Add External Task'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: double.infinity,
-                    child: TextField(
-                      controller: titleController,
-                      autofocus: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Task description',
-                      ),
-                      textInputAction: TextInputAction.done,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: DropdownButtonFormField<String>(
-                      initialValue: selectedKey,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Assigned to',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: assigneeOptions
-                          .map(
-                            (option) => DropdownMenuItem<String>(
-                              value: option.key,
-                              child: Text(option.label),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) => setState(() => selectedKey = value),
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () {
-                    final title = titleController.text.trim();
-                    if (title.isEmpty || selectedKey == null) {
-                      ScaffoldMessenger.of(dialogContext).showSnackBar(
-                        const SnackBar(
-                          content: Text('Provide a title and assignee.'),
-                        ),
-                      );
-                      return;
-                    }
-                    Navigator.of(
-                      dialogContext,
-                    ).pop({'title': title, 'assigneeKey': selectedKey!});
-                  },
-                  child: const Text('Add'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    if (result == null) return;
-
-    final option = assigneeOptions.firstWhere(
-      (item) => item.key == result['assigneeKey'],
-      orElse: () => assigneeOptions.first,
-    );
-
-    try {
-      await _repo.add(
-        projectId,
-        ExternalTask(
-          id: '',
-          projectId: projectId,
-          title: result['title'] ?? '',
-          assigneeKey: option.key,
-          assigneeName: option.value,
-          isDone: false,
-          createdAt: DateTime.now(),
-          updatedAt: DateTime.now(),
-        ),
-      );
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Failed to add task: $e')));
-    }
-  }
-
-  Future<void> _showEditExternalTaskDialog(
-    BuildContext context,
-    ExternalTask task,
-  ) async {
-    final titleController = TextEditingController(text: task.title);
-    var selectedKey =
-        assigneeOptions.any((option) => option.key == task.assigneeKey)
-            ? task.assigneeKey
-            : (assigneeOptions.isNotEmpty ? assigneeOptions.first.key : null);
-
-    final messenger = ScaffoldMessenger.of(context);
-    final result = await showDialog<Map<String, String>>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (dialogContext, setState) {
-            return AlertDialog(
-              title: const Text('Edit External Task'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: double.infinity,
-                    child: TextField(
-                      controller: titleController,
-                      autofocus: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Task description',
-                      ),
-                      textInputAction: TextInputAction.done,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: DropdownButtonFormField<String>(
-                      initialValue: selectedKey,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Assigned to',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: assigneeOptions
-                          .map(
-                            (option) => DropdownMenuItem<String>(
-                              value: option.key,
-                              child: Text(option.label),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) => setState(() => selectedKey = value),
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () {
-                    final title = titleController.text.trim();
-                    if (title.isEmpty || selectedKey == null) {
-                      ScaffoldMessenger.of(dialogContext).showSnackBar(
-                        const SnackBar(
-                          content: Text('Provide a title and assignee.'),
-                        ),
-                      );
-                      return;
-                    }
-                    Navigator.of(dialogContext)
-                        .pop({'title': title, 'assigneeKey': selectedKey!});
-                  },
-                  child: const Text('Save'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    if (result == null) return;
-
-    final option = assigneeOptions.firstWhere(
-      (item) => item.key == result['assigneeKey'],
-      orElse: () => assigneeOptions.first,
-    );
-
-    try {
-      await _repo.update(projectId, task.id, {
-        'title': result['title'],
-        'assigneeKey': option.key,
-        'assigneeName': option.value,
-      });
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Failed to update task: $e')),
-      );
-    }
-  }
-}
-
-class _ExternalTaskTile extends StatefulWidget {
-  const _ExternalTaskTile({
-    super.key,
-    required this.dismissibleKey,
-    required this.task,
-    required this.canEdit,
-    required this.onSetDone,
-    required this.onDelete,
-    required this.onToggleStar,
-    required this.onEdit,
-  });
-
-  final Key dismissibleKey;
-  final ExternalTask task;
-  final bool canEdit;
-  final Future<bool> Function(bool) onSetDone;
-  final Future<bool> Function() onDelete;
-  final VoidCallback onToggleStar;
-  final VoidCallback onEdit;
-
-  @override
-  State<_ExternalTaskTile> createState() => _ExternalTaskTileState();
-}
-
-class _ExternalTaskTileState extends State<_ExternalTaskTile> {
-  static const double _completeThreshold = 0.6;
-  static const double _deleteThreshold = 0.85;
-
-  double _dragProgress = 0.0;
-  DismissDirection? _currentDirection;
-
-  bool get _completeArmed =>
-      _currentDirection == DismissDirection.startToEnd &&
-      _dragProgress >= _completeThreshold;
-
-  bool get _deleteArmed =>
-      _currentDirection == DismissDirection.endToStart &&
-      _dragProgress >= _deleteThreshold;
-
-  void _resetDrag() {
-    if (_dragProgress != 0.0 || _currentDirection != null) {
-      setState(() {
-        _dragProgress = 0.0;
-        _currentDirection = null;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final task = widget.task;
-    final small = theme.textTheme.bodySmall?.copyWith(fontSize: 12);
-    final hasAssignee = task.hasAssignedTeamMember;
-    final assigneeLabel = task.displayAssigneeLabel;
-    final baseAssigneeStyle = small ?? const TextStyle(fontSize: 12);
-    final fallbackColor =
-        theme.textTheme.bodySmall?.color?.withValues(alpha: 0.75) ??
-            Colors.black54;
-    final assigneeStyle = hasAssignee
-        ? baseAssigneeStyle
-        : baseAssigneeStyle.copyWith(
-            fontStyle: FontStyle.italic,
-            color: fallbackColor,
-          );
-    final baseColor = theme.textTheme.bodyMedium?.color;
-    final doneColor = baseColor?.withValues(alpha: 0.6);
-    const baseTitleStyle = TextStyle(fontWeight: FontWeight.w600, fontSize: 13);
-    final titleStyle = task.isDone
-        ? baseTitleStyle.copyWith(
-            decoration: TextDecoration.lineThrough,
-            color: doneColor,
-          )
-        : baseTitleStyle;
-    final filledStarColor = theme.colorScheme.secondary;
-    final hollowStarColor = theme.colorScheme.onSurfaceVariant;
-
-    return Dismissible(
-      key: widget.dismissibleKey,
-      direction:
-          widget.canEdit ? DismissDirection.horizontal : DismissDirection.none,
-      dismissThresholds: const {
-        DismissDirection.startToEnd: _completeThreshold,
-        DismissDirection.endToStart: _deleteThreshold,
-      },
-      background: _buildSwipeBackground(context, isStartToEnd: true),
-      secondaryBackground: _buildSwipeBackground(context, isStartToEnd: false),
-      onUpdate: (details) {
-        final progress = details.progress.abs().clamp(0.0, 1.0);
-        final direction = (details.direction == DismissDirection.startToEnd ||
-                details.direction == DismissDirection.endToStart)
-            ? details.direction
-            : null;
-        if (_dragProgress != progress || _currentDirection != direction) {
-          setState(() {
-            _dragProgress = progress;
-            _currentDirection = direction;
-          });
-        }
-      },
-      confirmDismiss: (direction) async {
-        if (!widget.canEdit) return false;
-        final progress = _dragProgress;
-        _resetDrag();
-        if (direction == DismissDirection.startToEnd &&
-            progress >= _completeThreshold) {
-          await widget.onSetDone(!task.isDone);
-          return false;
-        }
-        if (direction == DismissDirection.endToStart &&
-            progress >= _deleteThreshold) {
-          return await widget.onDelete();
-        }
-        return false;
-      },
-      child: Material(
-        color: task.isDone
-            ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: widget.canEdit ? widget.onEdit : null,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: IconButton(
-                    padding: EdgeInsets.zero,
-                    constraints:
-                        const BoxConstraints(minWidth: 32, minHeight: 32),
-                    iconSize: 20,
-                    splashRadius: 18,
-                    tooltip: task.isStarred ? 'Unstar task' : 'Star task',
-                    onPressed: widget.canEdit ? widget.onToggleStar : null,
-                    icon: Icon(
-                      task.isStarred ? Icons.star : Icons.star_border,
-                      color: task.isStarred ? filledStarColor : hollowStarColor,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        task.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: titleStyle,
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          assigneeLabel,
-                          style: assigneeStyle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSwipeBackground(
-    BuildContext context, {
-    required bool isStartToEnd,
-  }) {
-    final theme = Theme.of(context);
-    final isActive = _currentDirection ==
-        (isStartToEnd
-            ? DismissDirection.startToEnd
-            : DismissDirection.endToStart);
-    final progress = isActive ? _dragProgress : 0.0;
-
-    final baseColor = theme.colorScheme.surfaceContainerHighest.withValues(
-      alpha: 0.2,
-    );
-    final accentColor = isStartToEnd
-        ? theme.colorScheme.primary.withValues(alpha: 0.25)
-        : theme.colorScheme.error.withValues(alpha: 0.25);
-
-    final isArmed = isStartToEnd ? _completeArmed : _deleteArmed;
-    final bgColor = isActive && isArmed ? accentColor : baseColor;
-
-    final iconOpacity = isStartToEnd
-        ? (progress / _completeThreshold).clamp(0.0, 1.0)
-        : progress <= _completeThreshold
-            ? 0.0
-            : ((progress - _completeThreshold) /
-                    (_deleteThreshold - _completeThreshold))
-                .clamp(0.0, 1.0);
-
-    final alignment =
-        isStartToEnd ? Alignment.centerLeft : Alignment.centerRight;
-    final rowAlignment =
-        isStartToEnd ? MainAxisAlignment.start : MainAxisAlignment.end;
-
-    final icon = isStartToEnd ? Icons.check_circle : Icons.delete_forever;
-    final iconColor =
-        isStartToEnd ? theme.colorScheme.primary : theme.colorScheme.error;
-
-    return Container(
-      alignment: alignment,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      color: bgColor,
-      child: Row(
-        mainAxisAlignment: rowAlignment,
-        children: [
-          Opacity(
-            opacity: iconOpacity,
-            child: Icon(icon, color: iconColor),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -1407,4 +849,47 @@ class _FinancialSummaryCard extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<void> _showSchedulingNotesDialog(
+  BuildContext context,
+  Project project,
+) async {
+  var notesText = project.schedulingNotes ?? '';
+  final repo = ProjectRepository();
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
+      return AlertDialog(
+        title: const Text('Scheduling Notes'),
+        content: TextFormField(
+          initialValue: notesText,
+          maxLines: 5,
+          onChanged: (value) => notesText = value,
+          decoration: const InputDecoration(
+            hintText: 'Enter scheduling notes',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final text = notesText.trim();
+              await repo.update(project.id, {
+                'schedulingNotes': text.isEmpty ? null : text,
+              });
+              if (dialogContext.mounted) {
+                Navigator.pop(dialogContext);
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      );
+    },
+  );
 }

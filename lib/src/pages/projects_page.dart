@@ -948,6 +948,7 @@ Future<void> _showAddDialog(BuildContext context) async {
                     id: '_',
                     name: nameCtl.text.trim(),
                     clientName: clientName,
+                    teamOwner: clientName,
                     status: projectStatus,
                     contractAmount: amt,
                     contactName: nullIfEmpty(contactNameCtl.text),

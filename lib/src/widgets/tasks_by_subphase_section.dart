@@ -362,7 +362,7 @@ class _SubphaseBox extends StatelessWidget {
                 ),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
-                  vertical: 6,
+                  vertical: 2,
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -443,7 +443,7 @@ class _SubphaseBox extends StatelessWidget {
           const SizedBox(height: 4),
           if (tasks.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 2),
               child: ListView.separated(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
@@ -1182,7 +1182,9 @@ Future<_DefaultsPreviewData?> _loadDefaultsPreview(
 }) async {
   final messenger = ScaffoldMessenger.maybeOf(context);
   final me = FirebaseAuth.instance.currentUser;
-  final resolvedOwnerUid = ownerUid.isNotEmpty ? ownerUid : me?.uid ?? '';
+  final trimmedOwner = ownerUid.trim();
+  final authOwner = (me?.uid ?? '').trim();
+  final resolvedOwnerUid = trimmedOwner.isNotEmpty ? trimmedOwner : authOwner;
   if (resolvedOwnerUid.isEmpty) {
     messenger?.showSnackBar(
       const SnackBar(content: Text('You must be signed in.')),
@@ -1190,10 +1192,35 @@ Future<_DefaultsPreviewData?> _loadDefaultsPreview(
     return null;
   }
 
+  List<String> buildOwnerFallbackOrder() {
+    final seen = <String>{};
+    final order = <String>[];
+
+    void addCandidate(String value, {bool allowEmpty = false}) {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty && !allowEmpty) return;
+      if (!seen.add(trimmed)) return;
+      order.add(trimmed);
+    }
+
+    addCandidate(trimmedOwner);
+    addCandidate(authOwner);
+    addCandidate('', allowEmpty: true);
+    return order;
+  }
+
   try {
     final templatesRepo = SubphaseTemplateRepository();
-    final tpl =
-        await templatesRepo.getByOwnerAndCode(resolvedOwnerUid, subphaseCode);
+    SubphaseTemplate? tpl;
+    String? matchedOwner;
+    for (final candidate in buildOwnerFallbackOrder()) {
+      tpl = await templatesRepo.getByOwnerAndCode(candidate, subphaseCode);
+      if (tpl != null) {
+        matchedOwner = candidate;
+        break;
+      }
+    }
+
     if (tpl == null) {
       messenger?.showSnackBar(
         const SnackBar(
@@ -1214,7 +1241,10 @@ Future<_DefaultsPreviewData?> _loadDefaultsPreview(
       return null;
     }
 
-    return _DefaultsPreviewData(ownerUid: resolvedOwnerUid, template: tpl);
+    return _DefaultsPreviewData(
+      ownerUid: matchedOwner ?? resolvedOwnerUid,
+      template: tpl,
+    );
   } catch (e) {
     messenger?.showSnackBar(
       SnackBar(content: Text('Failed to load defaults: $e')),
@@ -1261,7 +1291,7 @@ Future<_DefaultsSelection?> _showDefaultsPreviewDialog(
                         onTap: onToggle,
                         borderRadius: BorderRadius.circular(6),
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          padding: const EdgeInsets.symmetric(vertical: 2),
                           child: Row(
                             children: [
                               Icon(
@@ -1302,7 +1332,7 @@ Future<_DefaultsSelection?> _showDefaultsPreviewDialog(
                 if (expanded)
                   ...items.map(
                     (item) => Padding(
-                      padding: const EdgeInsets.only(bottom: 4, left: 8),
+                      padding: const EdgeInsets.only(bottom: 2, left: 8),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -1417,8 +1447,12 @@ Future<void> _insertDefaultsForSubphase(
   List<String>? selectedExternal,
 }) async {
   final me = FirebaseAuth.instance.currentUser;
-  final resolvedOwnerUid = resolvedOwnerUidOverride ??
-      (ownerUid.isNotEmpty ? ownerUid : me?.uid ?? '');
+  final overrideUid = (resolvedOwnerUidOverride ?? '').trim();
+  final fallbackOwnerUid = ownerUid.trim();
+  final authUid = (me?.uid ?? '').trim();
+  final resolvedOwnerUid = overrideUid.isNotEmpty
+      ? overrideUid
+      : (fallbackOwnerUid.isNotEmpty ? fallbackOwnerUid : authUid);
   if (resolvedOwnerUid.isEmpty) {
     ScaffoldMessenger.of(
       context,
@@ -1431,7 +1465,7 @@ Future<void> _insertDefaultsForSubphase(
 
   try {
     LoadingOverlay.show(context, message: 'Adding tasks...');
-    final tpl =
+    final tpl = templateOverride ??
         await templatesRepo.getByOwnerAndCode(resolvedOwnerUid, subphaseCode);
     if (tpl == null) {
       messenger?.showSnackBar(

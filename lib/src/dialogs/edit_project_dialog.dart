@@ -18,11 +18,12 @@ Future<void> showEditProjectDialog(BuildContext context, Project p) async {
     text: formatPhoneForDisplay(p.contactPhone),
   );
   final contactEmailCtl = TextEditingController(text: p.contactEmail ?? '');
+  final schedulingNotesCtl =
+      TextEditingController(text: p.schedulingNotes ?? '');
   final formKey = GlobalKey<FormState>();
   final repo = ProjectRepository();
-  String projectStatus = kProjectStatuses.contains(p.status)
-      ? p.status
-      : 'In Progress';
+  String projectStatus =
+      kProjectStatuses.contains(p.status) ? p.status : 'In Progress';
 
   double? parseMoney(String value) {
     final trimmed = value.trim();
@@ -105,6 +106,13 @@ Future<void> showEditProjectDialog(BuildContext context, Project p) async {
                         ),
                       ),
                       const SizedBox(height: 16),
+                      appTextField(
+                        'Scheduling Notes',
+                        schedulingNotesCtl,
+                        hint: 'Optional scheduling info',
+                        maxLines: 3,
+                      ),
+                      const SizedBox(height: 16),
                       Text(
                         'Client Contact',
                         style: Theme.of(innerContext).textTheme.titleMedium,
@@ -169,6 +177,9 @@ Future<void> showEditProjectDialog(BuildContext context, Project p) async {
                                 ),
                                 'contactEmail': nullIfEmpty(
                                   contactEmailCtl.text,
+                                ),
+                                'schedulingNotes': nullIfEmpty(
+                                  schedulingNotesCtl.text,
                                 ),
                                 'status': projectStatus,
                                 'isArchived': projectStatus == 'Archive',
