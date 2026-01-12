@@ -151,11 +151,11 @@ class _SubphasesPageState extends State<SubphasesPage> {
     final scopedAccess = UserAccessScope.maybeOf(context);
     final fallbackAccess = UserAccessController.instance.current;
     final isAdmin = scopedAccess?.isAdmin ?? fallbackAccess?.isAdmin ?? false;
-    const ownerUid = '';
+    const selectedOwner = '';
     final canEdit = isAdmin;
     const ownerChoices = <String>[];
     final ownerTextColor = Theme.of(context).colorScheme.onPrimary;
-    const editableOwnerUid = ownerUid;
+    const editableOwnerUid = selectedOwner;
 
     return Scaffold(
       appBar: AppBar(
@@ -167,7 +167,7 @@ class _SubphasesPageState extends State<SubphasesPage> {
               child: PopupMenuButton<String>(
                 tooltip: 'Select template owner',
                 onSelected: (value) {
-                  if (value == ownerUid) return;
+                  if (value == selectedOwner) return;
                   setState(() {
                     _ownerOverride = value;
                     _phaseOrder = null;
@@ -194,7 +194,7 @@ class _SubphasesPageState extends State<SubphasesPage> {
                       const Icon(Icons.manage_accounts_outlined),
                     const SizedBox(width: 6),
                     Text(
-                      _ownerLabel(ownerUid, me.uid),
+                      _ownerLabel(selectedOwner, me.uid),
                       style: TextStyle(color: ownerTextColor),
                     ),
                     Icon(Icons.arrow_drop_down, color: ownerTextColor),
@@ -208,7 +208,7 @@ class _SubphasesPageState extends State<SubphasesPage> {
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: canEdit ? _buildFab(editableOwnerUid) : null,
       body: FutureBuilder<List<PhaseTemplate>>(
-        future: _phaseRepo.getAllForUser(ownerUid),
+        future: _phaseRepo.getAllForUser(selectedOwner),
         builder: (context, phaseSnap) {
           final phases = (phaseSnap.data ?? const <PhaseTemplate>[]);
           // Fast lookup: phaseCode -> label (e.g., "02 - Preliminary Design")
@@ -218,7 +218,7 @@ class _SubphasesPageState extends State<SubphasesPage> {
           };
 
           return StreamBuilder<List<SubphaseTemplate>>(
-            stream: _subRepo.streamForUser(ownerUid),
+            stream: _subRepo.streamForUser(selectedOwner),
             builder: (context, snap) {
               if (snap.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
@@ -436,30 +436,64 @@ class _FabOptionButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
 
+  String _formatLabel(String value) {
+    if (value.isEmpty) return value;
+    return value[0].toUpperCase() + value.substring(1);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(40),
         onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.75),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+        child: SizedBox(
+          width: 96,
+          height: 72,
+          child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              Icon(icon, color: Colors.white, size: 18),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.2,
+              Positioned(
+                top: 0,
+                left: 0,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.85),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    _formatLabel(label),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: const BoxDecoration(
+                    color: _accentYellow,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: 6,
+                        offset: Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(icon, color: Colors.black),
                 ),
               ),
             ],
@@ -485,38 +519,25 @@ class _RowTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 28,
-      child: ListTile(
-        dense: true,
-        visualDensity: const VisualDensity(vertical: -4),
-        minVerticalPadding: 0,
-        contentPadding: EdgeInsets.zero,
-        leading: SizedBox(
-          width: 48,
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Container(
-              width: 48,
-              height: 24,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                border:
-                    Border.all(color: Theme.of(context).colorScheme.outline),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(t.subphaseCode),
-            ),
-          ),
+    return ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      leading: Container(
+        width: 48,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          border: Border.all(color: Theme.of(context).colorScheme.outline),
+          borderRadius: BorderRadius.circular(8),
         ),
-        title: Text(
-          t.subphaseName,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.w500),
-        ),
-        onTap: canEdit ? () => _showEditDialog(context, t, meUid) : null,
+        child: Text(t.subphaseCode),
       ),
+      title: Text(
+        t.subphaseName,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontWeight: FontWeight.w500),
+      ),
+      onTap: canEdit ? () => _showEditDialog(context, t, meUid) : null,
     );
   }
 }
@@ -560,8 +581,8 @@ Future<void> _showAddDialog(BuildContext context, String ownerUid) async {
 
   List<String> parseDefaults(String raw) {
     final set = <String>{};
-    for (final entry in raw.split(RegExp('[\n,]'))) {
-      final s = entry.trim();
+    for (final line in raw.split('\n')) {
+      final s = line.trim();
       if (s.isNotEmpty) {
         set.add(s);
       }
@@ -609,12 +630,12 @@ Future<void> _showAddDialog(BuildContext context, String ownerUid) async {
                       TextFormField(
                         controller: defaultsCtl,
                         decoration: const InputDecoration(
-                          labelText: 'Default tasks (comma separated)',
+                          labelText: 'Default tasks (one per line)',
                           hintText:
                               'e.g.\nKickoff meeting\nCollect survey\nPrelim grading',
                           border: OutlineInputBorder(),
                         ),
-                        maxLines: 3,
+                        maxLines: 6,
                       ),
                     ],
                   ),
@@ -885,8 +906,8 @@ Future<void> _showEditDialog(
 
   List<String> parseDefaults(String raw) {
     final set = <String>{};
-    for (final entry in raw.split(RegExp('[\n,]'))) {
-      final s = entry.trim();
+    for (final line in raw.split('\n')) {
+      final s = line.trim();
       if (s.isNotEmpty) {
         set.add(s);
       }
@@ -933,10 +954,10 @@ Future<void> _showEditDialog(
                       TextFormField(
                         controller: defaultsCtl,
                         decoration: const InputDecoration(
-                          labelText: 'Default tasks (comma separated)',
+                          labelText: 'Default tasks (one per line)',
                           border: OutlineInputBorder(),
                         ),
-                        maxLines: 3,
+                        maxLines: 8,
                       ),
                     ],
                   ),

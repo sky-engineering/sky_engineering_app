@@ -15,6 +15,13 @@ const kProjectStatuses = <String>[
 
 const kSubphaseStatuses = <String>['In Progress', 'On Hold', 'Completed'];
 
+const kBigPictureLaneValues = <String>[
+  'revenue',
+  'finishingTouches',
+  'strongProposals',
+  'inactive',
+];
+
 /// Each project stores the selected subphases + per-project status.
 class SelectedSubphase {
   final String code; // 4-digit, e.g. "0201"
@@ -100,6 +107,7 @@ class Project {
   final String? projectNumber;
   final String? folderName;
   final String? taskOverviewComment;
+  final String? bigPictureLane;
 
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -141,6 +149,7 @@ class Project {
     this.projectNumber,
     this.folderName,
     this.taskOverviewComment,
+    this.bigPictureLane,
     this.createdAt,
     this.updatedAt,
     this.selectedSubphases,
@@ -158,6 +167,14 @@ class Project {
       return status;
     }
     return archivedFlag ? 'Archive' : 'In Progress';
+  }
+
+  static String? _normalizeBigPictureLane(String? raw) {
+    final trimmed = raw?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    return kBigPictureLaneValues.contains(trimmed) ? trimmed : null;
   }
 
   // -------- factory from Firestore --------
@@ -224,6 +241,9 @@ class Project {
       projectNumber: readStringOrNull(data, 'projectNumber'),
       folderName: readStringOrNull(data, 'folderName'),
       taskOverviewComment: readStringOrNull(data, 'taskOverviewComment'),
+      bigPictureLane: _normalizeBigPictureLane(
+        readStringOrNull(data, 'bigPictureLane'),
+      ),
       createdAt: readDateTime(data, 'createdAt'),
       updatedAt: readDateTime(data, 'updatedAt'),
       selectedSubphases: selectedSubphases,
@@ -275,6 +295,7 @@ class Project {
         'folderName': folderName,
       if (taskOverviewComment != null && taskOverviewComment!.isNotEmpty)
         'taskOverviewComment': taskOverviewComment,
+      if (bigPictureLane != null) 'bigPictureLane': bigPictureLane,
 
       if (selectedSubphases != null)
         'selectedSubphases': selectedSubphases!.map((s) => s.toMap()).toList(),
@@ -315,6 +336,7 @@ class Project {
     String? projectNumber,
     String? folderName,
     String? taskOverviewComment,
+    String? bigPictureLane,
     DateTime? createdAt,
     DateTime? updatedAt,
     List<SelectedSubphase>? selectedSubphases,
@@ -350,6 +372,7 @@ class Project {
       projectNumber: projectNumber ?? this.projectNumber,
       folderName: folderName ?? this.folderName,
       taskOverviewComment: taskOverviewComment ?? this.taskOverviewComment,
+      bigPictureLane: bigPictureLane ?? this.bigPictureLane,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       selectedSubphases: selectedSubphases ?? this.selectedSubphases,

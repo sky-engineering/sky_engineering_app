@@ -123,29 +123,31 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                           iconSize: 20,
                           onPressed: () async {
                             final messenger = ScaffoldMessenger.of(context);
-                            final snap = await FirebaseFirestore.instance
-                                .collection('projects')
-                                .doc(widget.projectId)
-                                .get();
-                            if (!context.mounted) return;
-                            final owner =
-                                (snap.data()?['ownerUid'] as String?) ?? '';
-                            if (owner.isEmpty) {
+                            final primaryOwner =
+                                widget.ownerUidForWrites.trim();
+                            final authOwner = FirebaseAuth
+                                    .instance.currentUser?.uid
+                                    ?.trim() ??
+                                '';
+                            final resolvedOwner = primaryOwner.isNotEmpty
+                                ? primaryOwner
+                                : authOwner;
+                            if (resolvedOwner.isEmpty) {
                               messenger.showSnackBar(
                                 const SnackBar(
-                                  content: Text('Project has no ownerUid.'),
+                                  content: Text(
+                                    'Could not determine an owner for this project.',
+                                  ),
                                 ),
                               );
                               return;
                             }
                             if (!context.mounted) return;
-                            final fallbackOwnerUid =
-                                FirebaseAuth.instance.currentUser?.uid ?? '';
                             await showSelectSubphasesDialog(
                               context,
                               projectId: widget.projectId,
-                              ownerUid: owner,
-                              fallbackOwnerUid: fallbackOwnerUid,
+                              ownerUid: resolvedOwner,
+                              fallbackOwnerUid: authOwner,
                             );
                           },
                           icon: const Icon(Icons.tune),
@@ -210,7 +212,7 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                   ownerUidForWrites: widget.ownerUidForWrites,
                   subphase: s,
                   currentStatus: status,
-                  onChangeStatus: (newStatus) async {
+                  onChangeStatus: (newStatus, newName) async {
                     if (!widget.canEdit) {
                       return _SubphaseBox._viewOnlySnack(context);
                     }
@@ -221,6 +223,7 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                           const <SelectedSubphase>[],
                       code: s.code,
                       newStatus: newStatus,
+                      newName: newName,
                     );
                   },
                 );
@@ -286,7 +289,7 @@ class _SubphaseBox extends StatelessWidget {
 
   final SelectedSubphase? subphase; // null for Other
   final String? currentStatus; // null for Other
-  final ValueChanged<String>? onChangeStatus;
+  final Future<void> Function(String status, String name)? onChangeStatus;
 
   const _SubphaseBox({
     required this.projectId,
@@ -323,7 +326,7 @@ class _SubphaseBox extends StatelessWidget {
             color: Colors.transparent,
             child: InkWell(
               onTap: hasSubphase
-                  ? () {
+                  ? () async {
                       if (!canEdit) {
                         _viewOnlySnack(context);
                         return;
@@ -332,11 +335,16 @@ class _SubphaseBox extends StatelessWidget {
                           _kSubphaseStatuses.contains(statusLabel)
                               ? statusLabel
                               : 'In Progress';
-                      _showSubphaseStatusDialog(
+                      await _showSubphaseStatusDialog(
                         context,
                         code: subphase!.code,
                         current: dialogStatus,
-                        onPicked: (s) => onChangeStatus?.call(s),
+                        initialName: subphase!.name,
+                        onPicked: (status, name) async {
+                          if (onChangeStatus != null) {
+                            await onChangeStatus!(status, name);
+                          }
+                        },
                       );
                     }
                   : null,
@@ -527,26 +535,43 @@ class _SubphaseBox extends StatelessWidget {
     BuildContext context, {
     required String code,
     required String current,
-    required ValueChanged<String> onPicked,
+    required String initialName,
+    required Future<void> Function(String status, String name) onPicked,
   }) async {
     var selected = current;
+    var editedName = initialName;
     await showDialog<void>(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: Text('Subphase $code Status'),
-              content: DropdownButtonFormField<String>(
-                initialValue: selected,
-                items: _kSubphaseStatuses
-                    .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                    .toList(),
-                onChanged: (v) => setState(() => selected = v ?? selected),
-                decoration: const InputDecoration(
-                  labelText: 'Status',
-                  border: OutlineInputBorder(),
-                ),
+              title: Text('Subphase $code'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextFormField(
+                    initialValue: editedName,
+                    onChanged: (value) => editedName = value,
+                    decoration: const InputDecoration(
+                      labelText: 'Display name',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selected,
+                    items: _kSubphaseStatuses
+                        .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                        .toList(),
+                    onChanged: (v) => setState(() => selected = v ?? selected),
+                    decoration: const InputDecoration(
+                      labelText: 'Status',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
               ),
               actions: [
                 TextButton(
@@ -554,9 +579,14 @@ class _SubphaseBox extends StatelessWidget {
                   child: const Text('Cancel'),
                 ),
                 FilledButton(
-                  onPressed: () {
-                    onPicked(selected);
-                    Navigator.pop(context);
+                  onPressed: () async {
+                    final trimmed = editedName.trim();
+                    final resolvedName =
+                        trimmed.isNotEmpty ? trimmed : initialName;
+                    await onPicked(selected, resolvedName);
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                    }
                   },
                   child: const Text('Save'),
                 ),
@@ -1201,13 +1231,15 @@ Future<void> _updateSubphaseStatus(
   required List<SelectedSubphase> selected,
   required String code,
   required String newStatus,
+  String? newName,
 }) async {
   final repo = ProjectRepository();
-  final updated = selected
-      .map(
-        (s) =>
-            s.code == code ? s.copyWith(status: newStatus).toMap() : s.toMap(),
-      )
-      .toList();
+  final updated = selected.map((s) {
+    if (s.code != code) return s.toMap();
+    final trimmedName = newName?.trim();
+    final resolvedName =
+        (trimmedName != null && trimmedName.isNotEmpty) ? trimmedName : s.name;
+    return s.copyWith(status: newStatus, name: resolvedName).toMap();
+  }).toList();
   await repo.update(projectId, {'selectedSubphases': updated});
 }

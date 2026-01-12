@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'template_checklists_page.dart';
+import 'big_picture_page.dart';
 import 'proposals_page.dart';
 import 'subphases_page.dart';
 import '../dialogs/city_inspect_links_dialog.dart';
@@ -73,6 +74,12 @@ class DashboardPage extends StatelessWidget {
                 Navigator.of(
                   context,
                 ).push(MaterialPageRoute(builder: (_) => ProposalsPage()));
+              }),
+              const SizedBox(height: 16),
+              linkButton('Big Picture', () {
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => BigPicturePage()));
               }),
               const SizedBox(height: 16),
               linkButton('Checklists', () {
