@@ -1,34 +1,6 @@
 *** Begin Patch
-*** Update File: lib/src/data/models/external_task.dart
+*** Update File: lib/src/widgets/tasks_by_subphase_section.dart
 @@
- class ExternalTask {
-   final String id;
-   final String projectId;
-   final String title;
-   final String assigneeKey;
-   final String assigneeName;
-@@
- }
- 
- DateTime? _readTimestamp(dynamic value) {
-   if (value is Timestamp) return value.toDate();
-   if (value is int) {
-     return DateTime.fromMillisecondsSinceEpoch(value);
-   }
-   if (value is num) {
-     return DateTime.fromMillisecondsSinceEpoch(value.toInt());
-   }
-   return null;
- }
-+
-+extension ExternalTaskDisplay on ExternalTask {
-+  static const String _fallbackAssigneeLabel = 'No Team Member Assigned';
-+
-+  String get displayAssigneeLabel {
-+    final trimmed = assigneeName.trim();
-+    return trimmed.isEmpty ? _fallbackAssigneeLabel : trimmed;
-+  }
-+
-+  bool get hasAssignedTeamMember => assigneeName.trim().isNotEmpty;
-+}
+-                              const SizedBox(width: 6),
+-                              Icon(icon, size: 16, color: Colors.black54),
 *** End Patch

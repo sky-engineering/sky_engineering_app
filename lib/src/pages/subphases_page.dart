@@ -151,11 +151,12 @@ class _SubphasesPageState extends State<SubphasesPage> {
     final scopedAccess = UserAccessScope.maybeOf(context);
     final fallbackAccess = UserAccessController.instance.current;
     final isAdmin = scopedAccess?.isAdmin ?? fallbackAccess?.isAdmin ?? false;
-    const ownerUid = '';
+    final ownerUid = (_ownerOverride ?? '').trim();
     final canEdit = isAdmin;
-    const ownerChoices = <String>[];
+    final ownerChoices = isAdmin ? _ownerChoices(me.uid) : const <String>[];
     final ownerTextColor = Theme.of(context).colorScheme.onPrimary;
-    const editableOwnerUid = ownerUid;
+    final editableOwnerUid =
+        ownerUid.isNotEmpty ? ownerUid : (me.uid.isNotEmpty ? me.uid : '');
 
     return Scaffold(
       appBar: AppBar(
@@ -505,7 +506,7 @@ class _FabOptionButton extends StatelessWidget {
               width: 60,
               height: 60,
               child: FloatingActionButton(
-                heroTag: 'subphase-option-' + label,
+                heroTag: 'subphase-option-$label',
                 backgroundColor: _accentYellow,
                 foregroundColor: Colors.black,
                 shape: const CircleBorder(),

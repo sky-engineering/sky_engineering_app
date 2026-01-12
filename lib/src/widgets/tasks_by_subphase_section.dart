@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../data/models/project.dart';
 import '../data/models/task.dart';
+import '../data/models/subphase_template.dart';
 import '../data/models/external_task.dart';
 import '../data/repositories/task_repository.dart';
 import '../data/repositories/project_repository.dart';
@@ -127,10 +128,9 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                             final messenger = ScaffoldMessenger.of(context);
                             final primaryOwner =
                                 widget.ownerUidForWrites.trim();
-                            final authOwner = FirebaseAuth
-                                    .instance.currentUser?.uid
-                                    ?.trim() ??
-                                '';
+                            final authOwner =
+                                (FirebaseAuth.instance.currentUser?.uid ?? '')
+                                    .trim();
                             final resolvedOwner = primaryOwner.isNotEmpty
                                 ? primaryOwner
                                 : authOwner;
@@ -398,16 +398,35 @@ class _SubphaseBox extends StatelessWidget {
                         alignment: Alignment.topCenter,
                         onPressed: canEdit
                             ? () async {
-                                final confirmed = await confirmDialog(
+                                final preview = await _loadDefaultsPreview(
                                   context,
-                                  'Add default tasks for "${subphase!.name}"? This also adds any default external tasks.',
+                                  ownerUid: ownerUidForWrites,
+                                  subphaseCode: subphase!.code,
                                 );
-                                if (!confirmed) return;
+                                if (preview == null || !context.mounted) {
+                                  return;
+                                }
+                                final selection =
+                                    await _showDefaultsPreviewDialog(
+                                  context,
+                                  subphase!.name,
+                                  preview.template,
+                                );
+                                if (!context.mounted) return;
+                                if (selection == null ||
+                                    (selection.internal.isEmpty &&
+                                        selection.external.isEmpty)) {
+                                  return;
+                                }
                                 await _insertDefaultsForSubphase(
                                   context,
                                   projectId,
                                   subphase!.code,
                                   ownerUidForWrites,
+                                  templateOverride: preview.template,
+                                  resolvedOwnerUidOverride: preview.ownerUid,
+                                  selectedInternal: selection.internal,
+                                  selectedExternal: selection.external,
                                 );
                               }
                             : () => _viewOnlySnack(context),
@@ -570,7 +589,7 @@ class _SubphaseBox extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: selected,
+                    initialValue: selected,
                     items: _kSubphaseStatuses
                         .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                         .toList(),
@@ -1132,6 +1151,258 @@ Future<void> _showAddTaskDialog(
   );
 }
 
+class _DefaultsPreviewData {
+  const _DefaultsPreviewData({
+    required this.ownerUid,
+    required this.template,
+  });
+
+  final String ownerUid;
+  final SubphaseTemplate template;
+}
+
+class _DefaultsSelection {
+  const _DefaultsSelection({
+    required this.internal,
+    required this.external,
+  });
+
+  final List<String> internal;
+  final List<String> external;
+}
+
+List<String> _cleanDefaults(List<String> values) {
+  return values.map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
+}
+
+Future<_DefaultsPreviewData?> _loadDefaultsPreview(
+  BuildContext context, {
+  required String ownerUid,
+  required String subphaseCode,
+}) async {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final me = FirebaseAuth.instance.currentUser;
+  final resolvedOwnerUid = ownerUid.isNotEmpty ? ownerUid : me?.uid ?? '';
+  if (resolvedOwnerUid.isEmpty) {
+    messenger?.showSnackBar(
+      const SnackBar(content: Text('You must be signed in.')),
+    );
+    return null;
+  }
+
+  try {
+    final templatesRepo = SubphaseTemplateRepository();
+    final tpl =
+        await templatesRepo.getByOwnerAndCode(resolvedOwnerUid, subphaseCode);
+    if (tpl == null) {
+      messenger?.showSnackBar(
+        const SnackBar(
+          content: Text('No default tasks defined for this subphase.'),
+        ),
+      );
+      return null;
+    }
+
+    final hasAny = _cleanDefaults(tpl.defaultTasks).isNotEmpty ||
+        _cleanDefaults(tpl.defaultExternalTasks).isNotEmpty;
+    if (!hasAny) {
+      messenger?.showSnackBar(
+        const SnackBar(
+          content: Text('No default tasks defined for this subphase.'),
+        ),
+      );
+      return null;
+    }
+
+    return _DefaultsPreviewData(ownerUid: resolvedOwnerUid, template: tpl);
+  } catch (e) {
+    messenger?.showSnackBar(
+      SnackBar(content: Text('Failed to load defaults: $e')),
+    );
+    return null;
+  }
+}
+
+Future<_DefaultsSelection?> _showDefaultsPreviewDialog(
+  BuildContext context,
+  String subphaseName,
+  SubphaseTemplate template,
+) async {
+  final internal = _cleanDefaults(template.defaultTasks);
+  final external = _cleanDefaults(template.defaultExternalTasks);
+  final selectedInternal = internal.toSet();
+  final selectedExternal = external.toSet();
+  var expandInternal = true;
+  var expandExternal = true;
+
+  return showDialog<_DefaultsSelection>(
+    context: context,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          Widget buildSection(
+            String heading,
+            List<String> items,
+            Set<String> selected,
+            bool expanded,
+            VoidCallback onToggle,
+          ) {
+            if (items.isEmpty) return const SizedBox.shrink();
+            final allSelected =
+                selected.length == items.length && items.isNotEmpty;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: onToggle,
+                        borderRadius: BorderRadius.circular(6),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            children: [
+                              Icon(
+                                expanded
+                                    ? Icons.expand_less
+                                    : Icons.expand_more,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                heading,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelMedium
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        setState(() {
+                          if (allSelected) {
+                            selected.clear();
+                          } else {
+                            selected
+                              ..clear()
+                              ..addAll(items);
+                          }
+                        });
+                      },
+                      child: Text(allSelected ? 'Deselect All' : 'Select All'),
+                    ),
+                  ],
+                ),
+                if (expanded)
+                  ...items.map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4, left: 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: Transform.scale(
+                              scale: 0.85,
+                              child: Checkbox(
+                                value: selected.contains(item),
+                                onChanged: (checked) {
+                                  setState(() {
+                                    if (checked ?? false) {
+                                      selected.add(item);
+                                    } else {
+                                      selected.remove(item);
+                                    }
+                                  });
+                                },
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              item,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(height: 1.2),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          }
+
+          return AlertDialog(
+            title: const Text('Default Tasks'),
+            content: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420, maxHeight: 360),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    buildSection(
+                      'Tasks',
+                      internal,
+                      selectedInternal,
+                      expandInternal,
+                      () => setState(() => expandInternal = !expandInternal),
+                    ),
+                    if (internal.isNotEmpty && external.isNotEmpty)
+                      const SizedBox(height: 10),
+                    buildSection(
+                      'External tasks',
+                      external,
+                      selectedExternal,
+                      expandExternal,
+                      () => setState(() => expandExternal = !expandExternal),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(
+                    context,
+                    _DefaultsSelection(
+                      internal: internal
+                          .where((item) => selectedInternal.contains(item))
+                          .toList(),
+                      external: external
+                          .where((item) => selectedExternal.contains(item))
+                          .toList(),
+                    ),
+                  );
+                },
+                child: const Text('Add Tasks'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
+
 /// Insert default tasks for a given subphase code into the current project.
 /// De-duplicates by title (case-insensitive) among tasks that already
 /// exist for the same `projectId` + `taskCode`.
@@ -1139,10 +1410,15 @@ Future<void> _insertDefaultsForSubphase(
   BuildContext context,
   String projectId,
   String subphaseCode,
-  String ownerUid,
-) async {
+  String ownerUid, {
+  SubphaseTemplate? templateOverride,
+  String? resolvedOwnerUidOverride,
+  List<String>? selectedInternal,
+  List<String>? selectedExternal,
+}) async {
   final me = FirebaseAuth.instance.currentUser;
-  final resolvedOwnerUid = ownerUid.isNotEmpty ? ownerUid : me?.uid ?? '';
+  final resolvedOwnerUid = resolvedOwnerUidOverride ??
+      (ownerUid.isNotEmpty ? ownerUid : me?.uid ?? '');
   if (resolvedOwnerUid.isEmpty) {
     ScaffoldMessenger.of(
       context,
@@ -1152,10 +1428,6 @@ Future<void> _insertDefaultsForSubphase(
 
   final templatesRepo = SubphaseTemplateRepository();
   final messenger = ScaffoldMessenger.maybeOf(context);
-
-  List<String> _clean(List<String> values) {
-    return values.map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
-  }
 
   try {
     LoadingOverlay.show(context, message: 'Adding tasks...');
@@ -1170,8 +1442,12 @@ Future<void> _insertDefaultsForSubphase(
       return;
     }
 
-    final cleanedDefaults = _clean(tpl.defaultTasks);
-    final cleanedExternalDefaults = _clean(tpl.defaultExternalTasks);
+    final cleanedDefaults = List<String>.from(
+      selectedInternal ?? _cleanDefaults(tpl.defaultTasks),
+    );
+    final cleanedExternalDefaults = List<String>.from(
+      selectedExternal ?? _cleanDefaults(tpl.defaultExternalTasks),
+    );
 
     if (cleanedDefaults.isEmpty && cleanedExternalDefaults.isEmpty) {
       messenger?.showSnackBar(

@@ -358,7 +358,30 @@ class _InvoicesPageState extends State<InvoicesPage> {
     if (rawQuery.isEmpty) {
       return true;
     }
-    final query = rawQuery.toLowerCase();
+
+    final tokens = rawQuery
+        .split(',')
+        .map((token) => token.trim())
+        .where((token) => token.isNotEmpty)
+        .toList();
+
+    if (tokens.isEmpty) {
+      tokens.add(rawQuery);
+    }
+
+    for (final token in tokens) {
+      if (_matchesSingleQuery(invoice, token.toLowerCase())) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  bool _matchesSingleQuery(Invoice invoice, String query) {
+    if (query.isEmpty) {
+      return true;
+    }
 
     final fields = <String>[
       invoice.invoiceNumber,

@@ -70,16 +70,16 @@ class DashboardPage extends StatelessWidget {
               const SizedBox(height: 8),
               Center(child: Text(_user?.email ?? '(no email)')),
               const SizedBox(height: 28),
+              linkButton('Workload', () {
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => BigPicturePage()));
+              }),
+              const SizedBox(height: 16),
               linkButton('Proposals', () {
                 Navigator.of(
                   context,
                 ).push(MaterialPageRoute(builder: (_) => ProposalsPage()));
-              }),
-              const SizedBox(height: 16),
-              linkButton('Big Picture', () {
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => BigPicturePage()));
               }),
               const SizedBox(height: 16),
               linkButton('Checklists', () {

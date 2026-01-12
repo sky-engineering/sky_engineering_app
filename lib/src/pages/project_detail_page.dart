@@ -246,6 +246,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
       bottomNavigationBar: const ShellBottomNav(popCurrentRoute: true),
       body: ListView(
         controller: _scrollCtrl,
+        physics: const ClampingScrollPhysics(),
         padding: const EdgeInsets.all(16),
         children: [
           _kv(context, 'Client', project.clientName),
@@ -965,7 +966,7 @@ class _ExternalTasksSection extends StatelessWidget {
                   SizedBox(
                     width: double.infinity,
                     child: DropdownButtonFormField<String>(
-                      value: selectedKey,
+                      initialValue: selectedKey,
                       isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Assigned to',
