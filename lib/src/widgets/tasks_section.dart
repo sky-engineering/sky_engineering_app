@@ -159,6 +159,17 @@ class TasksSection extends StatelessWidget {
   }
 
   static int _taskComparator(TaskItem a, TaskItem b) {
+    final sameCode = (a.taskCode ?? '') == (b.taskCode ?? '');
+    if (sameCode) {
+      final ao = a.projectOrder;
+      final bo = b.projectOrder;
+      if (ao != null || bo != null) {
+        if (ao == null) return 1;
+        if (bo == null) return -1;
+        final cmpOrder = ao.compareTo(bo);
+        if (cmpOrder != 0) return cmpOrder;
+      }
+    }
     final ac = _codeToInt(a.taskCode) ?? _extractTitleCode(a.title);
     final bc = _codeToInt(b.taskCode) ?? _extractTitleCode(b.title);
     if (ac != null && bc != null) return ac.compareTo(bc);

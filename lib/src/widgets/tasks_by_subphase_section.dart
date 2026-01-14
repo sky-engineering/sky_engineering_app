@@ -86,24 +86,10 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
               }
             }
 
-            // Sort each list (dueDate asc, then title)
-            int compareTasks(TaskItem a, TaskItem b) {
-              final ad = a.dueDate, bd = b.dueDate;
-              if (ad != null && bd != null) {
-                final c = ad.compareTo(bd);
-                if (c != 0) return c;
-              } else if (ad == null && bd != null) {
-                return 1;
-              } else if (ad != null && bd == null) {
-                return -1;
-              }
-              return a.title.toLowerCase().compareTo(b.title.toLowerCase());
-            }
-
             for (final list in byCode.values) {
-              list.sort(compareTasks);
+              list.sort(_compareProjectTasks);
             }
-            other.sort(compareTasks);
+            other.sort(_compareProjectTasks);
 
             // Header row: Tasks + (Select Subphases icon) ... clickable yellow text
             final header = Row(
@@ -279,6 +265,30 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
     if (!_isValidCode(code)) return null;
     return code!.trim();
   }
+
+  static int _compareProjectTasks(TaskItem a, TaskItem b) {
+    final sameCode = (a.taskCode ?? '') == (b.taskCode ?? '');
+    if (sameCode) {
+      final ao = a.projectOrder;
+      final bo = b.projectOrder;
+      if (ao != null || bo != null) {
+        if (ao == null) return 1;
+        if (bo == null) return -1;
+        final cmpOrder = ao.compareTo(bo);
+        if (cmpOrder != 0) return cmpOrder;
+      }
+    }
+    final ad = a.dueDate, bd = b.dueDate;
+    if (ad != null && bd != null) {
+      final c = ad.compareTo(bd);
+      if (c != 0) return c;
+    } else if (ad == null && bd != null) {
+      return 1;
+    } else if (ad != null && bd == null) {
+      return -1;
+    }
+    return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+  }
 }
 
 class _SubphaseBox extends StatelessWidget {
@@ -444,91 +454,13 @@ class _SubphaseBox extends StatelessWidget {
           if (tasks.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 0, 8, 2),
-              child: ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: tasks.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 1),
-                itemBuilder: (context, i) {
-                  final t = tasks[i];
-                  return _CompactTaskTile(
-                    task: t,
-                    canEdit: canEdit,
-                    onToggleStar: () async {
-                      if (!canEdit) return _viewOnlySnack(context);
-                      try {
-                        await TaskRepository().setStarred(t, !t.isStarred);
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Could not update star: $e'),
-                            ),
-                          );
-                        }
-                      }
-                    },
-                    onChangeStatus: (newStatus) async {
-                      if (!canEdit) return _viewOnlySnack(context);
-                      await TaskRepository().update(t.id, {
-                        'taskStatus': newStatus,
-                        'status': _legacyFromNew(newStatus), // mirror
-                      });
-                    },
-                    onTap: () => showTaskEditDialog(
-                      context,
-                      t,
-                      canEdit: canEdit,
-                      subphases: allSubphases,
-                    ),
-                    onCompleteSwipe: () async {
-                      if (!canEdit) {
-                        _viewOnlySnack(context);
-                        return false;
-                      }
-                      try {
-                        await TaskRepository().update(t.id, {
-                          'taskStatus': 'Completed',
-                          'status': _legacyFromNew('Completed'),
-                        });
-                        return true;
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Failed to update task: $e'),
-                            ),
-                          );
-                        }
-                        return false;
-                      }
-                    },
-                    onDeleteSwipe: () async {
-                      if (!canEdit) {
-                        _viewOnlySnack(context);
-                        return false;
-                      }
-                      final ok = await confirmDialog(
-                        context,
-                        'Delete this task?',
-                      );
-                      if (!ok) return false;
-                      try {
-                        await TaskRepository().delete(t.id);
-                        return true;
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Failed to delete task: $e'),
-                            ),
-                          );
-                        }
-                        return false;
-                      }
-                    },
-                  );
-                },
+              child: _SubphaseTaskList(
+                tasks: tasks,
+                allSubphases: allSubphases,
+                canEdit: canEdit,
+                onReorder: canEdit
+                    ? (ordered) => _persistTaskOrder(context, ordered)
+                    : null,
               ),
             ),
         ],
@@ -543,6 +475,25 @@ class _SubphaseBox extends StatelessWidget {
             'View-only: only the project owner or an admin can modify tasks.'),
       ),
     );
+  }
+
+  Future<void> _persistTaskOrder(
+    BuildContext context,
+    List<TaskItem> ordered,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ordering = <String, int>{};
+    for (var i = 0; i < ordered.length; i++) {
+      ordering[ordered[i].id] = i;
+    }
+    try {
+      await TaskRepository().reorderProjectTasks(ordering);
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Failed to reorder tasks: $e')),
+      );
+      rethrow;
+    }
   }
 
   static String _legacyFromNew(String taskStatus) {
@@ -624,6 +575,249 @@ class _SubphaseBox extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _SubphaseTaskList extends StatefulWidget {
+  const _SubphaseTaskList({
+    required this.tasks,
+    required this.allSubphases,
+    required this.canEdit,
+    this.onReorder,
+  });
+
+  final List<TaskItem> tasks;
+  final List<SelectedSubphase> allSubphases;
+  final bool canEdit;
+  final Future<void> Function(List<TaskItem> ordered)? onReorder;
+
+  @override
+  State<_SubphaseTaskList> createState() => _SubphaseTaskListState();
+}
+
+class _SubphaseTaskListState extends State<_SubphaseTaskList> {
+  late List<TaskItem> _tasks;
+  bool _pendingReorder = false;
+
+  bool get _reorderEnabled => widget.canEdit && widget.onReorder != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _tasks = List<TaskItem>.from(widget.tasks);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SubphaseTaskList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncWithIncoming(widget.tasks);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_tasks.isEmpty) return const SizedBox.shrink();
+    if (!_reorderEnabled) {
+      return ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: widget.tasks.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 1),
+        itemBuilder: (context, index) {
+          final task = widget.tasks[index];
+          return _buildTile(context, task);
+        },
+      );
+    }
+
+    return ReorderableListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      buildDefaultDragHandles: true,
+      itemCount: _tasks.length,
+      onReorder: _handleReorder,
+      proxyDecorator: (child, index, animation) {
+        return Material(
+          elevation: 6,
+          borderRadius: BorderRadius.circular(12),
+          child: child,
+        );
+      },
+      itemBuilder: (context, index) {
+        final task = _tasks[index];
+        return Column(
+          key: ValueKey('proj-task-${task.id}'),
+          children: [
+            _buildTile(context, task),
+            if (index != _tasks.length - 1) const SizedBox(height: 1),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildTile(BuildContext context, TaskItem task) {
+    return _CompactTaskTile(
+      task: task,
+      canEdit: widget.canEdit,
+      onToggleStar: () async {
+        if (!widget.canEdit) return _SubphaseBox._viewOnlySnack(context);
+        try {
+          await TaskRepository().setStarred(task, !task.isStarred);
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Could not update star: $e')),
+            );
+          }
+        }
+      },
+      onChangeStatus: (newStatus) async {
+        if (!widget.canEdit) return _SubphaseBox._viewOnlySnack(context);
+        await TaskRepository().update(task.id, {
+          'taskStatus': newStatus,
+          'status': _SubphaseBox._legacyFromNew(newStatus),
+        });
+      },
+      onTap: () => showTaskEditDialog(
+        context,
+        task,
+        canEdit: widget.canEdit,
+        subphases: widget.allSubphases,
+      ),
+      onCompleteSwipe: () async {
+        if (!widget.canEdit) {
+          _SubphaseBox._viewOnlySnack(context);
+          return false;
+        }
+        try {
+          await TaskRepository().update(task.id, {
+            'taskStatus': 'Completed',
+            'status': _SubphaseBox._legacyFromNew('Completed'),
+          });
+          return true;
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Failed to update task: $e')),
+            );
+          }
+          return false;
+        }
+      },
+      onDeleteSwipe: () async {
+        if (!widget.canEdit) {
+          _SubphaseBox._viewOnlySnack(context);
+          return false;
+        }
+        final ok = await confirmDialog(
+          context,
+          'Delete this task?',
+        );
+        if (!ok) return false;
+        try {
+          await TaskRepository().delete(task.id);
+          return true;
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Failed to delete task: $e')),
+            );
+          }
+          return false;
+        }
+      },
+    );
+  }
+
+  Future<void> _handleReorder(int oldIndex, int newIndex) async {
+    if (!_reorderEnabled) return;
+    if (newIndex > oldIndex) newIndex -= 1;
+    final previous = List<TaskItem>.from(_tasks);
+    final task = _tasks.removeAt(oldIndex);
+    _tasks.insert(newIndex, task);
+    setState(() {
+      _pendingReorder = true;
+    });
+    try {
+      await widget.onReorder!(List<TaskItem>.unmodifiable(_tasks));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _tasks = previous;
+        _pendingReorder = false;
+      });
+    }
+  }
+
+  void _syncWithIncoming(List<TaskItem> next) {
+    final incomingIds = _ids(next);
+    final localIds = _ids(_tasks);
+
+    final sameSet = _sameIdSet(incomingIds, localIds);
+    if (!sameSet) {
+      setState(() {
+        _tasks = List<TaskItem>.from(next);
+        _pendingReorder = false;
+      });
+      return;
+    }
+
+    final sameOrder = _listsEqual(incomingIds, localIds);
+    if (_pendingReorder) {
+      if (sameOrder) {
+        setState(() {
+          _tasks = List<TaskItem>.from(next);
+          _pendingReorder = false;
+        });
+      }
+      return;
+    }
+
+    if (!sameOrder || _hasDifferentInstances(next, _tasks)) {
+      setState(() {
+        _tasks = List<TaskItem>.from(next);
+      });
+    }
+  }
+
+  static List<String> _ids(List<TaskItem> tasks) =>
+      tasks.map((task) => task.id).toList(growable: false);
+
+  static bool _sameIdSet(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    final seen = <String, int>{};
+    for (final id in a) {
+      seen[id] = (seen[id] ?? 0) + 1;
+    }
+    for (final id in b) {
+      final count = seen[id];
+      if (count == null) return false;
+      if (count == 1) {
+        seen.remove(id);
+      } else {
+        seen[id] = count - 1;
+      }
+    }
+    return seen.isEmpty;
+  }
+
+  static bool _listsEqual(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  static bool _hasDifferentInstances(List<TaskItem> next, List<TaskItem> current) {
+    if (next.length != current.length) return true;
+    for (var i = 0; i < next.length; i++) {
+      if (!identical(next[i], current[i])) {
+        return true;
+      }
+    }
+    return false;
   }
 }
 
@@ -1524,7 +1718,7 @@ Future<void> _insertDefaultsForSubphase(
             ownerUid: resolvedOwnerUid,
             title: title,
             description: null,
-            taskStatus: 'In Progress',
+            taskStatus: 'Pending',
             isStarred: false,
             taskCode: subphaseCode,
             dueDate: null,

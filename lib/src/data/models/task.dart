@@ -31,6 +31,7 @@ class TaskItem {
   final bool isStarred; // star marker in lists
   final String? taskCode; // optional 4-digit code like '0101'
   final int? starredOrder; // manual sort index for starred lists
+  final int? projectOrder; // manual sort order on project detail page
   final List<SubtaskItem> subtasks;
 
   // Meta
@@ -59,6 +60,7 @@ class TaskItem {
     this.taskCode,
     this.starredOrder,
     List<SubtaskItem>? subtasks,
+    this.projectOrder,
 
     // Legacy input (still accepted)
     String? status,
@@ -66,8 +68,8 @@ class TaskItem {
     this.createdAt,
     this.updatedAt,
   }) : taskStatus = taskStatus ?? _fromLegacyStatus(status) ?? 'Pending',
-       isStarred = isStarred ?? false,
-       subtasks = List.unmodifiable(subtasks ?? const []);
+      isStarred = isStarred ?? false,
+      subtasks = List.unmodifiable(subtasks ?? const []);
 
   // ----------------- mapping helpers -----------------
   static String _toLegacyStatus(String taskStatus) {
@@ -121,6 +123,7 @@ class TaskItem {
       isStarred: readBool(data, 'isStarred'),
       taskCode: readStringOrNull(data, 'taskCode'),
       starredOrder: readIntOrNull(data, 'starredOrder'),
+      projectOrder: readIntOrNull(data, 'projectOrder'),
       subtasks: _parseSubtasks(data['subtasks']),
       createdAt: readDateTime(data, 'createdAt'),
       updatedAt: readDateTime(data, 'updatedAt'),
@@ -144,6 +147,7 @@ class TaskItem {
       'isStarred': isStarred,
       'taskCode': taskCode,
       if (starredOrder != null) 'starredOrder': starredOrder,
+      if (projectOrder != null) 'projectOrder': projectOrder,
       'subtasks': subtasks.map((s) => s.toMap()).toList(),
 
       // Legacy mirror
@@ -168,6 +172,7 @@ class TaskItem {
     bool? isStarred,
     String? taskCode,
     int? starredOrder,
+    int? projectOrder,
 
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -188,6 +193,7 @@ class TaskItem {
       isStarred: isStarred ?? this.isStarred,
       taskCode: taskCode ?? this.taskCode,
       starredOrder: starredOrder ?? this.starredOrder,
+      projectOrder: projectOrder ?? this.projectOrder,
       subtasks: subtasks ?? this.subtasks,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

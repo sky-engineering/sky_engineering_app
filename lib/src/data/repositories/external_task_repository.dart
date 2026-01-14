@@ -112,6 +112,47 @@ class ExternalTaskRepository {
     });
   }
 
+  Future<void> reorderTasks(String projectId, List<String> orderedIds) async {
+    if (orderedIds.isEmpty) return;
+    final docRef = _projects.doc(projectId);
+    await FirebaseFirestore.instance.runTransaction((txn) async {
+      final snap = await txn.get(docRef);
+      if (!snap.exists) {
+        throw StateError('Project not found');
+      }
+      final data = snap.data() ?? <String, dynamic>{};
+      final tasks = _readTasks(data['externalTasks'], projectId);
+      if (tasks.isEmpty) return;
+      final idToTask = {for (final task in tasks) task.id: task};
+      final seen = <String>{};
+      final reordered = <ExternalTask>[];
+      for (final id in orderedIds) {
+        final task = idToTask[id];
+        if (task == null) continue;
+        seen.add(id);
+        reordered.add(task);
+      }
+      if (reordered.isEmpty) return;
+      for (final task in tasks) {
+        if (!seen.contains(task.id)) {
+          reordered.add(task);
+        }
+      }
+      final now = DateTime.now();
+      for (var i = 0; i < reordered.length; i++) {
+        reordered[i] = reordered[i].copyWith(
+          sortOrder: i,
+          updatedAt: now,
+        );
+      }
+      txn.update(docRef, {
+        'externalTasks': reordered.map((t) => t.toMap()).toList(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'hasExternalTasks': reordered.isNotEmpty,
+      });
+    });
+  }
+
   Future<void> delete(String projectId, String taskId) async {
     final docRef = _projects.doc(projectId);
 
@@ -152,6 +193,14 @@ class ExternalTaskRepository {
 
   void _sortTasks(List<ExternalTask> tasks) {
     tasks.sort((a, b) {
+      final ao = a.sortOrder;
+      final bo = b.sortOrder;
+      if (ao != null || bo != null) {
+        if (ao == null) return 1;
+        if (bo == null) return -1;
+        final cmpOrder = ao.compareTo(bo);
+        if (cmpOrder != 0) return cmpOrder;
+      }
       if (a.isDone != b.isDone) {
         return (a.isDone ? 1 : 0) - (b.isDone ? 1 : 0);
       }
@@ -218,6 +267,14 @@ class ExternalTaskRepository {
         if (value == null || value is num) {
           updated = updated.copyWith(
             starredOrder: value == null ? null : (value as num).toInt(),
+          );
+        }
+      }
+      if (partial.containsKey('sortOrder')) {
+        final value = partial['sortOrder'];
+        if (value == null || value is num) {
+          updated = updated.copyWith(
+            sortOrder: value == null ? null : (value as num).toInt(),
           );
         }
       }

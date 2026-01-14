@@ -18,16 +18,11 @@ Future<void> showSelectSubphasesDialog(
   final projRepo = ProjectRepository();
   final tmplRepo = SubphaseTemplateRepository();
 
-  var templates = await tmplRepo.getAllForUser(ownerUid);
-  if (templates.isEmpty &&
-      fallbackOwnerUid != null &&
-      fallbackOwnerUid.isNotEmpty &&
-      fallbackOwnerUid != ownerUid) {
-    templates = await tmplRepo.getAllForUser(fallbackOwnerUid);
-  }
-  if (templates.isEmpty) {
-    templates = await tmplRepo.getAllForUser('');
-  }
+  final templates = await _loadSubphaseTemplates(
+    tmplRepo,
+    ownerUid: ownerUid,
+    fallbackOwnerUid: fallbackOwnerUid,
+  );
   final project = await projRepo.getById(projectId);
 
   if (!context.mounted) return;
@@ -191,10 +186,15 @@ Future<void> showSelectSubphasesDialog(
                     final template = templateByCode[code];
                     final prev = existingByCode[code];
                     if (template != null) {
+                      final overriddenName = prev?.name.trim();
+                      final resolvedName =
+                          (overriddenName != null && overriddenName.isNotEmpty)
+                              ? overriddenName
+                              : template.subphaseName;
                       picked.add(
                         SelectedSubphase(
                           code: template.subphaseCode,
-                          name: template.subphaseName,
+                          name: resolvedName,
                           responsibility: template.responsibility,
                           isDeliverable: template.isDeliverable,
                           status: prev?.status ?? 'In Progress',
@@ -242,4 +242,39 @@ Future<void> showSelectSubphasesDialog(
       );
     },
   );
+}
+
+Future<List<SubphaseTemplate>> _loadSubphaseTemplates(
+  SubphaseTemplateRepository repo, {
+  required String ownerUid,
+  String? fallbackOwnerUid,
+}) async {
+  final result = <SubphaseTemplate>[];
+  final seenCodes = <String>{};
+  final visitedOwners = <String>{};
+
+  Future<void> appendOwner(String candidate) async {
+    if (visitedOwners.contains(candidate)) return;
+    visitedOwners.add(candidate);
+    final templates = await repo.getAllForUser(candidate);
+    for (final template in templates) {
+      final code = template.subphaseCode;
+      if (seenCodes.add(code)) {
+        result.add(template);
+      }
+    }
+  }
+
+  await appendOwner(ownerUid);
+
+  if (fallbackOwnerUid != null &&
+      fallbackOwnerUid.isNotEmpty &&
+      fallbackOwnerUid != ownerUid) {
+    await appendOwner(fallbackOwnerUid);
+  }
+
+  await appendOwner('');
+
+  result.sort((a, b) => a.subphaseCode.compareTo(b.subphaseCode));
+  return result;
 }

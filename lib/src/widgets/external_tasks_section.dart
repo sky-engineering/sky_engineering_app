@@ -33,19 +33,29 @@ class ExternalTasksSection extends StatelessWidget {
 
   static final ExternalTaskRepository _repo = ExternalTaskRepository();
 
+  static int _compareTasks(ExternalTask a, ExternalTask b) {
+    final ao = a.sortOrder;
+    final bo = b.sortOrder;
+    if (ao != null || bo != null) {
+      if (ao == null) return 1;
+      if (bo == null) return -1;
+      final cmpOrder = ao.compareTo(bo);
+      if (cmpOrder != 0) return cmpOrder;
+    }
+    if (a.isDone != b.isDone) {
+      return (a.isDone ? 1 : 0) - (b.isDone ? 1 : 0);
+    }
+    final ad = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+    final bd = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+    return ad.compareTo(bd);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final enableEditing = canEdit && assigneeOptions.isNotEmpty;
     final items = [...tasks];
-    items.sort((a, b) {
-      if (a.isDone != b.isDone) {
-        return (a.isDone ? 1 : 0) - (b.isDone ? 1 : 0);
-      }
-      final ad = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final bd = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-      return ad.compareTo(bd);
-    });
+    items.sort(_compareTasks);
 
     return Card(
       child: Padding(
@@ -66,24 +76,16 @@ class ExternalTasksSection extends StatelessWidget {
                 ),
               )
             else
-              ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: items.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 4),
-                itemBuilder: (context, index) {
-                  final task = items[index];
-                  return _ExternalTaskTile(
-                    key: ValueKey('external-${task.id}'),
-                    dismissibleKey: ValueKey('external-${task.id}'),
-                    task: task,
-                    canEdit: enableEditing,
-                    onSetDone: (value) => _setDone(context, task, value),
-                    onDelete: () => _delete(context, task),
-                    onToggleStar: () => _toggleStar(context, task),
-                    onEdit: () => _showEditExternalTaskDialog(context, task),
-                  );
-                },
+              _ExternalTaskList(
+                tasks: items,
+                canEdit: enableEditing,
+                onSetDone: (task, value) => _setDone(context, task, value),
+                onDelete: (task) => _delete(context, task),
+                onToggleStar: (task) => _toggleStar(context, task),
+                onEdit: (task) => _showEditExternalTaskDialog(context, task),
+                onReorder: enableEditing
+                    ? (ordered) => _reorderTasks(context, ordered)
+                    : null,
               ),
             if (enableEditing) ...[
               const SizedBox(height: 12),
@@ -153,6 +155,24 @@ class ExternalTasksSection extends StatelessWidget {
         SnackBar(content: Text('Failed to delete task: $e')),
       );
       return false;
+    }
+  }
+
+  Future<void> _reorderTasks(
+    BuildContext context,
+    List<ExternalTask> ordered,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await _repo.reorderTasks(
+        projectId,
+        ordered.map((task) => task.id).toList(),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Failed to reorder tasks: $e')),
+      );
+      rethrow;
     }
   }
 
@@ -400,6 +420,197 @@ class ExternalTasksSection extends StatelessWidget {
         SnackBar(content: Text('Failed to update task: $e')),
       );
     }
+  }
+}
+
+class _ExternalTaskList extends StatefulWidget {
+  const _ExternalTaskList({
+    required this.tasks,
+    required this.canEdit,
+    required this.onSetDone,
+    required this.onDelete,
+    required this.onToggleStar,
+    required this.onEdit,
+    this.onReorder,
+  });
+
+  final List<ExternalTask> tasks;
+  final bool canEdit;
+  final Future<bool> Function(ExternalTask task, bool value) onSetDone;
+  final Future<bool> Function(ExternalTask task) onDelete;
+  final Future<void> Function(ExternalTask task) onToggleStar;
+  final Future<void> Function(ExternalTask task) onEdit;
+  final Future<void> Function(List<ExternalTask> ordered)? onReorder;
+
+  @override
+  State<_ExternalTaskList> createState() => _ExternalTaskListState();
+}
+
+class _ExternalTaskListState extends State<_ExternalTaskList> {
+  late List<ExternalTask> _tasks;
+  bool _pendingReorder = false;
+
+  bool get _reorderEnabled => widget.canEdit && widget.onReorder != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _tasks = List<ExternalTask>.from(widget.tasks);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ExternalTaskList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncWithIncoming(widget.tasks);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_tasks.isEmpty) return const SizedBox.shrink();
+    if (!_reorderEnabled) {
+      return ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: widget.tasks.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 4),
+        itemBuilder: (context, index) {
+          final task = widget.tasks[index];
+          return _buildTile(context, task);
+        },
+      );
+    }
+
+    return ReorderableListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      itemCount: _tasks.length,
+      buildDefaultDragHandles: true,
+      proxyDecorator: (child, index, animation) {
+        return Material(
+          elevation: 6,
+          borderRadius: BorderRadius.circular(12),
+          child: child,
+        );
+      },
+      onReorder: _handleReorder,
+      itemBuilder: (context, index) {
+        final task = _tasks[index];
+        return Column(
+          key: ValueKey('external-${task.id}'),
+          children: [
+            _buildTile(context, task),
+            if (index != _tasks.length - 1) const SizedBox(height: 4),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildTile(BuildContext context, ExternalTask task) {
+    return _ExternalTaskTile(
+      key: ValueKey('external-tile-${task.id}'),
+      dismissibleKey: ValueKey('external-${task.id}'),
+      task: task,
+      canEdit: widget.canEdit,
+      onSetDone: (value) => widget.onSetDone(task, value),
+      onDelete: () => widget.onDelete(task),
+      onToggleStar: () => widget.onToggleStar(task),
+      onEdit: () => widget.onEdit(task),
+    );
+  }
+
+  Future<void> _handleReorder(int oldIndex, int newIndex) async {
+    if (!_reorderEnabled) return;
+    if (newIndex > oldIndex) newIndex -= 1;
+    final previous = List<ExternalTask>.from(_tasks);
+    final task = _tasks.removeAt(oldIndex);
+    _tasks.insert(newIndex, task);
+    setState(() {
+      _pendingReorder = true;
+    });
+    try {
+      await widget.onReorder!(List<ExternalTask>.unmodifiable(_tasks));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _tasks = previous;
+        _pendingReorder = false;
+      });
+    }
+  }
+
+  void _syncWithIncoming(List<ExternalTask> next) {
+    final incomingIds = _ids(next);
+    final localIds = _ids(_tasks);
+
+    final sameSet = _sameIdSet(incomingIds, localIds);
+    if (!sameSet) {
+      setState(() {
+        _tasks = List<ExternalTask>.from(next);
+        _pendingReorder = false;
+      });
+      return;
+    }
+
+    final sameOrder = _listsEqual(incomingIds, localIds);
+    if (_pendingReorder) {
+      if (sameOrder) {
+        setState(() {
+          _tasks = List<ExternalTask>.from(next);
+          _pendingReorder = false;
+        });
+      }
+      return;
+    }
+
+    if (!sameOrder || _hasDifferentInstances(next, _tasks)) {
+      setState(() {
+        _tasks = List<ExternalTask>.from(next);
+      });
+    }
+  }
+
+  static List<String> _ids(List<ExternalTask> tasks) =>
+      tasks.map((task) => task.id).toList(growable: false);
+
+  static bool _sameIdSet(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    final seen = <String, int>{};
+    for (final id in a) {
+      seen[id] = (seen[id] ?? 0) + 1;
+    }
+    for (final id in b) {
+      final count = seen[id];
+      if (count == null) return false;
+      if (count == 1) {
+        seen.remove(id);
+      } else {
+        seen[id] = count - 1;
+      }
+    }
+    return seen.isEmpty;
+  }
+
+  static bool _listsEqual(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  static bool _hasDifferentInstances(
+    List<ExternalTask> next,
+    List<ExternalTask> current,
+  ) {
+    if (next.length != current.length) return true;
+    for (var i = 0; i < next.length; i++) {
+      if (!identical(next[i], current[i])) {
+        return true;
+      }
+    }
+    return false;
   }
 }
 

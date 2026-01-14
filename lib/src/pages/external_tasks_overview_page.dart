@@ -1313,6 +1313,14 @@ List<Object> _tokenizeNatural(String input) {
 }
 
 int _compareTasks(ExternalTask a, ExternalTask b) {
+  final ao = a.sortOrder;
+  final bo = b.sortOrder;
+  if (ao != null || bo != null) {
+    if (ao == null) return 1;
+    if (bo == null) return -1;
+    final cmpOrder = ao.compareTo(bo);
+    if (cmpOrder != 0) return cmpOrder;
+  }
   if (a.isDone != b.isDone) {
     return (a.isDone ? 1 : 0) - (b.isDone ? 1 : 0);
   }

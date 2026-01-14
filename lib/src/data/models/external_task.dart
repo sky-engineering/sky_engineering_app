@@ -12,6 +12,7 @@ class ExternalTask {
   final bool isDone;
   final bool isStarred;
   final int? starredOrder;
+  final int? sortOrder;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -24,6 +25,7 @@ class ExternalTask {
     this.isDone = false,
     this.isStarred = false,
     this.starredOrder,
+    this.sortOrder,
     this.createdAt,
     this.updatedAt,
   });
@@ -37,6 +39,7 @@ class ExternalTask {
     bool? isDone,
     bool? isStarred,
     int? starredOrder,
+    int? sortOrder,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -49,6 +52,7 @@ class ExternalTask {
       isDone: isDone ?? this.isDone,
       isStarred: isStarred ?? this.isStarred,
       starredOrder: starredOrder ?? this.starredOrder,
+      sortOrder: sortOrder ?? this.sortOrder,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -73,6 +77,9 @@ class ExternalTask {
       starredOrder: map['starredOrder'] is num
           ? (map['starredOrder'] as num).toInt()
           : null,
+      sortOrder: map['sortOrder'] is num
+          ? (map['sortOrder'] as num).toInt()
+          : null,
       createdAt: _readTimestamp(map['createdAt']),
       updatedAt: _readTimestamp(map['updatedAt']),
     );
@@ -88,6 +95,7 @@ class ExternalTask {
       'isDone': isDone,
       'isStarred': isStarred,
       'starredOrder': starredOrder,
+      'sortOrder': sortOrder,
       'createdAt': createdAt?.millisecondsSinceEpoch,
       'updatedAt': updatedAt?.millisecondsSinceEpoch,
     };

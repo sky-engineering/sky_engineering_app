@@ -19,7 +19,7 @@ class TaskRepository {
 
     return qs.snapshots().map((snap) {
       final items = snap.docs.map(TaskItem.fromDoc).toList();
-      items.sort(_byDueThenTitle);
+      items.sort(_byProjectOrderThenDue);
       return items;
     });
   }
@@ -138,11 +138,34 @@ class TaskRepository {
     await batch.commit();
   }
 
+  Future<void> reorderProjectTasks(Map<String, int> ordering) async {
+    if (ordering.isEmpty) return;
+    final batch = FirebaseFirestore.instance.batch();
+    ordering.forEach((taskId, order) {
+      batch.update(_col.doc(taskId), {
+        'projectOrder': order,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    });
+    await batch.commit();
+  }
+
   Future<void> delete(String id) => _col.doc(id).delete();
 
   // ----------------- helpers -----------------
 
-  static int _byDueThenTitle(TaskItem a, TaskItem b) {
+  static int _byProjectOrderThenDue(TaskItem a, TaskItem b) {
+    final sameCode = (a.taskCode ?? '') == (b.taskCode ?? '');
+    if (sameCode) {
+      final ao = a.projectOrder;
+      final bo = b.projectOrder;
+      if (ao != null || bo != null) {
+        if (ao == null) return 1;
+        if (bo == null) return -1;
+        final cmpOrder = ao.compareTo(bo);
+        if (cmpOrder != 0) return cmpOrder;
+      }
+    }
     final ad = a.dueDate, bd = b.dueDate;
     if (ad != null && bd != null) {
       final c = ad.compareTo(bd);

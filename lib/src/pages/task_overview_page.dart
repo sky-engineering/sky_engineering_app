@@ -278,7 +278,7 @@ class _ProjectTaskCard extends StatelessWidget {
                       .where((t) => _kWatchedStatuses.contains(t.taskStatus))
                       .toList();
                   if (tasks.isEmpty) {
-                    return const SizedBox.shrink();
+                    return const SizedBox(height: 10);
                   }
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -405,6 +405,14 @@ class _ProjectTaskCard extends StatelessWidget {
         .toList();
     if (tasks.isEmpty) return null;
     tasks.sort((a, b) {
+      final ap = a.sortOrder;
+      final bp = b.sortOrder;
+      if (ap != null || bp != null) {
+        if (ap == null) return 1;
+        if (bp == null) return -1;
+        final cmpManual = ap.compareTo(bp);
+        if (cmpManual != 0) return cmpManual;
+      }
       if (a.isStarred != b.isStarred) {
         return a.isStarred ? -1 : 1;
       }
