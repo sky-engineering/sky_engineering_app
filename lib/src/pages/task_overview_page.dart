@@ -278,11 +278,11 @@ class _ProjectTaskCard extends StatelessWidget {
                       .where((t) => _kWatchedStatuses.contains(t.taskStatus))
                       .toList();
                   if (tasks.isEmpty) {
-                    return const SizedBox(height: 10);
+                    return const SizedBox.shrink();
                   }
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: tasks.take(6).map((task) {
+                    children: tasks.map((task) {
                       return InkWell(
                         onTap: () => toggleStar(task),
                         child: Padding(
@@ -425,8 +425,6 @@ class _ProjectTaskCard extends StatelessWidget {
       return ad.compareTo(bd);
     });
     final theme = Theme.of(context);
-    final visible = tasks.take(3).toList();
-    final remaining = tasks.length - visible.length;
     Widget buildRow(ExternalTask task) {
       final title = task.title.trim();
       final line = ['External', title, task.displayAssigneeLabel].join(' - ');
@@ -470,19 +468,7 @@ class _ProjectTaskCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 8),
-        ...visible.map(buildRow),
-        if (remaining > 0)
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Text(
-              '+$remaining more external tasks',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: titleColor.withValues(alpha: 0.8),
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ),
+        ...tasks.map(buildRow),
       ],
     );
   }
