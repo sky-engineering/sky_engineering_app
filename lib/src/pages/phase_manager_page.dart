@@ -5,19 +5,22 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../data/models/phase_template.dart';
 import '../data/repositories/phase_template_repository.dart';
+import '../theme/tokens.dart';
+import '../widgets/app_page_scaffold.dart';
 
 class PhaseManagerPage extends StatelessWidget {
   const PhaseManagerPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Manage Phases'),
-        actions: const [_AddPhaseButton()],
-      ),
+    return AppPageScaffold(
+      title: 'Manage Phases',
+      actions: const [_AddPhaseButton()],
+      useSafeArea: true,
+      padding: const EdgeInsets.all(AppSpacing.md),
       body: const _PhaseList(),
       floatingActionButton: const _FabAddPhase(),
+      fabLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 }
@@ -38,7 +41,7 @@ class _PhaseList extends StatelessWidget {
           return const Center(child: Text('Please sign in to manage phases'));
         }
 
-        // IMPORTANT: no orderBy here → avoids needing a composite index
+        // IMPORTANT: no orderBy here - avoids needing a composite index
         final query = FirebaseFirestore.instance
             .collection('phases')
             .where('ownerUid', isEqualTo: me.uid);
@@ -70,14 +73,14 @@ class _PhaseList extends StatelessWidget {
             if (phases.isEmpty) {
               return Center(
                 child: Padding(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(AppSpacing.xl),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: const [
                       Icon(Icons.tune, size: 80),
-                      SizedBox(height: 12),
+                      SizedBox(height: AppSpacing.sm),
                       Text('No phases yet'),
-                      SizedBox(height: 8),
+                      SizedBox(height: AppSpacing.xs),
                       _AddPhaseInline(),
                     ],
                   ),
@@ -86,7 +89,7 @@ class _PhaseList extends StatelessWidget {
             }
 
             return ReorderableListView.builder(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+              padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
               itemCount: phases.length,
               onReorder: (oldIndex, newIndex) =>
                   _persistReorder(context, phases, oldIndex, newIndex),
@@ -169,14 +172,14 @@ class _ErrorBox extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(AppSpacing.xl),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(Icons.error_outline, size: 64),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.sm),
             Text(message),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.xs),
             Text(
               details,
               style: Theme.of(context).textTheme.bodySmall,

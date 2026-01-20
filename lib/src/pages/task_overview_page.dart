@@ -7,6 +7,8 @@ import '../data/models/task.dart';
 import '../data/repositories/external_task_repository.dart';
 import '../data/repositories/project_repository.dart';
 import '../data/repositories/task_repository.dart';
+import '../theme/tokens.dart';
+import '../widgets/app_page_scaffold.dart';
 import 'project_detail_page.dart';
 
 const _kWatchedStatuses = ['In Progress', 'Pending'];
@@ -36,107 +38,111 @@ class _TaskOverviewPageState extends State<TaskOverviewPage> {
     'Close When Paid',
   };
   Set<String> _statusFilters = {..._defaultStatusFilters};
+
   @override
   Widget build(BuildContext context) {
-    final filterLabelStyle = Theme.of(
-          context,
-        ).textTheme.labelSmall?.copyWith(fontSize: 9.5, height: 1.0) ??
+    final filterLabelStyle = Theme.of(context)
+            .textTheme
+            .labelSmall
+            ?.copyWith(fontSize: 9.5, height: 1.0) ??
         const TextStyle(fontSize: 9.5, height: 1.0);
-    return Scaffold(
-      body: SafeArea(
-        child: StreamBuilder<List<Project>>(
-          stream: _projectRepo.streamAll(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            final projects = snapshot.data ?? const <Project>[];
-            if (projects.isEmpty) {
-              return const _EmptyState();
-            }
-            final visibleProjects =
-                projects.where(_includeProject).toList(growable: false);
-            visibleProjects.sort(_compareProjects);
-            final children = <Widget>[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(0, 0, 0, 4),
-                child: SegmentedButton<String>(
-                  segments: _statusOptions
-                      .map(
-                        (entry) => ButtonSegment<String>(
-                          value: entry.key,
-                          label: SizedBox(
-                            width: 132,
-                            child: Text(
-                              entry.key,
-                              textAlign: TextAlign.center,
-                              maxLines: 2,
-                              overflow: TextOverflow.visible,
-                              softWrap: true,
-                              style: filterLabelStyle,
-                            ),
+
+    return AppPageScaffold(
+      title: 'Task Overview',
+      useSafeArea: true,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      body: StreamBuilder<List<Project>>(
+        stream: _projectRepo.streamAll(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final projects = snapshot.data ?? const <Project>[];
+          if (projects.isEmpty) {
+            return const _EmptyState();
+          }
+          final visibleProjects =
+              projects.where(_includeProject).toList(growable: false);
+          visibleProjects.sort(_compareProjects);
+          final children = <Widget>[
+            SectionCard(
+              header: const SectionHeader(title: 'Statuses'),
+              child: SegmentedButton<String>(
+                segments: _statusOptions
+                    .map(
+                      (entry) => ButtonSegment<String>(
+                        value: entry.key,
+                        label: SizedBox(
+                          width: 132,
+                          child: Text(
+                            entry.key,
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.visible,
+                            softWrap: true,
+                            style: filterLabelStyle,
                           ),
                         ),
-                      )
-                      .toList(growable: false),
-                  selected: _statusFilters,
-                  multiSelectionEnabled: true,
-                  emptySelectionAllowed: true,
-                  showSelectedIcon: false,
-                  style: const ButtonStyle(
-                    padding: WidgetStatePropertyAll(
-                      EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                    ),
-                    minimumSize: WidgetStatePropertyAll(Size(0, 32)),
+                      ),
+                    )
+                    .toList(growable: false),
+                selected: _statusFilters,
+                multiSelectionEnabled: true,
+                emptySelectionAllowed: true,
+                showSelectedIcon: false,
+                style: const ButtonStyle(
+                  padding: WidgetStatePropertyAll(
+                    EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                   ),
-                  onSelectionChanged: (newSelection) {
-                    setState(() {
-                      _statusFilters = Set<String>.from(newSelection);
-                    });
-                  },
+                  minimumSize: WidgetStatePropertyAll(Size(0, 32)),
+                ),
+                onSelectionChanged: (newSelection) {
+                  setState(() {
+                    _statusFilters = Set<String>.from(newSelection);
+                  });
+                },
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ];
+          if (visibleProjects.isEmpty) {
+            children.add(
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg,
+                  vertical: AppSpacing.xl,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.inbox_outlined, size: 48),
+                    SizedBox(height: AppSpacing.sm),
+                    Text('No projects match the selected statuses.'),
+                  ],
                 ),
               ),
-              const SizedBox(height: 8),
-            ];
-            if (visibleProjects.isEmpty) {
+            );
+          } else {
+            for (var i = 0; i < visibleProjects.length; i++) {
               children.add(
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 32,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: const [
-                      Icon(Icons.inbox_outlined, size: 48),
-                      SizedBox(height: 8),
-                      Text('No projects match the selected statuses.'),
-                    ],
-                  ),
+                _ProjectTaskCard(
+                  project: visibleProjects[i],
+                  taskRepo: _taskRepo,
+                  externalRepo: _externalRepo,
+                  projectRepo: _projectRepo,
                 ),
               );
-            } else {
-              for (var i = 0; i < visibleProjects.length; i++) {
-                children.add(
-                  _ProjectTaskCard(
-                    project: visibleProjects[i],
-                    taskRepo: _taskRepo,
-                    externalRepo: _externalRepo,
-                    projectRepo: _projectRepo,
-                  ),
-                );
-                if (i != visibleProjects.length - 1) {
-                  children.add(const SizedBox(height: 12));
-                }
+              if (i != visibleProjects.length - 1) {
+                children.add(const SizedBox(height: AppSpacing.md));
               }
             }
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-              physics: const ClampingScrollPhysics(),
-              children: children,
-            );
-          },
-        ),
+          }
+          return ListView(
+            padding: const EdgeInsets.only(bottom: AppSpacing.xl),
+            physics: const ClampingScrollPhysics(),
+            children: children,
+          );
+        },
       ),
     );
   }
@@ -245,21 +251,18 @@ class _ProjectTaskCard extends StatelessWidget {
 
     final card = SizedBox(
       width: double.infinity,
-      child: Card(
-        margin: EdgeInsets.zero,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      child: SectionCard(
+        header: InkWell(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ProjectDetailPage(projectId: project.id),
+              ),
+            );
+          },
+          child: Row(
             children: [
-              InkWell(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => ProjectDetailPage(projectId: project.id),
-                    ),
-                  );
-                },
+              Expanded(
                 child: Text(
                   title,
                   maxLines: 2,
@@ -270,71 +273,77 @@ class _ProjectTaskCard extends StatelessWidget {
                       ),
                 ),
               ),
-              const SizedBox(height: 8),
-              StreamBuilder<List<TaskItem>>(
-                stream: taskRepo.streamByProject(project.id),
-                builder: (context, snapshot) {
-                  final tasks = (snapshot.data ?? const <TaskItem>[])
-                      .where((t) => _kWatchedStatuses.contains(t.taskStatus))
-                      .toList();
-                  if (tasks.isEmpty) {
-                    return const SizedBox.shrink();
-                  }
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: tasks.map((task) {
-                      return InkWell(
-                        onTap: () => toggleStar(task),
-                        child: Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              SizedBox(
-                                width: 20,
-                                child: Align(
-                                  alignment: Alignment.topCenter,
-                                  child: Icon(
-                                    task.isStarred
-                                        ? Icons.star
-                                        : Icons.star_border,
-                                    size: 14,
-                                    color: task.isStarred
-                                        ? const Color(0xFFF1C400)
-                                        : titleColor.withValues(alpha: 0.7),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  task.title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(
-                                        color:
-                                            titleColor.withValues(alpha: 0.85),
-                                      ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  );
-                },
-              ),
-              if (externalSection != null) externalSection,
+              const Icon(Icons.open_in_new, size: 18),
             ],
           ),
         ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            StreamBuilder<List<TaskItem>>(
+              stream: taskRepo.streamByProject(project.id),
+              builder: (context, snapshot) {
+                final tasks = (snapshot.data ?? const <TaskItem>[])
+                    .where((t) => _kWatchedStatuses.contains(t.taskStatus))
+                    .toList();
+                if (tasks.isEmpty) {
+                  return const SizedBox.shrink();
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: tasks.map((task) {
+                    return InkWell(
+                      onTap: () => toggleStar(task),
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              width: 20,
+                              child: Align(
+                                alignment: Alignment.topCenter,
+                                child: Icon(
+                                  task.isStarred
+                                      ? Icons.star
+                                      : Icons.star_border,
+                                  size: 14,
+                                  color: task.isStarred
+                                      ? const Color(0xFFF1C400)
+                                      : titleColor.withValues(alpha: 0.7),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                task.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: titleColor.withValues(alpha: 0.85),
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
+            if (externalSection != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              externalSection,
+            ],
+          ],
+        ),
       ),
     );
-
     return Stack(
       clipBehavior: Clip.none,
       children: [

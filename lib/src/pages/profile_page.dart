@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../data/models/user_profile.dart';
 import '../data/repositories/user_repository.dart';
 import '../utils/phone_utils.dart';
+import '../theme/tokens.dart';
+import '../widgets/app_page_scaffold.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -58,7 +60,10 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget build(BuildContext context) {
     final u = _me;
     if (u == null) {
-      return const Scaffold(
+      return const AppPageScaffold(
+        title: 'Profile',
+        useSafeArea: true,
+        padding: EdgeInsets.all(AppSpacing.md),
         body: Center(child: Text('Please sign in to view your profile')),
       );
     }
@@ -67,7 +72,10 @@ class _ProfilePageState extends State<ProfilePage> {
       stream: _repo.streamByUid(u.uid),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
+          return const AppPageScaffold(
+            title: 'Profile',
+            useSafeArea: true,
+            padding: EdgeInsets.all(AppSpacing.md),
             body: Center(child: CircularProgressIndicator()),
           );
         }
@@ -75,165 +83,157 @@ class _ProfilePageState extends State<ProfilePage> {
         final profile = snap.data;
         _seedIfNeeded(profile);
 
-        return Scaffold(
-          body: SafeArea(
-            child: Form(
-              key: _formKey,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  // ---------------- Your Info ----------------
-                  _sectionCard(
-                    context,
-                    child: Column(
-                      children: [
-                        _kvInputRow(
-                          context,
-                          label: 'Name',
-                          child: TextFormField(
-                            controller: _userNameCtl,
-                            decoration: const InputDecoration(
-                              isDense: true,
-                              border: InputBorder.none,
-                              hintText: 'e.g., Jane Smith',
-                            ),
+        return AppPageScaffold(
+          title: 'Profile',
+          useSafeArea: true,
+          padding: EdgeInsets.zero,
+          body: Form(
+            key: _formKey,
+            child: ListView(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              children: [
+                _sectionCard(
+                  context,
+                  child: Column(
+                    children: [
+                      _kvInputRow(
+                        context,
+                        label: 'Name',
+                        child: TextFormField(
+                          controller: _userNameCtl,
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            border: InputBorder.none,
+                            hintText: 'e.g., Jane Smith',
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        _kvInputRow(
-                          context,
-                          label: 'Phone',
-                          child: TextFormField(
-                            controller: _userPhoneCtl,
-                            keyboardType: TextInputType.phone,
-                            decoration: const InputDecoration(
-                              isDense: true,
-                              border: InputBorder.none,
-                              hintText: '(555) 123-4567',
-                            ),
-                            inputFormatters: const [UsPhoneInputFormatter()],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        _kvInputRow(
-                          context,
-                          label: 'Address',
-                          child: TextFormField(
-                            controller: _userAddressCtl,
-                            minLines: 2,
-                            maxLines: 3,
-                            decoration: const InputDecoration(
-                              isDense: true,
-                              border: InputBorder.none,
-                              hintText: 'Street, City, State',
-                            ),
-                          ),
-                          alignTop: true,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // ---------------- Admin ----------------
-                  _sectionCard(
-                    context,
-                    child: Column(
-                      children: [
-                        _kvInputRow(
-                          context,
-                          label: 'Client ID',
-                          child: TextFormField(
-                            controller: _clientNumberCtl,
-                            decoration: const InputDecoration(
-                              isDense: true,
-                              border: InputBorder.none,
-                              hintText: 'e.g., C-1024',
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        _kvInputRow(
-                          context,
-                          label: 'User Type',
-                          child: DropdownButtonFormField<String>(
-                            initialValue:
-                                UserProfile.allowedUserTypes.contains(_userType)
-                                    ? _userType
-                                    : null,
-                            items: UserProfile.allowedUserTypes
-                                .map(
-                                  (t) => DropdownMenuItem(
-                                    value: t,
-                                    child: Text(t),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (v) => setState(() => _userType = v),
-                            decoration: const InputDecoration(
-                              isDense: true,
-                              border: InputBorder.none,
-                              hintText: 'Select your type',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        TextButton.icon(
-                          onPressed: _signOut,
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 6,
-                            ),
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          icon: const Icon(Icons.logout_outlined, size: 18),
-                          label: const Text('Sign Out'),
-                        ),
-                        const SizedBox(width: 12),
-                        FilledButton.icon(
-                          onPressed: _onSave,
-                          icon: const Icon(Icons.save),
-                          label: const Text('Save'),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  _kvReadOnlyRow(
-                    context,
-                    label: 'UID',
-                    value: u.uid,
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  const Divider(),
-                  const SizedBox(height: 8),
-
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton(
-                      onPressed: _confirmDeleteAccount,
-                      style: TextButton.styleFrom(
-                        foregroundColor: Theme.of(context).colorScheme.error,
                       ),
-                      child: const Text('Delete Account'),
-                    ),
+                      const SizedBox(height: AppSpacing.xs),
+                      _kvInputRow(
+                        context,
+                        label: 'Phone',
+                        child: TextFormField(
+                          controller: _userPhoneCtl,
+                          keyboardType: TextInputType.phone,
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            border: InputBorder.none,
+                            hintText: '(555) 123-4567',
+                          ),
+                          inputFormatters: const [UsPhoneInputFormatter()],
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      _kvInputRow(
+                        context,
+                        label: 'Address',
+                        child: TextFormField(
+                          controller: _userAddressCtl,
+                          minLines: 2,
+                          maxLines: 3,
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            border: InputBorder.none,
+                            hintText: 'Street, City, State',
+                          ),
+                        ),
+                        alignTop: true,
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _sectionCard(
+                  context,
+                  child: Column(
+                    children: [
+                      _kvInputRow(
+                        context,
+                        label: 'Client ID',
+                        child: TextFormField(
+                          controller: _clientNumberCtl,
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            border: InputBorder.none,
+                            hintText: 'e.g., C-1024',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      _kvInputRow(
+                        context,
+                        label: 'User Type',
+                        child: DropdownButtonFormField<String>(
+                          initialValue:
+                              UserProfile.allowedUserTypes.contains(_userType)
+                                  ? _userType
+                                  : null,
+                          items: UserProfile.allowedUserTypes
+                              .map(
+                                (t) => DropdownMenuItem(
+                                  value: t,
+                                  child: Text(t),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (v) => setState(() => _userType = v),
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            border: InputBorder.none,
+                            hintText: 'Select your type',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextButton.icon(
+                        onPressed: _signOut,
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 6,
+                          ),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        icon: const Icon(Icons.logout_outlined, size: 18),
+                        label: const Text('Sign Out'),
+                      ),
+                      const SizedBox(width: 12),
+                      FilledButton.icon(
+                        onPressed: _onSave,
+                        icon: const Icon(Icons.save),
+                        label: const Text('Save'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _kvReadOnlyRow(
+                  context,
+                  label: 'UID',
+                  value: u.uid,
+                ),
+                const SizedBox(height: 32),
+                const Divider(),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: _confirmDeleteAccount,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.error,
+                    ),
+                    child: const Text('Delete Account'),
+                  ),
+                ),
+              ],
             ),
           ),
         );

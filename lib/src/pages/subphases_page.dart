@@ -8,10 +8,9 @@ import '../data/repositories/subphase_template_repository.dart';
 
 import '../data/models/phase_template.dart';
 import '../data/repositories/phase_template_repository.dart';
-import '../app/shell.dart';
 import '../app/user_access_scope.dart';
-
-const _accentYellow = Color(0xFFF1C400);
+import '../theme/tokens.dart';
+import '../widgets/app_page_scaffold.dart';
 
 class SubphasesPage extends StatefulWidget {
   const SubphasesPage({super.key});
@@ -143,7 +142,10 @@ class _SubphasesPageState extends State<SubphasesPage> {
   Widget build(BuildContext context) {
     final me = FirebaseAuth.instance.currentUser;
     if (me == null) {
-      return const Scaffold(
+      return const AppPageScaffold(
+        title: 'Task Structure',
+        includeShellBottomNav: true,
+        popShellRoute: true,
         body: Center(child: Text('Please sign in to view subphases')),
       );
     }
@@ -158,56 +160,56 @@ class _SubphasesPageState extends State<SubphasesPage> {
     final editableOwnerUid =
         ownerUid.isNotEmpty ? ownerUid : (me.uid.isNotEmpty ? me.uid : '');
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Task Structure'),
-        actions: [
-          if (isAdmin && ownerChoices.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: PopupMenuButton<String>(
-                tooltip: 'Select template owner',
-                onSelected: (value) {
-                  if (value == ownerUid) return;
-                  setState(() {
-                    _ownerOverride = value;
-                    _phaseOrder = null;
-                  });
-                },
-                itemBuilder: (context) => ownerChoices
-                    .map(
-                      (uid) => PopupMenuItem<String>(
-                        value: uid,
-                        child: Text(_ownerMenuLabel(uid, me.uid)),
-                      ),
-                    )
-                    .toList(),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (_ownerListLoading)
-                      const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    else
-                      const Icon(Icons.manage_accounts_outlined),
-                    const SizedBox(width: 6),
-                    Text(
-                      _ownerLabel(ownerUid, me.uid),
-                      style: TextStyle(color: ownerTextColor),
+    return AppPageScaffold(
+      title: 'Task Structure',
+      includeShellBottomNav: true,
+      popShellRoute: true,
+      padding: EdgeInsets.zero,
+      actions: [
+        if (isAdmin && ownerChoices.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(right: AppSpacing.sm),
+            child: PopupMenuButton<String>(
+              tooltip: 'Select template owner',
+              onSelected: (value) {
+                if (value == ownerUid) return;
+                setState(() {
+                  _ownerOverride = value;
+                  _phaseOrder = null;
+                });
+              },
+              itemBuilder: (context) => ownerChoices
+                  .map(
+                    (uid) => PopupMenuItem<String>(
+                      value: uid,
+                      child: Text(_ownerMenuLabel(uid, me.uid)),
                     ),
-                    Icon(Icons.arrow_drop_down, color: ownerTextColor),
-                  ],
-                ),
+                  )
+                  .toList(),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_ownerListLoading)
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else
+                    const Icon(Icons.manage_accounts_outlined),
+                  const SizedBox(width: AppSpacing.xs),
+                  Text(
+                    _ownerLabel(ownerUid, me.uid),
+                    style: TextStyle(color: ownerTextColor),
+                  ),
+                  Icon(Icons.arrow_drop_down, color: ownerTextColor),
+                ],
               ),
             ),
-        ],
-      ),
-      bottomNavigationBar: const ShellBottomNav(popCurrentRoute: true),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+          ),
+      ],
       floatingActionButton: canEdit ? _buildFab(editableOwnerUid) : null,
+      fabLocation: FloatingActionButtonLocation.endFloat,
       body: FutureBuilder<List<PhaseTemplate>>(
         future: _phaseRepo.getAllForUser(ownerUid),
         builder: (context, phaseSnap) {
@@ -409,7 +411,7 @@ class _SubphasesPageState extends State<SubphasesPage> {
           ),
           FloatingActionButton(
             heroTag: 'subphases-fab',
-            backgroundColor: _accentYellow,
+            backgroundColor: AppColors.accentYellow,
             foregroundColor: Colors.black,
             onPressed: () => setState(() => _fabExpanded = !_fabExpanded),
             child: Icon(_fabExpanded ? Icons.close : Icons.add),
@@ -507,7 +509,7 @@ class _FabOptionButton extends StatelessWidget {
               height: 60,
               child: FloatingActionButton(
                 heroTag: 'subphase-option-$label',
-                backgroundColor: _accentYellow,
+                backgroundColor: AppColors.accentYellow,
                 foregroundColor: Colors.black,
                 shape: const CircleBorder(),
                 elevation: 4,

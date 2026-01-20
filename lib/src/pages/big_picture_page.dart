@@ -4,6 +4,8 @@ import '../data/models/project.dart';
 import '../data/models/task.dart';
 import '../data/repositories/project_repository.dart';
 import '../data/repositories/task_repository.dart';
+import '../theme/tokens.dart';
+import '../widgets/app_page_scaffold.dart';
 import 'project_detail_page.dart';
 
 enum _BigPictureLane {
@@ -48,70 +50,73 @@ class _BigPicturePageState extends State<BigPicturePage> {
     final baseColor = Theme.of(context).colorScheme.primary;
     final colors = _buildSections(baseColor);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Big Picture'),
+    return AppPageScaffold(
+      title: 'Big Picture',
+      useSafeArea: true,
+      scrollable: true,
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.xxl,
       ),
-      body: SafeArea(
-        child: StreamBuilder<List<Project>>(
-          stream: _projectRepository.streamAll(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting &&
-                !snapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snapshot.hasError) {
-              return Center(
-                child: Text(
-                  'Could not load projects',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              );
-            }
-
-            final projects = snapshot.data ?? const <Project>[];
-            final visibleProjects = projects
-                .where((project) =>
-                    !(project.isArchived || project.status == 'Archive'))
-                .toList();
-            final strongProposalsProject =
-                _findProposalsProject(visibleProjects);
-            final partitions = _partitionProjects(visibleProjects);
-            final sections = _laneSections(colors);
-
-            return SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(0, 12, 0, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (var i = 0; i < sections.length; i++) ...[
-                    if (sections[i].lane == _BigPictureLane.strongProposals)
-                      _StrongProposalsLane(
-                        title: sections[i].title,
-                        color: sections[i].color,
-                        project: strongProposalsProject,
-                        expectedProjectName: _kStrongProposalsProjectName,
-                        taskRepository: _taskRepository,
-                        onProposalTap: strongProposalsProject == null
-                            ? null
-                            : () => _openProjectDetail(strongProposalsProject),
-                      )
-                    else
-                      _LaneColumn(
-                        title: sections[i].title,
-                        color: sections[i].color,
-                        projects:
-                            partitions[sections[i].lane] ?? const <Project>[],
-                        onProjectDropped: (project) =>
-                            _handleDrop(project, sections[i].lane),
-                        onProjectTap: _openProjectDetail,
-                      ),
-                  ],
-                ],
+      body: StreamBuilder<List<Project>>(
+        stream: _projectRepository.streamAll(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(
+                'Could not load projects',
+                style: Theme.of(context).textTheme.bodyMedium,
               ),
             );
-          },
-        ),
+          }
+
+          final projects = snapshot.data ?? const <Project>[];
+          final visibleProjects = projects
+              .where(
+                (project) =>
+                    !(project.isArchived || project.status == 'Archive'),
+              )
+              .toList();
+          final strongProposalsProject = _findProposalsProject(visibleProjects);
+          final partitions = _partitionProjects(visibleProjects);
+          final sections = _laneSections(colors);
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < sections.length; i++) ...[
+                if (sections[i].lane == _BigPictureLane.strongProposals)
+                  _StrongProposalsLane(
+                    title: sections[i].title,
+                    color: sections[i].color,
+                    project: strongProposalsProject,
+                    expectedProjectName: _kStrongProposalsProjectName,
+                    taskRepository: _taskRepository,
+                    onProposalTap: strongProposalsProject == null
+                        ? null
+                        : () => _openProjectDetail(strongProposalsProject),
+                  )
+                else
+                  _LaneColumn(
+                    title: sections[i].title,
+                    color: sections[i].color,
+                    projects: partitions[sections[i].lane] ?? const <Project>[],
+                    onProjectDropped: (project) =>
+                        _handleDrop(project, sections[i].lane),
+                    onProjectTap: _openProjectDetail,
+                  ),
+                if (i != sections.length - 1)
+                  const SizedBox(height: AppSpacing.md),
+              ],
+            ],
+          );
+        },
       ),
     );
   }

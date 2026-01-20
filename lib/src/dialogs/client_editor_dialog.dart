@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 
 import '../data/models/client.dart';
 import '../data/repositories/client_repository.dart';
+import '../theme/tokens.dart';
 import '../utils/phone_utils.dart';
+import '../widgets/form_helpers.dart';
 
 Future<void> showClientEditorDialog(
   BuildContext context, {
@@ -12,9 +14,8 @@ Future<void> showClientEditorDialog(
   final codeCtl = TextEditingController(text: client?.code ?? '');
   final nameCtl = TextEditingController(text: client?.name ?? '');
   final contactNameCtl = TextEditingController(text: client?.contactName ?? '');
-  final contactEmailCtl = TextEditingController(
-    text: client?.contactEmail ?? '',
-  );
+  final contactEmailCtl =
+      TextEditingController(text: client?.contactEmail ?? '');
   final contactPhoneCtl = TextEditingController(
     text: formatPhoneForDisplay(client?.contactPhone),
   );
@@ -41,286 +42,208 @@ Future<void> showClientEditorDialog(
   await showDialog<void>(
     context: context,
     builder: (dialogContext) {
-      final priorityOptions = List<int>.generate(5, (index) => index + 1);
-      final priorityTextStyle = Theme.of(dialogContext).textTheme.bodyMedium
-          ?.copyWith(color: Theme.of(dialogContext).colorScheme.onSurface);
-
       return StatefulBuilder(
         builder: (innerContext, setState) {
-          return AlertDialog(
-            title: Text(client == null ? 'Add Client' : 'Edit Client'),
-            content: Form(
+          return AppFormDialog(
+            title: client == null ? 'Add Client' : 'Edit Client',
+            actions: [
+              AppDialogActions(
+                leading: client != null
+                    ? TextButton(
+                        onPressed: () async {
+                          final confirmed = await showDialog<bool>(
+                            context: dialogContext,
+                            builder: (confirmContext) => AlertDialog(
+                              title: const Text('Delete client?'),
+                              content: Text(
+                                'Remove ${client.code} ${client.name}?',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(confirmContext, false),
+                                  child: const Text('Cancel'),
+                                ),
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(confirmContext, true),
+                                  child: const Text('Delete'),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirmed == true) {
+                            try {
+                              await repo.delete(client.id);
+                              if (dialogContext.mounted) {
+                                Navigator.pop(dialogContext);
+                              }
+                            } catch (e) {
+                              if (!dialogContext.mounted) return;
+                              ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                SnackBar(content: Text('Delete failed: $e')),
+                              );
+                            }
+                          }
+                        },
+                        child: const Text(
+                          'Delete',
+                          style: TextStyle(color: Colors.redAccent),
+                        ),
+                      )
+                    : null,
+                secondary: TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                primary: FilledButton(
+                  onPressed: () async {
+                    if (!(formKey.currentState?.validate() ?? false)) return;
+
+                    final code = codeCtl.text.trim();
+                    final name = nameCtl.text.trim();
+
+                    String? nullIfEmpty(String value) {
+                      final trimmed = value.trim();
+                      return trimmed.isEmpty ? null : trimmed;
+                    }
+
+                    final contactName = nullIfEmpty(contactNameCtl.text);
+                    final contactEmail = nullIfEmpty(contactEmailCtl.text);
+                    final contactPhone = normalizePhone(contactPhoneCtl.text);
+                    final currentProposals =
+                        parseCommaSeparated(currentProposalsCtl.text);
+                    final notes = nullIfEmpty(notesCtl.text);
+
+                    try {
+                      final user = auth.currentUser;
+                      if (client == null) {
+                        if (user == null) {
+                          if (!dialogContext.mounted) return;
+                          ScaffoldMessenger.of(dialogContext).showSnackBar(
+                            const SnackBar(
+                              content: Text('Sign in required to add clients.'),
+                            ),
+                          );
+                          return;
+                        }
+                        final record = ClientRecord(
+                          id: '',
+                          code: code,
+                          name: name,
+                          priority: priority,
+                          currentProposals: currentProposals,
+                          notes: notes,
+                          contactName: contactName,
+                          contactEmail: contactEmail,
+                          contactPhone: contactPhone,
+                          ownerUid: user.uid,
+                        );
+                        await repo.add(record, ownerUid: user.uid);
+                      } else {
+                        final updated = ClientRecord(
+                          id: client.id,
+                          code: code,
+                          name: name,
+                          priority: priority,
+                          currentProposals: currentProposals,
+                          notes: notes,
+                          contactName: contactName,
+                          contactEmail: contactEmail,
+                          contactPhone: contactPhone,
+                          ownerUid: client.ownerUid ?? user?.uid,
+                        );
+                        await repo.update(client.id, updated);
+                      }
+                      if (dialogContext.mounted) {
+                        Navigator.pop(dialogContext);
+                      }
+                    } catch (e) {
+                      if (!dialogContext.mounted) return;
+                      ScaffoldMessenger.of(dialogContext).showSnackBar(
+                        SnackBar(content: Text('Save failed: $e')),
+                      );
+                    }
+                  },
+                  child: const Text('Save'),
+                ),
+              ),
+            ],
+            child: Form(
               key: formKey,
-              child: SizedBox(
-                width: 360,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: codeCtl,
-                              decoration: const InputDecoration(
-                                labelText: 'Client code',
-                                hintText: 'e.g., 001',
-                              ),
-                              maxLength: 3,
-                              buildCounter:
-                                  (
-                                    _, {
-                                    required int currentLength,
-                                    required bool isFocused,
-                                    int? maxLength,
-                                  }) => null,
-                              keyboardType: TextInputType.number,
-                              validator: (value) {
-                                final v = value?.trim() ?? '';
-                                if (v.isEmpty) return 'Required';
-                                if (v.length != 3 || int.tryParse(v) == null) {
-                                  return 'Use a 3-digit code';
-                                }
-                                return null;
-                              },
+                      Expanded(
+                        child: appTextField(
+                          'Client code',
+                          codeCtl,
+                          required: true,
+                          hint: 'e.g., 001',
+                          keyboardType: TextInputType.number,
+                          maxLength: 3,
+                          validator: (value) {
+                            final v = value?.trim() ?? '';
+                            if (v.isEmpty) return 'Required';
+                            if (v.length != 3 || int.tryParse(v) == null) {
+                              return 'Use a 3-digit code';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: DropdownButtonFormField<int>(
+                          initialValue: priority,
+                          decoration: const InputDecoration(
+                            labelText: 'Priority',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: List.generate(
+                            5,
+                            (index) => DropdownMenuItem<int>(
+                              value: index + 1,
+                              child: Text('${index + 1}'),
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: DropdownButtonFormField<int>(
-                              initialValue: priority,
-                              decoration: const InputDecoration(
-                                labelText: 'Priority',
-                                border: OutlineInputBorder(),
-                              ),
-                              items: priorityOptions
-                                  .map(
-                                    (value) => DropdownMenuItem<int>(
-                                      value: value,
-                                      child: Text(
-                                        '$value',
-                                        style: priorityTextStyle,
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                              selectedItemBuilder: (context) => priorityOptions
-                                  .map(
-                                    (value) => Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(
-                                        '$value',
-                                        style: priorityTextStyle,
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (value) {
-                                if (value == null) return;
-                                setState(() => priority = value);
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: nameCtl,
-                        decoration: const InputDecoration(
-                          labelText: 'Client name',
-                          hintText: 'e.g., City of Anywhere',
+                          onChanged: (value) {
+                            if (value != null) setState(() => priority = value);
+                          },
                         ),
-                        validator: (value) =>
-                            (value == null || value.trim().isEmpty)
-                            ? 'Required'
-                            : null,
-                      ),
-                      const SizedBox(height: 8),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: currentProposalsCtl,
-                        decoration: const InputDecoration(
-                          labelText: 'Current proposals',
-                          hintText: 'Separate entries with commas',
-                        ),
-                        maxLines: 6,
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: notesCtl,
-                        decoration: const InputDecoration(
-                          labelText: 'Proposal notes',
-                          hintText: 'Optional text',
-                        ),
-                        maxLines: 2,
-                      ),
-                      const SizedBox(height: 16),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'Client Contact',
-                          style: Theme.of(dialogContext).textTheme.titleMedium,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: contactNameCtl,
-                        decoration: const InputDecoration(
-                          labelText: 'Contact name',
-                          hintText: 'e.g., Jane Smith',
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: contactPhoneCtl,
-                        decoration: const InputDecoration(
-                          labelText: 'Contact phone',
-                          hintText: 'e.g., (555) 123-4567',
-                        ),
-                        keyboardType: TextInputType.phone,
-                        inputFormatters: const [UsPhoneInputFormatter()],
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: contactEmailCtl,
-                        decoration: const InputDecoration(
-                          labelText: 'Contact email',
-                          hintText: 'e.g., jane@example.com',
-                        ),
-                        keyboardType: TextInputType.emailAddress,
                       ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: AppSpacing.md),
+                  appTextField('Client name', nameCtl, required: true),
+                  const SizedBox(height: AppSpacing.md),
+                  appTextField('Contact name', contactNameCtl),
+                  const SizedBox(height: AppSpacing.md),
+                  appTextField(
+                    'Contact email',
+                    contactEmailCtl,
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  appTextField(
+                    'Contact phone',
+                    contactPhoneCtl,
+                    keyboardType: TextInputType.phone,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  appTextField(
+                    'Current proposals',
+                    currentProposalsCtl,
+                    hint: 'Comma separated list',
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  appTextField('Notes', notesCtl, maxLines: 3),
+                ],
               ),
             ),
-            actions: [
-              if (client != null)
-                TextButton(
-                  onPressed: () async {
-                    final confirmed = await showDialog<bool>(
-                      context: dialogContext,
-                      builder: (confirmContext) => AlertDialog(
-                        title: const Text('Delete client?'),
-                        content: Text('Remove ${client.code} ${client.name}?'),
-                        actions: [
-                          TextButton(
-                            onPressed: () =>
-                                Navigator.pop(confirmContext, false),
-                            child: const Text('Cancel'),
-                          ),
-                          TextButton(
-                            onPressed: () =>
-                                Navigator.pop(confirmContext, true),
-                            child: const Text('Delete'),
-                          ),
-                        ],
-                      ),
-                    );
-
-                    if (confirmed == true) {
-                      try {
-                        await repo.delete(client.id);
-                        if (!dialogContext.mounted) return;
-                        Navigator.pop(dialogContext);
-                      } catch (e) {
-                        if (!dialogContext.mounted) return;
-                        final messenger = ScaffoldMessenger.maybeOf(
-                          dialogContext,
-                        );
-                        messenger?.showSnackBar(
-                          SnackBar(content: Text('Delete failed: $e')),
-                        );
-                      }
-                    }
-                  },
-                  child: const Text(
-                    'Delete',
-                    style: TextStyle(color: Colors.redAccent),
-                  ),
-                ),
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () async {
-                  if (!(formKey.currentState?.validate() ?? false)) return;
-
-                  final code = codeCtl.text.trim();
-                  final name = nameCtl.text.trim();
-
-                  String? nullIfEmpty(String value) {
-                    final trimmed = value.trim();
-                    return trimmed.isEmpty ? null : trimmed;
-                  }
-
-                  final contactName = nullIfEmpty(contactNameCtl.text);
-                  final contactEmail = nullIfEmpty(contactEmailCtl.text);
-                  final contactPhone = normalizePhone(contactPhoneCtl.text);
-                  final currentProposals = parseCommaSeparated(
-                    currentProposalsCtl.text,
-                  );
-                  final notes = nullIfEmpty(notesCtl.text);
-
-                  try {
-                    final user = auth.currentUser;
-                    if (client == null) {
-                      if (user == null) {
-                        if (!dialogContext.mounted) return;
-                        final messenger = ScaffoldMessenger.maybeOf(
-                          dialogContext,
-                        );
-                        messenger?.showSnackBar(
-                          const SnackBar(
-                            content: Text('Sign in required to add clients.'),
-                          ),
-                        );
-                        return;
-                      }
-                      final record = ClientRecord(
-                        id: '',
-                        code: code,
-                        name: name,
-                        priority: priority,
-                        currentProposals: currentProposals,
-                        notes: notes,
-                        contactName: contactName,
-                        contactEmail: contactEmail,
-                        contactPhone: contactPhone,
-                        ownerUid: user.uid,
-                      );
-                      await repo.add(record, ownerUid: user.uid);
-                    } else {
-                      final updated = ClientRecord(
-                        id: client.id,
-                        code: code,
-                        name: name,
-                        priority: priority,
-                        currentProposals: currentProposals,
-                        notes: notes,
-                        contactName: contactName,
-                        contactEmail: contactEmail,
-                        contactPhone: contactPhone,
-                        ownerUid: client.ownerUid ?? user?.uid,
-                      );
-                      await repo.update(client.id, updated);
-                    }
-                    if (dialogContext.mounted) {
-                      Navigator.pop(dialogContext);
-                    }
-                  } catch (e) {
-                    if (!dialogContext.mounted) return;
-                    final messenger = ScaffoldMessenger.maybeOf(dialogContext);
-                    messenger?.showSnackBar(
-                      SnackBar(content: Text('Save failed: $e')),
-                    );
-                  }
-                },
-                child: const Text('Save'),
-              ),
-            ],
           );
         },
       );

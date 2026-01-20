@@ -10,11 +10,13 @@ import '../../utils/data_parsers.dart';
 ///
 /// Backwards compatibility:
 /// - legacy 'status' is still supported on read and mirrored on write.
-///   Old statuses like 'Open'/'In Progress'/'Blocked'/'Done' are mapped to the new taskStatus:
-///     Open -> Pending
-///     In Progress -> In Progress
-///     Blocked -> On Hold
-///     Done -> Completed
+///   Old statuses like 'Open'/'In Progress'/'Blocked'/'Done' and newer reads of
+///   'Pending'/'On Hold'/'Completed' are normalized into the taskStatus
+///   enumeration:
+///     Open/Pending -> Pending
+///     In Progress  -> In Progress
+///     Blocked/On Hold -> On Hold
+///     Done/Completed -> Completed
 class TaskItem {
   final String id;
   final String projectId;
@@ -27,7 +29,7 @@ class TaskItem {
 
   // NEW schema
   final String
-  taskStatus; // 'In Progress' | 'On Hold' | 'Pending' | 'Completed'
+      taskStatus; // 'In Progress' | 'On Hold' | 'Pending' | 'Completed'
   final bool isStarred; // star marker in lists
   final String? taskCode; // optional 4-digit code like '0101'
   final int? starredOrder; // manual sort index for starred lists
@@ -64,12 +66,11 @@ class TaskItem {
 
     // Legacy input (still accepted)
     String? status,
-
     this.createdAt,
     this.updatedAt,
-  }) : taskStatus = taskStatus ?? _fromLegacyStatus(status) ?? 'Pending',
-      isStarred = isStarred ?? false,
-      subtasks = List.unmodifiable(subtasks ?? const []);
+  })  : taskStatus = taskStatus ?? _fromLegacyStatus(status) ?? 'Pending',
+        isStarred = isStarred ?? false,
+        subtasks = List.unmodifiable(subtasks ?? const []);
 
   // ----------------- mapping helpers -----------------
   static String _toLegacyStatus(String taskStatus) {
@@ -87,14 +88,22 @@ class TaskItem {
   }
 
   static String? _fromLegacyStatus(String? legacy) {
-    switch ((legacy ?? '').trim()) {
-      case 'In Progress':
+    final normalized = (legacy ?? '').trim().toLowerCase();
+    switch (normalized) {
+      case 'in progress':
+      case 'in-progress':
         return 'In Progress';
-      case 'Blocked':
+      case 'blocked':
+      case 'on hold':
+      case 'on-hold':
         return 'On Hold';
-      case 'Done':
+      case 'done':
+      case 'completed':
+      case 'complete':
         return 'Completed';
-      case 'Open':
+      case 'open':
+      case 'pending':
+      case 'not started':
       case '':
       default:
         return 'Pending';
@@ -173,7 +182,6 @@ class TaskItem {
     String? taskCode,
     int? starredOrder,
     int? projectOrder,
-
     DateTime? createdAt,
     DateTime? updatedAt,
 

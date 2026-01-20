@@ -1,20 +1,17 @@
+import 'dart:math' as math;
 // lib/src/widgets/external_tasks_section.dart
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../data/models/external_task.dart';
+import '../data/models/external_assignee_option.dart';
+import '../data/models/project.dart';
+import '../data/models/task.dart';
 import '../data/repositories/external_task_repository.dart';
-
-class ExternalAssigneeOption {
-  const ExternalAssigneeOption({
-    required this.key,
-    required this.label,
-    required this.value,
-  });
-
-  final String key;
-  final String label;
-  final String value;
-}
+import '../data/repositories/project_repository.dart';
+import '../data/repositories/task_repository.dart';
+import '../utils/external_task_utils.dart';
+import '../widgets/form_helpers.dart';
 
 class ExternalTasksSection extends StatelessWidget {
   const ExternalTasksSection({
@@ -30,8 +27,16 @@ class ExternalTasksSection extends StatelessWidget {
   final List<ExternalAssigneeOption> assigneeOptions;
   final List<ExternalTask> tasks;
   static const _fabColor = Color(0xFFF1C400);
+  static final ButtonStyle _conversionButtonStyle = TextButton.styleFrom(
+    foregroundColor: const Color(0xFF0B57D0),
+    padding: EdgeInsets.zero,
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    minimumSize: Size.zero,
+  );
 
   static final ExternalTaskRepository _repo = ExternalTaskRepository();
+  static final ProjectRepository _projectRepo = ProjectRepository();
+  static final TaskRepository _taskRepo = TaskRepository();
 
   static int _compareTasks(ExternalTask a, ExternalTask b) {
     final ao = a.sortOrder;
@@ -103,6 +108,163 @@ class ExternalTasksSection extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _convertExternalTaskToInternal(
+    BuildContext context,
+    ExternalTask task,
+  ) async {
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await confirmDialog(
+      context,
+      'Convert this to an internal task? All external-only data will be cleared.',
+    );
+    if (!ok || !navigator.mounted) return;
+    Project? project;
+    try {
+      project = await _projectRepo.getById(projectId);
+    } catch (e) {
+      if (messenger.mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Could not load project: $e')),
+        );
+      }
+      return;
+    }
+    if (project == null) {
+      if (messenger.mounted) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Project not found.')),
+        );
+      }
+      return;
+    }
+    if (!navigator.mounted) return;
+    final selection = await _promptTaskCodeSelection(
+      navigator.context,
+      project.selectedSubphases ?? const <SelectedSubphase>[],
+    );
+    if (selection == null || !selection.confirmed) return;
+    var ownerUid = (project.ownerUid ?? '').trim();
+    if (ownerUid.isEmpty) {
+      ownerUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    }
+    if (ownerUid.isEmpty) {
+      if (messenger.mounted) {
+        messenger.showSnackBar(
+          const SnackBar(
+              content: Text('No project owner available for the new task.')),
+        );
+      }
+      return;
+    }
+    final newTask = TaskItem(
+      id: '_',
+      projectId: projectId,
+      ownerUid: ownerUid,
+      title: task.title,
+      taskStatus: 'Pending',
+      isStarred: false,
+      taskCode: selection.code,
+      subtasks: const [],
+      createdAt: null,
+      updatedAt: null,
+    );
+    try {
+      await _taskRepo.add(newTask);
+      await _repo.delete(projectId, task.id);
+      if (navigator.mounted) {
+        navigator.pop();
+      }
+      if (messenger.mounted) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('External task converted.')),
+        );
+      }
+    } catch (e) {
+      if (messenger.mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Failed to convert task: $e')),
+        );
+      }
+    }
+  }
+
+  Future<_TaskCodeSelectionResult?> _promptTaskCodeSelection(
+    BuildContext context,
+    List<SelectedSubphase> subphases,
+  ) async {
+    final options = <MapEntry<String?, String>>[
+      const MapEntry<String?, String>(null, 'No Task Code'),
+    ];
+    final seen = <String>{};
+    for (final subphase in subphases) {
+      final code = subphase.code.trim();
+      if (code.isEmpty || !seen.add(code)) continue;
+      final label = '${subphase.code}  ${subphase.name}';
+      options.add(MapEntry(subphase.code, label));
+    }
+    String? selectedCode =
+        options.length > 1 ? options[1].key : options.first.key;
+    final estimatedHeight = math.min(
+      320.0,
+      math.max(56.0, options.length * 56.0),
+    );
+    return showDialog<_TaskCodeSelectionResult>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setState) {
+            return AlertDialog(
+              title: const Text('Select Task Code'),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: estimatedHeight,
+                child: Scrollbar(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: options.map(
+                      (entry) {
+                        final isSelected = selectedCode == entry.key;
+                        return ListTile(
+                          title: Text(entry.value),
+                          leading: Icon(
+                            isSelected
+                                ? Icons.radio_button_checked
+                                : Icons.radio_button_off,
+                          ),
+                          onTap: () => setState(() => selectedCode = entry.key),
+                        );
+                      },
+                    ).toList(),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(
+                    dialogContext,
+                    const _TaskCodeSelectionResult(confirmed: false),
+                  ),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(
+                    dialogContext,
+                    _TaskCodeSelectionResult(
+                      confirmed: true,
+                      code: selectedCode,
+                    ),
+                  ),
+                  child: const Text('Continue'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -195,8 +357,17 @@ class ExternalTasksSection extends StatelessWidget {
 
   Future<void> _showAddExternalTaskDialog(BuildContext context) async {
     final titleController = TextEditingController();
-    var selectedKey =
-        assigneeOptions.isNotEmpty ? assigneeOptions.first.key : null;
+    final dedupedOptions = dedupeExternalAssigneeOptions(assigneeOptions);
+    if (dedupedOptions.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Add project team members before creating external tasks.'),
+        ),
+      );
+      return;
+    }
+    var selectedKey = dedupedOptions.first.key;
 
     final messenger = ScaffoldMessenger.of(context);
     final result = await showDialog<Map<String, String>>(
@@ -230,7 +401,7 @@ class ExternalTasksSection extends StatelessWidget {
                       decoration: const InputDecoration(
                         labelText: 'Assignee',
                       ),
-                      items: assigneeOptions
+                      items: dedupedOptions
                           .map(
                             (option) => DropdownMenuItem<String>(
                               value: option.key,
@@ -262,7 +433,7 @@ class ExternalTasksSection extends StatelessWidget {
                       return;
                     }
                     Navigator.of(dialogContext)
-                        .pop({'title': title, 'assigneeKey': selectedKey!});
+                        .pop({'title': title, 'assigneeKey': selectedKey});
                   },
                   child: const Text('Save'),
                 ),
@@ -321,7 +492,13 @@ class ExternalTasksSection extends StatelessWidget {
               value: 'Unassigned',
             ),
     );
-    if (!assigneeOptions.contains(option)) {
+    final dedupedOptions = dedupeExternalAssigneeOptions(assigneeOptions);
+    if (!dedupedOptions.any((item) => item.key == selectedKey) &&
+        option.key.isNotEmpty) {
+      dedupedOptions.insert(0, option);
+    }
+    if (dedupedOptions.isEmpty) {
+      dedupedOptions.add(option);
       selectedKey = option.key;
     }
 
@@ -357,7 +534,7 @@ class ExternalTasksSection extends StatelessWidget {
                       decoration: const InputDecoration(
                         labelText: 'Assignee',
                       ),
-                      items: assigneeOptions
+                      items: dedupedOptions
                           .map(
                             (item) => DropdownMenuItem<String>(
                               value: item.key,
@@ -371,6 +548,16 @@ class ExternalTasksSection extends StatelessWidget {
                       },
                     ),
                   ),
+                  if (canEdit) ...[
+                    const SizedBox(height: 12),
+                    TextButton.icon(
+                      style: _conversionButtonStyle,
+                      icon: const Icon(Icons.swap_horiz),
+                      label: const Text('Convert to Internal Task'),
+                      onPressed: () =>
+                          _convertExternalTaskToInternal(dialogContext, task),
+                    ),
+                  ],
                 ],
               ),
               actions: [
@@ -404,9 +591,9 @@ class ExternalTasksSection extends StatelessWidget {
 
     if (result == null) return;
 
-    final selectedOption = assigneeOptions.firstWhere(
+    final selectedOption = dedupedOptions.firstWhere(
       (item) => item.key == result['assigneeKey'],
-      orElse: () => option,
+      orElse: () => dedupedOptions.first,
     );
 
     try {
@@ -842,4 +1029,11 @@ class _ExternalTaskTileState extends State<_ExternalTaskTile> {
       ),
     );
   }
+}
+
+class _TaskCodeSelectionResult {
+  const _TaskCodeSelectionResult({required this.confirmed, this.code});
+
+  final bool confirmed;
+  final String? code;
 }

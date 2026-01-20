@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../data/models/invoice.dart';
 import '../data/models/project.dart';
 import '../data/repositories/invoice_repository.dart';
+import '../theme/tokens.dart';
 import 'form_helpers.dart';
 
 class InvoicesSection extends StatelessWidget {
@@ -370,240 +371,240 @@ Future<void> _showAddInvoiceDialog(
 
   await showDialog<void>(
     context: context,
-    builder: (context) {
+    builder: (dialogContext) {
       return StatefulBuilder(
-        builder: (context, setState) {
-          return AlertDialog(
-            title: const Text('New Invoice'),
-            content: Form(
-              key: formKey,
-              child: SizedBox(
-                width: 520,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (projectMap.isNotEmpty) ...[
-                        DropdownButtonFormField<String>(
-                          initialValue: selectedProjectId,
-                          decoration: const InputDecoration(
-                            labelText: 'Project',
-                            border: OutlineInputBorder(),
+        builder: (_, setState) {
+          return AppFormDialog(
+            title: 'New Invoice',
+            width: 540,
+            actions: [
+              AppDialogActions(
+                secondary: TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                primary: FilledButton(
+                  onPressed: () async {
+                    final messenger = ScaffoldMessenger.of(dialogContext);
+                    final navigator = Navigator.of(dialogContext);
+                    if (!(formKey.currentState?.validate() ?? false)) return;
+
+                    final pnText = projectNumberCtl.text.trim();
+                    if (pnText.isEmpty ||
+                        !(await _projectNumberExists(pnText))) {
+                      if (messenger.mounted) {
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text('Project Number not found.'),
                           ),
-                          isExpanded: true,
-                          items: projectMap.entries
-                              .map(
-                                (entry) => DropdownMenuItem<String>(
-                                  value: entry.key,
-                                  child: Text(projectLabel(entry.value)),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            if (value == null) return;
-                            setState(() {
-                              selectedProjectId = value;
-                              selectedProject = projectMap[value];
-                              final suggestion =
-                                  (selectedProject?.projectNumber ?? '').trim();
-                              if (suggestion.isNotEmpty) {
-                                projectNumberCtl.text = suggestion;
-                                projectNumberCtl.selection =
-                                    TextSelection.fromPosition(
-                                  TextPosition(
-                                    offset: projectNumberCtl.text.length,
-                                  ),
-                                );
-                              }
-                            });
+                        );
+                      }
+                      return;
+                    }
+
+                    final amt =
+                        double.tryParse(invoiceAmountCtl.text.trim()) ?? 0.0;
+                    final paid = amountPaidCtl.text.trim().isEmpty
+                        ? 0.0
+                        : (double.tryParse(amountPaidCtl.text.trim()) ?? 0.0);
+
+                    final projectNumberValue =
+                        pnText.isNotEmpty ? pnText : null;
+
+                    final targetProjectId = selectedProjectId ?? projectId;
+                    if (targetProjectId == null || targetProjectId.isEmpty) {
+                      if (messenger.mounted) {
+                        messenger.showSnackBar(
+                          const SnackBar(content: Text('Select a project.')),
+                        );
+                      }
+                      return;
+                    }
+
+                    final providedOwner = ownerUid;
+                    final projectOwner = selectedProject?.ownerUid;
+                    final String ownerForInvoice =
+                        (providedOwner != null && providedOwner.isNotEmpty)
+                            ? providedOwner
+                            : ((projectOwner != null && projectOwner.isNotEmpty)
+                                ? projectOwner
+                                : me.uid);
+                    final resolvedOwner =
+                        ownerForInvoice.isNotEmpty ? ownerForInvoice : me.uid;
+                    final inv = Invoice(
+                      id: '_',
+                      projectId: targetProjectId,
+                      ownerUid:
+                          resolvedOwner.isNotEmpty ? resolvedOwner : me.uid,
+                      invoiceNumber: invoiceNumberCtl.text.trim(),
+                      projectNumber: projectNumberValue,
+                      invoiceAmount: amt,
+                      amountPaid: paid,
+                      invoiceDate: invoiceDate,
+                      dueDate: dueDate,
+                      paidDate: paidDate,
+                      documentLink: documentLinkCtl.text.trim().isNotEmpty
+                          ? documentLinkCtl.text.trim()
+                          : null,
+                      invoiceType: invoiceType,
+                    );
+
+                    try {
+                      await repo.add(inv);
+                      if (navigator.mounted) {
+                        navigator.pop();
+                      }
+                    } catch (e) {
+                      if (!navigator.mounted) return;
+                      if (messenger.mounted) {
+                        messenger.showSnackBar(
+                          SnackBar(
+                              content: Text('Failed to create invoice: $e')),
+                        );
+                      }
+                    }
+                  },
+                  child: const Text('Create'),
+                ),
+              ),
+            ],
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (projectMap.isNotEmpty) ...[
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedProjectId,
+                      decoration: const InputDecoration(
+                        labelText: 'Project',
+                        border: OutlineInputBorder(),
+                      ),
+                      isExpanded: true,
+                      items: projectMap.entries
+                          .map(
+                            (entry) => DropdownMenuItem<String>(
+                              value: entry.key,
+                              child: Text(projectLabel(entry.value)),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() {
+                          selectedProjectId = value;
+                          selectedProject = projectMap[value];
+                          final suggestion =
+                              (selectedProject?.projectNumber ?? '').trim();
+                          if (suggestion.isNotEmpty) {
+                            projectNumberCtl.text = suggestion;
+                            projectNumberCtl.selection =
+                                TextSelection.fromPosition(
+                              TextPosition(
+                                  offset: projectNumberCtl.text.length),
+                            );
+                          }
+                        });
+                      },
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                  appTextField(
+                    'Project Number',
+                    projectNumberCtl,
+                    required: true,
+                    hint: 'e.g., 026-01',
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  appTextField(
+                    'Invoice Number',
+                    invoiceNumberCtl,
+                    required: true,
+                    hint: 'e.g., 1220',
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  appTextField(
+                    'Invoice Amount',
+                    invoiceAmountCtl,
+                    required: true,
+                    hint: 'e.g., 17150.91',
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  appTextField(
+                    'Amount Paid',
+                    amountPaidCtl,
+                    hint: '0',
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: appDateField(
+                          label: 'Invoice Date',
+                          value: invoiceDate,
+                          onPick: () async {
+                            await pickDate('invoice');
+                            setState(() {});
                           },
                         ),
-                        const SizedBox(height: 10),
-                      ],
-                      appTextField(
-                        'Project Number',
-                        projectNumberCtl,
-                        required: true,
-                        hint: 'e.g., 026-01',
                       ),
-                      const SizedBox(height: 10),
-                      appTextField(
-                        'Invoice Number',
-                        invoiceNumberCtl,
-                        required: true,
-                        hint: 'e.g., 1220',
-                      ),
-                      const SizedBox(height: 10),
-                      appTextField(
-                        'Invoice Amount',
-                        invoiceAmountCtl,
-                        required: true,
-                        hint: 'e.g., 17150.91',
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: appDateField(
+                          label: 'Due Date',
+                          value: dueDate,
+                          onPick: () async {
+                            await pickDate('due');
+                            setState(() {});
+                          },
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      appTextField(
-                        'Amount Paid',
-                        amountPaidCtl,
-                        hint: '0',
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: appDateField(
-                              label: 'Invoice Date',
-                              value: invoiceDate,
-                              onPick: () async {
-                                await pickDate('invoice');
-                                setState(() {});
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: appDateField(
-                              label: 'Due Date',
-                              value: dueDate,
-                              onPick: () async {
-                                await pickDate('due');
-                                setState(() {});
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      appDateField(
-                        label: 'Paid Date',
-                        value: paidDate,
-                        onPick: () async {
-                          await pickDate('paid');
-                          setState(() {});
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      DropdownButtonFormField<String>(
-                        initialValue: invoiceType,
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'Client',
-                            child: Text('Client'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'Vendor',
-                            child: Text('Vendor'),
-                          ),
-                        ],
-                        onChanged: (v) =>
-                            setState(() => invoiceType = v ?? 'Client'),
-                        decoration: const InputDecoration(
-                          labelText: 'Invoice Type',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      appTextField(
-                        'Document Link',
-                        documentLinkCtl,
-                        hint: 'https://...',
                       ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: AppSpacing.md),
+                  appDateField(
+                    label: 'Paid Date',
+                    value: paidDate,
+                    onPick: () async {
+                      await pickDate('paid');
+                      setState(() {});
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  DropdownButtonFormField<String>(
+                    initialValue: invoiceType,
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'Client',
+                        child: Text('Client'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Vendor',
+                        child: Text('Vendor'),
+                      ),
+                    ],
+                    onChanged: (v) =>
+                        setState(() => invoiceType = v ?? 'Client'),
+                    decoration: const InputDecoration(
+                      labelText: 'Invoice Type',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  appTextField(
+                    'Document Link',
+                    documentLinkCtl,
+                    hint: 'https://...',
+                  ),
+                ],
               ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () async {
-                  final messenger = ScaffoldMessenger.of(context);
-                  final navigator = Navigator.of(context);
-                  if (!(formKey.currentState?.validate() ?? false)) return;
-
-                  // Validate that the project number exists before saving.
-                  final pnText = projectNumberCtl.text.trim();
-                  if (pnText.isEmpty || !(await _projectNumberExists(pnText))) {
-                    messenger.showSnackBar(
-                      const SnackBar(
-                        content: Text('Project Number not found.'),
-                      ),
-                    );
-                    return;
-                  }
-
-                  final amt =
-                      double.tryParse(invoiceAmountCtl.text.trim()) ?? 0.0;
-                  final paid = amountPaidCtl.text.trim().isEmpty
-                      ? 0.0
-                      : (double.tryParse(amountPaidCtl.text.trim()) ?? 0.0);
-
-                  // Store the project number exactly as entered so formatting is preserved.
-                  final projectNumberValue = pnText.isNotEmpty ? pnText : null;
-
-                  final targetProjectId = selectedProjectId ?? projectId;
-                  if (targetProjectId == null || targetProjectId.isEmpty) {
-                    messenger.showSnackBar(
-                      const SnackBar(content: Text('Select a project.')),
-                    );
-                    return;
-                  }
-
-                  final me = FirebaseAuth.instance.currentUser;
-                  final providedOwner = ownerUid;
-                  final projectOwner = selectedProject?.ownerUid;
-                  final ownerForInvoice =
-                      (providedOwner != null && providedOwner.isNotEmpty)
-                          ? providedOwner
-                          : ((projectOwner != null && projectOwner.isNotEmpty)
-                              ? projectOwner
-                              : (me?.uid ?? ''));
-                  final resolvedOwner = ownerForInvoice.isNotEmpty
-                      ? ownerForInvoice
-                      : (me?.uid ?? '');
-                  final inv = Invoice(
-                    id: '_',
-                    projectId: targetProjectId,
-                    ownerUid:
-                        resolvedOwner.isNotEmpty ? resolvedOwner : me?.uid,
-                    invoiceNumber: invoiceNumberCtl.text.trim(),
-                    projectNumber: projectNumberValue,
-                    invoiceAmount: amt,
-                    amountPaid: paid,
-                    invoiceDate: invoiceDate,
-                    dueDate: dueDate,
-                    paidDate: paidDate,
-                    documentLink: documentLinkCtl.text.trim().isNotEmpty
-                        ? documentLinkCtl.text.trim()
-                        : null,
-                    invoiceType: invoiceType,
-                  );
-
-                  try {
-                    await repo.add(inv);
-                    if (navigator.mounted) {
-                      navigator.pop();
-                    }
-                  } catch (e) {
-                    if (!navigator.mounted) return;
-                    if (messenger.mounted) {
-                      messenger.showSnackBar(
-                        SnackBar(content: Text('Failed to create invoice: $e')),
-                      );
-                    }
-                  }
-                },
-                child: const Text('Create'),
-              ),
-            ],
           );
         },
       );
@@ -616,7 +617,6 @@ Future<void> _showEditInvoiceDialog(
   Invoice inv, {
   required bool canEdit,
 }) async {
-  // Prefill the formatted project number string from the actual project doc.
   String initialProjectNumberText = inv.projectNumber ?? '';
   try {
     final projSnap = await FirebaseFirestore.instance
@@ -692,213 +692,216 @@ Future<void> _showEditInvoiceDialog(
 
   await showDialog<void>(
     context: context,
-    builder: (context) {
+    builder: (dialogContext) {
       return StatefulBuilder(
-        builder: (context, setState) {
-          return AlertDialog(
-            title: Text(
-              'Invoice ${inv.invoiceNumber.isNotEmpty ? inv.invoiceNumber : inv.id.substring(0, 6)}',
-            ),
-            content: Form(
-              key: formKey,
-              child: SizedBox(
-                width: 520,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      appTextField(
-                        'Project Number',
-                        projectNumberCtl,
-                        required: true,
-                        hint: 'e.g., 026-01',
-                      ),
-                      const SizedBox(height: 10),
-                      appTextField(
-                        'Invoice Number',
-                        invoiceNumberCtl,
-                        required: true,
-                      ),
-                      const SizedBox(height: 10),
-                      appTextField(
-                        'Invoice Amount',
-                        invoiceAmountCtl,
-                        required: true,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      appTextField(
-                        'Amount Paid',
-                        amountPaidCtl,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: appDateField(
-                              label: 'Invoice Date',
-                              value: invoiceDate,
-                              onPick: () async {
-                                if (!canEdit) return viewOnlyTap();
-                                await pickDate('invoice');
-                                setState(() {});
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: appDateField(
-                              label: 'Due Date',
-                              value: dueDate,
-                              onPick: () async {
-                                if (!canEdit) return viewOnlyTap();
-                                await pickDate('due');
-                                setState(() {});
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      appDateField(
-                        label: 'Paid Date',
-                        value: paidDate,
-                        onPick: () async {
-                          if (!canEdit) return viewOnlyTap();
-                          await pickDate('paid');
-                          setState(() {});
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      DropdownButtonFormField<String>(
-                        initialValue: invoiceType,
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'Client',
-                            child: Text('Client'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'Vendor',
-                            child: Text('Vendor'),
-                          ),
-                        ],
-                        onChanged: canEdit
-                            ? (v) =>
-                                setState(() => invoiceType = v ?? invoiceType)
-                            : (v) => viewOnlyTap(),
-                        decoration: const InputDecoration(
-                          labelText: 'Invoice Type',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      appTextField('Document Link', documentLinkCtl),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+        builder: (_, setState) {
+          return AppFormDialog(
+            title:
+                'Invoice ${inv.invoiceNumber.isNotEmpty ? inv.invoiceNumber : inv.id.substring(0, 6)}',
+            width: 540,
             actions: [
               if (canEdit)
-                TextButton(
-                  onPressed: () async {
-                    final navigator = Navigator.of(context);
-                    final messenger = ScaffoldMessenger.of(context);
-                    final ok = await confirmDialog(
-                      context,
-                      'Delete this invoice?',
-                    );
-                    if (!ok) return;
-                    try {
-                      await repo.delete(inv.id);
-                      if (navigator.mounted) {
-                        navigator.pop();
-                      }
-                    } catch (e) {
-                      if (!navigator.mounted) return;
-                      if (messenger.mounted) {
-                        messenger.showSnackBar(
-                          SnackBar(content: Text('Failed to delete: $e')),
-                        );
-                      }
-                    }
-                  },
-                  child: const Text('Delete'),
-                ),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(canEdit ? 'Cancel' : 'Close'),
-              ),
-              if (canEdit)
-                FilledButton(
-                  onPressed: () async {
-                    final messenger = ScaffoldMessenger.of(context);
-                    final navigator = Navigator.of(context);
-                    if (!(formKey.currentState?.validate() ?? false)) return;
-
-                    // Validate that the project number exists before saving.
-                    final pnText = projectNumberCtl.text.trim();
-                    if (pnText.isEmpty ||
-                        !(await _projectNumberExists(pnText))) {
-                      messenger.showSnackBar(
-                        const SnackBar(
-                          content: Text('Project Number not found.'),
-                        ),
+                AppDialogActions(
+                  leading: TextButton(
+                    onPressed: () async {
+                      final navigator = Navigator.of(dialogContext);
+                      final messenger = ScaffoldMessenger.of(dialogContext);
+                      final ok = await confirmDialog(
+                        dialogContext,
+                        'Delete this invoice?',
                       );
-                      return;
-                    }
-
-                    final amt = double.tryParse(invoiceAmountCtl.text.trim()) ??
-                        inv.invoiceAmount;
-                    final paid = amountPaidCtl.text.trim().isEmpty
-                        ? inv.amountPaid
-                        : (double.tryParse(amountPaidCtl.text.trim()) ??
-                            inv.amountPaid);
-
-                    // Store the project number exactly as entered so formatting is preserved.
-                    final projectNumberValue =
-                        pnText.isNotEmpty ? pnText : null;
-
-                    try {
-                      await repo.update(inv.id, {
-                        'invoiceNumber': invoiceNumberCtl.text.trim(),
-                        'projectNumber': projectNumberValue,
-                        'invoiceAmount': amt,
-                        'amountPaid': paid,
-                        'invoiceDate': invoiceDate != null
-                            ? Timestamp.fromDate(invoiceDate!)
-                            : null,
-                        'dueDate': dueDate != null
-                            ? Timestamp.fromDate(dueDate!)
-                            : null,
-                        'paidDate': paidDate != null
-                            ? Timestamp.fromDate(paidDate!)
-                            : null,
-                        'documentLink': documentLinkCtl.text.trim().isNotEmpty
-                            ? documentLinkCtl.text.trim()
-                            : null,
-                        'invoiceType': invoiceType,
-                      });
-                      if (navigator.mounted) {
-                        navigator.pop();
+                      if (!ok || !navigator.mounted) return;
+                      try {
+                        await repo.delete(inv.id);
+                        if (navigator.mounted) {
+                          navigator.pop();
+                        }
+                      } catch (e) {
+                        if (!navigator.mounted) return;
+                        if (messenger.mounted) {
+                          messenger.showSnackBar(
+                            SnackBar(content: Text('Failed to delete: $e')),
+                          );
+                        }
                       }
-                    } catch (e) {
-                      if (!navigator.mounted) return;
-                      if (messenger.mounted) {
-                        messenger.showSnackBar(
-                          SnackBar(content: Text('Failed to save: $e')),
-                        );
+                    },
+                    child: const Text('Delete'),
+                  ),
+                  secondary: TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text('Cancel'),
+                  ),
+                  primary: FilledButton(
+                    onPressed: () async {
+                      final messenger = ScaffoldMessenger.of(dialogContext);
+                      final navigator = Navigator.of(dialogContext);
+                      if (!(formKey.currentState?.validate() ?? false)) return;
+
+                      final pnText = projectNumberCtl.text.trim();
+                      if (pnText.isEmpty ||
+                          !(await _projectNumberExists(pnText))) {
+                        if (messenger.mounted) {
+                          messenger.showSnackBar(
+                            const SnackBar(
+                              content: Text('Project Number not found.'),
+                            ),
+                          );
+                        }
+                        return;
                       }
-                    }
-                  },
-                  child: const Text('Save'),
+
+                      final amt =
+                          double.tryParse(invoiceAmountCtl.text.trim()) ??
+                              inv.invoiceAmount;
+                      final paid = amountPaidCtl.text.trim().isEmpty
+                          ? inv.amountPaid
+                          : (double.tryParse(amountPaidCtl.text.trim()) ??
+                              inv.amountPaid);
+
+                      final projectNumberValue =
+                          pnText.isNotEmpty ? pnText : null;
+
+                      try {
+                        await repo.update(inv.id, {
+                          'invoiceNumber': invoiceNumberCtl.text.trim(),
+                          'projectNumber': projectNumberValue,
+                          'invoiceAmount': amt,
+                          'amountPaid': paid,
+                          'invoiceDate': invoiceDate != null
+                              ? Timestamp.fromDate(invoiceDate!)
+                              : null,
+                          'dueDate': dueDate != null
+                              ? Timestamp.fromDate(dueDate!)
+                              : null,
+                          'paidDate': paidDate != null
+                              ? Timestamp.fromDate(paidDate!)
+                              : null,
+                          'documentLink': documentLinkCtl.text.trim().isNotEmpty
+                              ? documentLinkCtl.text.trim()
+                              : null,
+                          'invoiceType': invoiceType,
+                        });
+                        if (navigator.mounted) {
+                          navigator.pop();
+                        }
+                      } catch (e) {
+                        if (!navigator.mounted) return;
+                        if (messenger.mounted) {
+                          messenger.showSnackBar(
+                            SnackBar(content: Text('Failed to save: $e')),
+                          );
+                        }
+                      }
+                    },
+                    child: const Text('Save'),
+                  ),
+                )
+              else
+                AppDialogActions(
+                  primary: TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text('Close'),
+                  ),
                 ),
             ],
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  appTextField(
+                    'Project Number',
+                    projectNumberCtl,
+                    required: true,
+                    hint: 'e.g., 026-01',
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  appTextField(
+                    'Invoice Number',
+                    invoiceNumberCtl,
+                    required: true,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  appTextField(
+                    'Invoice Amount',
+                    invoiceAmountCtl,
+                    required: true,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  appTextField(
+                    'Amount Paid',
+                    amountPaidCtl,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: appDateField(
+                          label: 'Invoice Date',
+                          value: invoiceDate,
+                          onPick: () async {
+                            if (!canEdit) return viewOnlyTap();
+                            await pickDate('invoice');
+                            setState(() {});
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: appDateField(
+                          label: 'Due Date',
+                          value: dueDate,
+                          onPick: () async {
+                            if (!canEdit) return viewOnlyTap();
+                            await pickDate('due');
+                            setState(() {});
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  appDateField(
+                    label: 'Paid Date',
+                    value: paidDate,
+                    onPick: () async {
+                      if (!canEdit) return viewOnlyTap();
+                      await pickDate('paid');
+                      setState(() {});
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  DropdownButtonFormField<String>(
+                    initialValue: invoiceType,
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'Client',
+                        child: Text('Client'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Vendor',
+                        child: Text('Vendor'),
+                      ),
+                    ],
+                    onChanged: canEdit
+                        ? (v) => setState(() => invoiceType = v ?? invoiceType)
+                        : (v) => viewOnlyTap(),
+                    decoration: const InputDecoration(
+                      labelText: 'Invoice Type',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  appTextField('Document Link', documentLinkCtl),
+                ],
+              ),
+            ),
           );
         },
       );

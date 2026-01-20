@@ -13,6 +13,8 @@ import '../utils/phone_utils.dart';
 import 'project_detail_page.dart';
 import '../integrations/dropbox/dropbox_auth.dart';
 import '../integrations/dropbox/dropbox_api.dart';
+import '../theme/tokens.dart';
+import '../widgets/app_page_scaffold.dart';
 
 class ProjectsPage extends StatefulWidget {
   const ProjectsPage({super.key});
@@ -22,8 +24,6 @@ class ProjectsPage extends StatefulWidget {
 }
 
 class _ProjectsPageState extends State<ProjectsPage> {
-  static const _accentYellow = Color(0xFFF1C400);
-
   static const List<MapEntry<String, String>> _statusOptions =
       <MapEntry<String, String>>[
     MapEntry('In Progress', 'IP'),
@@ -66,7 +66,10 @@ class _ProjectsPageState extends State<ProjectsPage> {
   Widget build(BuildContext context) {
     final repo = ProjectRepository();
 
-    return Scaffold(
+    return AppPageScaffold(
+      title: 'Projects',
+      useSafeArea: true,
+      padding: const EdgeInsets.all(AppSpacing.md),
       body: StreamBuilder<List<Project>>(
         stream: repo.streamAll(),
         builder: (context, snap) {
@@ -88,64 +91,65 @@ class _ProjectsPageState extends State<ProjectsPage> {
               const TextStyle(fontSize: 9.5, height: 1.0);
 
           final children = <Widget>[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
-              child: SegmentedButton<String>(
-                segments: _statusOptions
-                    .map(
-                      (entry) => ButtonSegment<String>(
-                        value: entry.key,
-                        label: SizedBox(
-                          width: 132,
-                          child: Text(
-                            entry.key,
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            overflow: TextOverflow.visible,
-                            softWrap: true,
-                            style: filterLabelStyle,
+            SectionCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SegmentedButton<String>(
+                    segments: _statusOptions
+                        .map(
+                          (entry) => ButtonSegment<String>(
+                            value: entry.key,
+                            label: SizedBox(
+                              width: 132,
+                              child: Text(
+                                entry.key,
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.visible,
+                                softWrap: true,
+                                style: filterLabelStyle,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                    )
-                    .toList(growable: false),
-                selected: _statusFilters,
-                multiSelectionEnabled: true,
-                emptySelectionAllowed: true,
-                showSelectedIcon: false,
-                style: ButtonStyle(
-                  padding: WidgetStateProperty.all(
-                    const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                  ),
-                  minimumSize: WidgetStateProperty.all(const Size(0, 32)),
-                ),
-                onSelectionChanged: (newSelection) {
-                  setState(() {
-                    _statusFilters = Set<String>.from(newSelection);
-                  });
-                },
-              ),
-            ),
-            const SizedBox(height: 6),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  labelText: 'Search projects',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: _searchQuery.isNotEmpty
-                      ? IconButton(
-                          tooltip: 'Clear search',
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() => _searchQuery = '');
-                          },
-                          icon: const Icon(Icons.clear),
                         )
-                      : null,
-                ),
-                onChanged: (value) => setState(() => _searchQuery = value),
+                        .toList(growable: false),
+                    selected: _statusFilters,
+                    multiSelectionEnabled: true,
+                    emptySelectionAllowed: true,
+                    showSelectedIcon: false,
+                    style: ButtonStyle(
+                      padding: WidgetStateProperty.all(
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                      ),
+                      minimumSize: WidgetStateProperty.all(const Size(0, 32)),
+                    ),
+                    onSelectionChanged: (newSelection) {
+                      setState(() {
+                        _statusFilters = Set<String>.from(newSelection);
+                      });
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      labelText: 'Search projects',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              tooltip: 'Clear search',
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _searchQuery = '');
+                              },
+                              icon: const Icon(Icons.clear),
+                            )
+                          : null,
+                    ),
+                    onChanged: (value) => setState(() => _searchQuery = value),
+                  ),
+                ],
               ),
             ),
           ];
@@ -154,13 +158,13 @@ class _ProjectsPageState extends State<ProjectsPage> {
             if (query.isNotEmpty) {
               children.add(
                 Padding(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(AppSpacing.xl),
                   child: Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const Icon(Icons.search_off, size: 48),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: AppSpacing.sm),
                         Text(
                           'No projects match your search.',
                           style: Theme.of(context).textTheme.bodyMedium,
@@ -181,13 +185,13 @@ class _ProjectsPageState extends State<ProjectsPage> {
             } else {
               children.add(
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
                   child: _Empty(onAdd: () => _showAddDialog(context)),
                 ),
               );
             }
           } else {
-            children.add(const SizedBox(height: 8));
+            children.add(const SizedBox(height: AppSpacing.md));
             final sorted = [...items]..sort(_byProjectNumberNaturalAscThenName);
             for (var i = 0; i < sorted.length; i++) {
               final p = sorted[i];
@@ -262,24 +266,25 @@ class _ProjectsPageState extends State<ProjectsPage> {
               );
 
               if (i != sorted.length - 1) {
-                children.add(const SizedBox(height: 4));
+                children.add(const SizedBox(height: AppSpacing.xs));
               }
             }
           }
 
           return ListView(
-            padding: const EdgeInsets.only(top: 8, bottom: 100),
+            padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
             children: children,
           );
         },
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: FloatingActionButton(
+        heroTag: 'dashboard-quick',
         onPressed: () => _showAddDialog(context),
-        backgroundColor: _accentYellow,
+        backgroundColor: AppColors.accentYellow,
         foregroundColor: Colors.black,
         child: const Icon(Icons.add),
       ),
+      fabLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 

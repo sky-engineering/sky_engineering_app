@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import '../data/models/personal_checklist_item.dart';
 import '../services/personal_checklist_service.dart';
 import '../dialogs/personal_task_edit_dialog.dart';
+import '../theme/tokens.dart';
+import '../widgets/app_page_scaffold.dart';
 
 class PersonalChecklistPage extends StatefulWidget {
   const PersonalChecklistPage({super.key, this.showAppBar = false});
@@ -147,13 +149,13 @@ class _PersonalChecklistPageState extends State<PersonalChecklistPage> {
     } else if (items.isEmpty) {
       content = const Center(
         child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 24),
+          padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
           child: _EmptyState(),
         ),
       );
     } else {
       content = ReorderableListView.builder(
-        padding: const EdgeInsets.fromLTRB(0, 8, 0, 140),
+        padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
         buildDefaultDragHandles: false,
         proxyDecorator: (child, index, animation) {
           final radius = BorderRadius.circular(16);
@@ -170,11 +172,8 @@ class _PersonalChecklistPageState extends State<PersonalChecklistPage> {
           final item = items[index];
           return Padding(
             key: ValueKey(item.id),
-            padding: EdgeInsets.fromLTRB(
-              12,
-              0,
-              12,
-              index == items.length - 1 ? 0 : 12,
+            padding: EdgeInsets.only(
+              bottom: index == items.length - 1 ? 0 : AppSpacing.md,
             ),
             child: ReorderableDelayedDragStartListener(
               index: index,
@@ -193,30 +192,30 @@ class _PersonalChecklistPageState extends State<PersonalChecklistPage> {
 
     final canClearCompleted = !_loading && hasCompleted;
 
-    final body = SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-        child: Column(
-          children: [
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: canClearCompleted ? _clearCompleted : null,
-                icon: const Icon(Icons.clear_all),
-                label: const Text('Clear Completed'),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(child: content),
-          ],
+    final body = Column(
+      children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: canClearCompleted ? _clearCompleted : null,
+            icon: const Icon(Icons.clear_all),
+            label: const Text('Clear Completed'),
+          ),
         ),
-      ),
+        const SizedBox(height: AppSpacing.sm),
+        Expanded(child: content),
+      ],
     );
 
-    return Scaffold(
-      appBar: widget.showAppBar
-          ? AppBar(title: const Text('Personal Tasks'))
-          : null,
+    return AppPageScaffold(
+      title: widget.showAppBar ? 'Personal Tasks' : null,
+      useSafeArea: true,
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.md,
+        0,
+      ),
       body: body,
       floatingActionButton: FloatingActionButton(
         tooltip: 'Add checklist item',
@@ -225,6 +224,7 @@ class _PersonalChecklistPageState extends State<PersonalChecklistPage> {
         onPressed: _addItem,
         child: const Icon(Icons.add),
       ),
+      fabLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 }

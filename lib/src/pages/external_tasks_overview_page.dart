@@ -7,6 +7,8 @@ import '../data/models/external_task.dart';
 import '../data/models/project.dart';
 import '../data/repositories/project_repository.dart';
 import '../data/repositories/external_task_repository.dart';
+import '../theme/tokens.dart';
+import '../widgets/app_page_scaffold.dart';
 import 'project_detail_page.dart';
 
 enum _ExternalTaskSort { teamType, memberName, projectNumber }
@@ -37,152 +39,152 @@ class _ExternalTasksOverviewPageState extends State<ExternalTasksOverviewPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: TextField(
-                controller: _searchCtl,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  hintText: 'Search external tasks...',
-                  border: OutlineInputBorder(),
+    return AppPageScaffold(
+      title: 'External Tasks',
+      useSafeArea: true,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SectionCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: _searchCtl,
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.search),
+                    hintText: 'Search external tasks...',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (value) {
+                    setState(() => _query = value.trim().toLowerCase());
+                  },
                 ),
-                onChanged: (value) {
-                  setState(() => _query = value.trim().toLowerCase());
-                },
-              ),
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  children: [
+                    Text(
+                      'Sort by:',
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    DropdownButton<_ExternalTaskSort>(
+                      value: _sort,
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() => _sort = value);
+                      },
+                      items: const [
+                        DropdownMenuItem(
+                          value: _ExternalTaskSort.teamType,
+                          child: Text('Team Role'),
+                        ),
+                        DropdownMenuItem(
+                          value: _ExternalTaskSort.memberName,
+                          child: Text('Team Member Name'),
+                        ),
+                        DropdownMenuItem(
+                          value: _ExternalTaskSort.projectNumber,
+                          child: Text('Project Number'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
             ),
-            const SizedBox(height: 4),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Text(
-                    'Sort by:',
-                    style: Theme.of(context).textTheme.labelLarge,
-                  ),
-                  const SizedBox(width: 12),
-                  DropdownButton<_ExternalTaskSort>(
-                    value: _sort,
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() => _sort = value);
-                    },
-                    items: const [
-                      DropdownMenuItem(
-                        value: _ExternalTaskSort.teamType,
-                        child: Text('Team Role'),
-                      ),
-                      DropdownMenuItem(
-                        value: _ExternalTaskSort.memberName,
-                        child: Text('Team Member Name'),
-                      ),
-                      DropdownMenuItem(
-                        value: _ExternalTaskSort.projectNumber,
-                        child: Text('Project Number'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 4),
-            Expanded(
-              child: FutureBuilder<void>(
-                future: _seedExternalTaskFlags,
-                builder: (context, seedSnapshot) {
-                  if (seedSnapshot.connectionState != ConnectionState.done) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Expanded(
+            child: FutureBuilder<void>(
+              future: _seedExternalTaskFlags,
+              builder: (context, seedSnapshot) {
+                if (seedSnapshot.connectionState != ConnectionState.done) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-                  return StreamBuilder<List<Project>>(
-                    stream: _projectRepo.streamWithExternalTasks(),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
+                return StreamBuilder<List<Project>>(
+                  stream: _projectRepo.streamWithExternalTasks(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
 
-                      final projects = snapshot.data ?? const <Project>[];
-                      final sortedProjects = [...projects]
-                        ..removeWhere(
-                          (project) =>
-                              (project.externalTasks ?? const <ExternalTask>[])
-                                  .isEmpty,
-                        )
-                        ..sort(_compareProjects);
-                      _projectsCache = sortedProjects;
+                    final projects = snapshot.data ?? const <Project>[];
+                    final sortedProjects = [...projects]
+                      ..removeWhere(
+                        (project) =>
+                            (project.externalTasks ?? const <ExternalTask>[])
+                                .isEmpty,
+                      )
+                      ..sort(_compareProjects);
+                    _projectsCache = sortedProjects;
 
-                      final entries = <_ExternalTaskEntry>[];
-                      for (final project in sortedProjects) {
-                        final tasks = [
-                          ...(project.externalTasks ?? const <ExternalTask>[]),
-                        ]..sort(_compareTasks);
-                        for (final task in tasks) {
-                          entries.add(
-                            _ExternalTaskEntry(project: project, task: task),
-                          );
-                        }
-                      }
-
-                      final filtered = _filterEntries(entries, _query);
-                      final sortedEntries = [...filtered]
-                        ..sort(_entryComparator);
-
-                      if (sortedEntries.isEmpty) {
-                        if (entries.isEmpty) {
-                          return const _EmptyState();
-                        }
-                        return Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Text(
-                              _query.isEmpty
-                                  ? 'No external tasks found.'
-                                  : 'No tasks match your search.',
-                              style: Theme.of(context).textTheme.bodyMedium,
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
+                    final entries = <_ExternalTaskEntry>[];
+                    for (final project in sortedProjects) {
+                      final tasks = [
+                        ...(project.externalTasks ?? const <ExternalTask>[]),
+                      ]..sort(_compareTasks);
+                      for (final task in tasks) {
+                        entries.add(
+                          _ExternalTaskEntry(project: project, task: task),
                         );
                       }
+                    }
 
-                      return ListView.separated(
-                        physics: const ClampingScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(0, 0, 0, 96),
-                        itemCount: sortedEntries.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 12),
-                        itemBuilder: (context, index) {
-                          final entry = sortedEntries[index];
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: _OverviewExternalTaskTile(
-                              project: entry.project,
-                              task: entry.task,
-                              repo: _externalRepo,
-                              onEdit: () => _openEditExternalTask(
-                                  entry.project, entry.task),
-                              onOpenProject: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => ProjectDetailPage(
-                                        projectId: entry.project.id),
-                                  ),
-                                );
-                              },
-                            ),
-                          );
-                        },
+                    final filtered = _filterEntries(entries, _query);
+                    final sortedEntries = [...filtered]..sort(_entryComparator);
+
+                    if (sortedEntries.isEmpty) {
+                      if (entries.isEmpty) {
+                        return const _EmptyState();
+                      }
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(
+                            _query.isEmpty
+                                ? 'No external tasks found.'
+                                : 'No tasks match your search.',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
                       );
-                    },
-                  );
-                },
-              ),
+                    }
+
+                    return ListView.separated(
+                      physics: const ClampingScrollPhysics(),
+                      padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
+                      itemCount: sortedEntries.length,
+                      separatorBuilder: (_, __) =>
+                          const SizedBox(height: AppSpacing.md),
+                      itemBuilder: (context, index) {
+                        final entry = sortedEntries[index];
+                        return _OverviewExternalTaskTile(
+                          project: entry.project,
+                          task: entry.task,
+                          repo: _externalRepo,
+                          onEdit: () =>
+                              _openEditExternalTask(entry.project, entry.task),
+                          onOpenProject: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => ProjectDetailPage(
+                                    projectId: entry.project.id),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    );
+                  },
+                );
+              },
             ),
-          ],
-        ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         tooltip: 'Add external task',
@@ -191,6 +193,7 @@ class _ExternalTasksOverviewPageState extends State<ExternalTasksOverviewPage> {
         onPressed: _openAddTaskDialog,
         child: const Icon(Icons.add),
       ),
+      fabLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 

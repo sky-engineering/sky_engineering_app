@@ -5,8 +5,9 @@ import '../data/models/project.dart';
 import '../data/repositories/client_repository.dart';
 import '../data/repositories/project_repository.dart';
 import '../dialogs/client_editor_dialog.dart';
+import '../theme/tokens.dart';
+import '../widgets/app_page_scaffold.dart';
 import 'project_detail_page.dart';
-import '../app/shell.dart';
 
 class ProposalsPage extends StatelessWidget {
   ProposalsPage({super.key});
@@ -16,18 +17,18 @@ class ProposalsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Proposals'),
-        actions: [
-          IconButton(
-            tooltip: 'Open 001 Proposals project',
-            icon: const Icon(Icons.open_in_new),
-            onPressed: () => _openProposalsProject(context),
-          ),
-        ],
-      ),
-      bottomNavigationBar: const ShellBottomNav(popCurrentRoute: true),
+    return AppPageScaffold(
+      title: 'Proposals',
+      includeShellBottomNav: true,
+      popShellRoute: true,
+      padding: EdgeInsets.zero,
+      actions: [
+        IconButton(
+          tooltip: 'Open 001 Proposals project',
+          icon: const Icon(Icons.open_in_new),
+          onPressed: () => _openProposalsProject(context),
+        ),
+      ],
       body: StreamBuilder<List<ClientRecord>>(
         stream: _clientRepository.streamAll(),
         builder: (context, snapshot) {
@@ -37,7 +38,7 @@ class ProposalsPage extends StatelessWidget {
           if (snapshot.hasError) {
             return Center(
               child: Padding(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(AppSpacing.lg),
                 child: Text('Failed to load clients: ${snapshot.error}'),
               ),
             );
@@ -76,19 +77,30 @@ class ProposalsPage extends StatelessWidget {
             slivers: [
               if (withProposals.isNotEmpty)
                 SliverPadding(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(AppSpacing.md),
                   sliver: _buildGrid(withProposals),
                 ),
               if (withProposals.isNotEmpty && withoutProposals.isNotEmpty)
                 const SliverToBoxAdapter(
                   child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    child: Divider(thickness: 4, color: Colors.red),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                      vertical: AppSpacing.sm,
+                    ),
+                    child: Divider(
+                      thickness: 3,
+                      color: AppColors.warning,
+                    ),
                   ),
                 ),
               if (withoutProposals.isNotEmpty)
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.md,
+                    0,
+                    AppSpacing.md,
+                    AppSpacing.md,
+                  ),
                   sliver: _buildGrid(withoutProposals),
                 ),
             ],
@@ -147,8 +159,8 @@ class ProposalsPage extends StatelessWidget {
       ),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        mainAxisSpacing: 2,
-        crossAxisSpacing: 2,
+        mainAxisSpacing: AppSpacing.xs,
+        crossAxisSpacing: AppSpacing.xs,
         childAspectRatio: 1,
       ),
     );
@@ -163,8 +175,8 @@ class _ProposalClientCard extends StatelessWidget {
   Color _priorityColor(BuildContext context) {
     final clamped = client.priority.clamp(1, 5) as num;
     final fraction = ((clamped - 1) / 4).clamp(0, 1).toDouble();
-    const gold = Color(0xFFF1C400);
-    const blue = Color(0xFF00426A);
+    const gold = AppColors.accentYellow;
+    const blue = AppColors.brandPrimary;
     return Color.lerp(gold, blue, fraction) ?? gold;
   }
 
@@ -202,7 +214,7 @@ class _ProposalClientCard extends StatelessWidget {
     }
     if (hasNotes) {
       if (hasProposals) {
-        detailChildren.add(const SizedBox(height: 6));
+        detailChildren.add(const SizedBox(height: AppSpacing.sm));
       }
       detailChildren.add(
         Flexible(
@@ -222,7 +234,7 @@ class _ProposalClientCard extends StatelessWidget {
       child: InkWell(
         onTap: () => showClientEditorDialog(context, client: client),
         child: Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(AppSpacing.md),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -231,7 +243,7 @@ class _ProposalClientCard extends StatelessWidget {
                 style: titleStyle?.copyWith(color: textColor),
               ),
               if (detailChildren.isNotEmpty) ...[
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.sm),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

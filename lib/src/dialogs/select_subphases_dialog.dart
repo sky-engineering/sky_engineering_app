@@ -4,6 +4,8 @@ import '../data/models/project.dart';
 import '../data/models/subphase_template.dart';
 import '../data/repositories/project_repository.dart';
 import '../data/repositories/subphase_template_repository.dart';
+import '../theme/tokens.dart';
+import '../widgets/form_helpers.dart';
 
 /// Shows all subphases grouped by phase (01..04).
 /// - Pre-checks currently selected project subphases.
@@ -82,14 +84,84 @@ Future<void> showSelectSubphasesDialog(
   final selected = <String>{...existing.map((s) => s.code)};
 
   if (!context.mounted) return;
+
   await showDialog<void>(
     context: context,
-    builder: (context) {
+    builder: (dialogContext) {
       return StatefulBuilder(
-        builder: (context, setState) {
-          return AlertDialog(
-            title: const Text('Select Subphases'),
-            content: SizedBox(
+        builder: (innerContext, setState) {
+          return AppFormDialog(
+            title: 'Select Subphases',
+            width: 600,
+            scrollable: false,
+            actions: [
+              AppDialogActions(
+                secondary: TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                primary: FilledButton(
+                  onPressed: () async {
+                    final navigator = Navigator.of(dialogContext);
+                    final messenger = ScaffoldMessenger.of(dialogContext);
+
+                    final picked = <Map<String, dynamic>>[];
+
+                    for (final code in selected) {
+                      final template = templateByCode[code];
+                      final prev = existingByCode[code];
+                      if (template != null) {
+                        final overriddenName = prev?.name.trim();
+                        final resolvedName = (overriddenName != null &&
+                                overriddenName.isNotEmpty)
+                            ? overriddenName
+                            : template.subphaseName;
+                        picked.add(
+                          SelectedSubphase(
+                            code: template.subphaseCode,
+                            name: resolvedName,
+                            responsibility: template.responsibility,
+                            isDeliverable: template.isDeliverable,
+                            status: prev?.status ?? 'In Progress',
+                          ).toMap(),
+                        );
+                      } else if (prev != null) {
+                        picked.add(prev.toMap());
+                      }
+                    }
+
+                    try {
+                      await projRepo.update(projectId, {
+                        'selectedSubphases': picked,
+                      });
+                      if (navigator.mounted) {
+                        navigator.pop();
+                      }
+                      if (messenger.mounted) {
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Saved ${picked.length} subphase(s).',
+                            ),
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (!navigator.mounted) return;
+                      if (messenger.mounted) {
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text('Failed to save subphases: $e'),
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  child: const Text('Save'),
+                ),
+              ),
+            ],
+            child: SizedBox(
               width: 560,
               height: 520,
               child: ListView.builder(
@@ -100,7 +172,8 @@ Future<void> showSelectSubphasesDialog(
                   if (items.isEmpty) {
                     if (phaseKey == '??') return const SizedBox.shrink();
                     return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      padding:
+                          const EdgeInsets.symmetric(vertical: AppSpacing.sm),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -108,7 +181,7 @@ Future<void> showSelectSubphasesDialog(
                             phaseLabel(phaseKey),
                             style: Theme.of(context).textTheme.titleSmall,
                           ),
-                          const SizedBox(height: 2),
+                          const SizedBox(height: AppSpacing.xs),
                           Text(
                             'No subphases configured for this phase.',
                             style: Theme.of(context).textTheme.bodySmall,
@@ -119,11 +192,13 @@ Future<void> showSelectSubphasesDialog(
                   }
 
                   return Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                     child: Card(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
-                            vertical: 6, horizontal: 8),
+                          vertical: AppSpacing.sm,
+                          horizontal: AppSpacing.md,
+                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -131,7 +206,7 @@ Future<void> showSelectSubphasesDialog(
                               phaseLabel(phaseKey),
                               style: Theme.of(context).textTheme.titleSmall,
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: AppSpacing.xs),
                             ...items.map((t) {
                               final checked = selected.contains(t.subphaseCode);
                               return CheckboxListTile(
@@ -167,76 +242,6 @@ Future<void> showSelectSubphasesDialog(
                 },
               ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () async {
-                  final navigator = Navigator.of(context);
-                  final messenger = ScaffoldMessenger.of(context);
-
-                  // Build new list:
-                  // - For codes in templates: use template snapshot + preserve existing status if any
-                  // - For codes no longer in templates: if still selected and existed before, preserve as-is
-                  final picked = <Map<String, dynamic>>[];
-
-                  for (final code in selected) {
-                    final template = templateByCode[code];
-                    final prev = existingByCode[code];
-                    if (template != null) {
-                      final overriddenName = prev?.name.trim();
-                      final resolvedName =
-                          (overriddenName != null && overriddenName.isNotEmpty)
-                              ? overriddenName
-                              : template.subphaseName;
-                      picked.add(
-                        SelectedSubphase(
-                          code: template.subphaseCode,
-                          name: resolvedName,
-                          responsibility: template.responsibility,
-                          isDeliverable: template.isDeliverable,
-                          status: prev?.status ?? 'In Progress',
-                        ).toMap(),
-                      );
-                    } else if (prev != null) {
-                      picked.add(
-                        prev.toMap(),
-                      ); // preserve unknown legacy selection
-                    }
-                  }
-
-                  try {
-                    await projRepo.update(projectId, {
-                      'selectedSubphases': picked,
-                    });
-                    if (navigator.mounted) {
-                      navigator.pop();
-                    }
-                    if (messenger.mounted) {
-                      messenger.showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Saved ${picked.length} subphase(s).',
-                          ),
-                        ),
-                      );
-                    }
-                  } catch (e) {
-                    if (!navigator.mounted) return;
-                    if (messenger.mounted) {
-                      messenger.showSnackBar(
-                        SnackBar(
-                          content: Text('Failed to save subphases: $e'),
-                        ),
-                      );
-                    }
-                  }
-                },
-                child: const Text('Save'),
-              ),
-            ],
           );
         },
       );

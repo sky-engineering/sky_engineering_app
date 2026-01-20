@@ -12,6 +12,8 @@ import '../data/models/project.dart';
 import '../data/repositories/project_repository.dart';
 import '../integrations/dropbox/dropbox_api.dart';
 import '../integrations/dropbox/dropbox_auth.dart';
+import '../theme/tokens.dart';
+import '../widgets/app_page_scaffold.dart';
 
 class NoteEditorPage extends StatefulWidget {
   const NoteEditorPage({super.key});
@@ -68,12 +70,17 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     final body = Column(
       children: [
         if (_attachments.isNotEmpty) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sm),
           _buildAttachmentStrip(),
         ],
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              0,
+              AppSpacing.md,
+              AppSpacing.md,
+            ),
             child: TextField(
               controller: _controller,
               decoration: const InputDecoration(
@@ -85,24 +92,22 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               maxLines: null,
               keyboardType: TextInputType.multiline,
               contextMenuBuilder: (context, EditableTextState state) {
-                final items = state.contextMenuButtonItems
-                    .map((item) {
-                      if (item.type == ContextMenuButtonType.paste) {
-                        final original = item.onPressed;
-                        return ContextMenuButtonItem(
-                          type: item.type,
-                          onPressed: () async {
-                            Navigator.of(context).pop();
-                            final handled = await _handlePaste();
-                            if (!handled) {
-                              original?.call();
-                            }
-                          },
-                        );
-                      }
-                      return item;
-                    })
-                    .toList(growable: false);
+                final items = state.contextMenuButtonItems.map((item) {
+                  if (item.type == ContextMenuButtonType.paste) {
+                    final original = item.onPressed;
+                    return ContextMenuButtonItem(
+                      type: item.type,
+                      onPressed: () async {
+                        Navigator.of(context).pop();
+                        final handled = await _handlePaste();
+                        if (!handled) {
+                          original?.call();
+                        }
+                      },
+                    );
+                  }
+                  return item;
+                }).toList(growable: false);
                 return AdaptiveTextSelectionToolbar.buttonItems(
                   anchors: state.contextMenuAnchors,
                   buttonItems: items,
@@ -125,16 +130,15 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           navigator.pop();
         }
       },
-      child: Scaffold(
+      child: AppPageScaffold(
         appBar: AppBar(
           title: const Text('New Note'),
           leading: BackButton(onPressed: _handleBack),
           actions: [
             IconButton(
               tooltip: 'Add photo',
-              onPressed: (_saving || _isPickingImage)
-                  ? null
-                  : _showImageSourceSheet,
+              onPressed:
+                  (_saving || _isPickingImage) ? null : _showImageSourceSheet,
               icon: _isPickingImage
                   ? const SizedBox(
                       width: 18,
@@ -155,6 +159,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             ),
           ],
         ),
+        padding: EdgeInsets.zero,
+        useSafeArea: true,
         body: body,
       ),
     );

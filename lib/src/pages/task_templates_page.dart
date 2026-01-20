@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../data/models/task_template.dart';
 import '../data/repositories/task_template_repository.dart';
+import '../theme/tokens.dart';
+import '../widgets/app_page_scaffold.dart';
 import '../widgets/form_helpers.dart';
 
 class TaskTemplatesPage extends StatelessWidget {
@@ -25,13 +27,18 @@ class TaskTemplatesPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final me = FirebaseAuth.instance.currentUser;
     if (me == null) {
-      return const Scaffold(
+      return const AppPageScaffold(
+        title: 'Task Templates',
+        useSafeArea: true,
+        padding: EdgeInsets.all(AppSpacing.md),
         body: Center(child: Text('Please sign in to view templates')),
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Task Templates')),
+    return AppPageScaffold(
+      title: 'Task Templates',
+      useSafeArea: true,
+      padding: const EdgeInsets.all(AppSpacing.md),
       body: StreamBuilder<List<TaskTemplate>>(
         stream: _repo.streamForUser(me.uid),
         builder: (context, snap) {
@@ -49,9 +56,8 @@ class TaskTemplatesPage extends StatelessWidget {
           // Group by contract phase (first 2 digits)
           final grouped = <String, List<TaskTemplate>>{};
           for (final t in items) {
-            final phase = (t.taskCode.length >= 2)
-                ? t.taskCode.substring(0, 2)
-                : '00';
+            final phase =
+                (t.taskCode.length >= 2) ? t.taskCode.substring(0, 2) : '00';
             grouped.putIfAbsent(phase, () => []).add(t);
           }
 
@@ -59,13 +65,16 @@ class TaskTemplatesPage extends StatelessWidget {
             ..sort((a, b) => _phaseOrder(a).compareTo(_phaseOrder(b)));
 
           return ListView.builder(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
             itemCount:
                 orderedPhaseKeys.length + 1, // +1 for bottom "New" button
             itemBuilder: (context, index) {
               if (index == orderedPhaseKeys.length) {
                 return Padding(
-                  padding: const EdgeInsets.only(top: 8, bottom: 20),
+                  padding: const EdgeInsets.only(
+                    top: AppSpacing.sm,
+                    bottom: AppSpacing.xl,
+                  ),
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: FilledButton.icon(
@@ -84,7 +93,7 @@ class TaskTemplatesPage extends StatelessWidget {
 
               return Card(
                 child: Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(AppSpacing.md),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -92,7 +101,7 @@ class TaskTemplatesPage extends StatelessWidget {
                         _phaseLabel(phase),
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpacing.sm),
                       ListView.separated(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
@@ -123,7 +132,8 @@ class TaskTemplatesPage extends StatelessWidget {
                             onTap: () => _showEditDialog(context, task),
                           );
                         },
-                        separatorBuilder: (_, __) => const SizedBox(height: 6),
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(height: AppSpacing.xs),
                         itemCount: tasks.length,
                       ),
                     ],
@@ -178,20 +188,20 @@ class _Empty extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(AppSpacing.xl),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(Icons.list_alt, size: 80),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.sm),
             const Text('No template tasks yet'),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.sm),
             FilledButton.icon(
               onPressed: onAdd,
               icon: const Icon(Icons.add),
               label: const Text('New Template Task'),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.xs),
             TextButton.icon(
               onPressed: onSeed,
               icon: const Icon(Icons.playlist_add),

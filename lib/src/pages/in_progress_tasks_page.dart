@@ -6,8 +6,10 @@ import '../data/models/task.dart';
 import '../app/user_access_scope.dart';
 
 import '../data/repositories/task_repository.dart';
-import 'project_detail_page.dart';
 import '../dialogs/task_edit_dialog.dart';
+import '../theme/tokens.dart';
+import '../widgets/app_page_scaffold.dart';
+import 'project_detail_page.dart';
 
 class InProgressTasksPage extends StatelessWidget {
   InProgressTasksPage({super.key});
@@ -19,14 +21,19 @@ class InProgressTasksPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final me = FirebaseAuth.instance.currentUser;
     if (me == null) {
-      return const Scaffold(
+      return const AppPageScaffold(
+        title: 'Current Tasks',
+        useSafeArea: true,
+        padding: EdgeInsets.all(AppSpacing.md),
         body: Center(child: Text('Please sign in to view tasks')),
       );
     }
     final access = UserAccessScope.maybeOf(context);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Current Tasks')),
+    return AppPageScaffold(
+      title: 'Current Tasks',
+      useSafeArea: true,
+      padding: const EdgeInsets.all(AppSpacing.md),
       body: StreamBuilder<List<TaskItem>>(
         stream: _repo.streamByStatuses(me.uid, _statuses),
         builder: (context, snap) {
@@ -40,7 +47,7 @@ class InProgressTasksPage extends StatelessWidget {
           }
 
           return ListView.separated(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
             itemCount: list.length,
             separatorBuilder: (_, __) => const SizedBox(height: 8),
             itemBuilder: (context, i) {

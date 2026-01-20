@@ -9,6 +9,8 @@ import 'subphases_page.dart';
 import '../dialogs/city_inspect_links_dialog.dart';
 import '../dialogs/other_links_dialog.dart';
 import '../pages/clients_page.dart';
+import '../theme/tokens.dart';
+import '../widgets/app_page_scaffold.dart';
 
 class DashboardPage extends StatelessWidget {
   DashboardPage({super.key});
@@ -52,83 +54,100 @@ class DashboardPage extends StatelessWidget {
       );
     }
 
-    return Align(
-      alignment: Alignment.topCenter,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 24, 16, 72),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Image.asset(
-                  'assets/SkyEngineering-Horizontal-Light.png',
-                  height: 128,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Center(child: Text(_user?.email ?? '(no email)')),
-              const SizedBox(height: 28),
-              linkButton('Workload', () {
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => BigPicturePage()));
-              }),
-              const SizedBox(height: 16),
-              linkButton('Proposals', () {
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => ProposalsPage()));
-              }),
-              const SizedBox(height: 16),
-              linkButton('Checklists', () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const TemplateChecklistsPage(),
-                  ),
-                );
-              }),
-              const SizedBox(height: 16),
-              linkButton('Clients', () {
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => ClientsPage()));
-              }),
-              const SizedBox(height: 16),
-              linkButton('Task Structure', () {
-                Navigator.of(
-                  context,
-                ).push(
-                    MaterialPageRoute(builder: (_) => const SubphasesPage()));
-              }),
-              const SizedBox(height: 24),
-              linkButton('Sky Engineering Dropbox', () {
-                _launchExternal(
-                  context,
-                  'https://www.dropbox.com/scl/fo/qb19djm48m3ko65x8ua1n/ADxAvonvBPlx5uVypAWlQ6A?rlkey=e9brozwr2qpq9k1b0t256kt56&dl=0',
-                );
-              }),
-              const SizedBox(height: 16),
-              linkButton('City Inspect Links', () {
-                showCityInspectLinksDialog(context);
-              }),
-              const SizedBox(height: 16),
-              linkButton('Washington County GIS', () {
-                _launchExternal(
-                  context,
-                  'https://geoprodvm.washco.utah.gov/Html5Viewer/?viewer=RecordersOffice',
-                );
-              }),
-              const SizedBox(height: 16),
-              linkButton('Other Links', () {
-                showOtherLinksDialog(context);
-              }),
-              const SizedBox(height: 32),
-            ],
-          ),
+    Widget buildLinkGroup(String title, List<Widget> buttons) {
+      return SectionCard(
+        header: SectionHeader(title: title),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: _withGaps(buttons),
         ),
+      );
+    }
+
+    final workflowLinks = buildLinkGroup(
+      'Workspace',
+      [
+        linkButton('Workload', () {
+          Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => BigPicturePage()));
+        }),
+        linkButton('Proposals', () {
+          Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => ProposalsPage()));
+        }),
+        linkButton('Checklists', () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const TemplateChecklistsPage()),
+          );
+        }),
+        linkButton('Clients', () {
+          Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => ClientsPage()));
+        }),
+        linkButton('Task Structure', () {
+          Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const SubphasesPage()));
+        }),
+      ],
+    );
+
+    final resourcesLinks = buildLinkGroup(
+      'Resources',
+      [
+        linkButton('Sky Engineering Dropbox', () {
+          _launchExternal(
+            context,
+            'https://www.dropbox.com/scl/fo/qb19djm48m3ko65x8ua1n/ADxAvonvBPlx5uVypAWlQ6A?rlkey=e9brozwr2qpq9k1b0t256kt56&dl=0',
+          );
+        }),
+        linkButton('City Inspect Links', () {
+          showCityInspectLinksDialog(context);
+        }),
+        linkButton('Washington County GIS', () {
+          _launchExternal(
+            context,
+            'https://geoprodvm.washco.utah.gov/Html5Viewer/?viewer=RecordersOffice',
+          );
+        }),
+        linkButton('Other Links', () {
+          showOtherLinksDialog(context);
+        }),
+      ],
+    );
+
+    return AppPageScaffold(
+      title: 'Dashboard',
+      scrollable: true,
+      useSafeArea: true,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Image.asset(
+              'assets/SkyEngineering-Horizontal-Light.png',
+              height: 128,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Center(child: Text(_user?.email ?? '(no email)')),
+          const SizedBox(height: AppSpacing.lg),
+          workflowLinks,
+          const SizedBox(height: AppSpacing.lg),
+          resourcesLinks,
+        ],
       ),
     );
+  }
+
+  List<Widget> _withGaps(List<Widget> children) {
+    final spaced = <Widget>[];
+    for (var i = 0; i < children.length; i++) {
+      spaced.add(children[i]);
+      if (i != children.length - 1) {
+        spaced.add(const SizedBox(height: AppSpacing.sm));
+      }
+    }
+    return spaced;
   }
 }

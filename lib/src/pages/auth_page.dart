@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../ui/loading_overlay.dart';
+import '../theme/tokens.dart';
+import '../widgets/app_page_scaffold.dart';
 
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key});
@@ -86,109 +88,109 @@ class _AuthPageState extends State<AuthPage> {
     final outlinedBorderColor = colorScheme.outline;
     const buttonPadding = EdgeInsets.symmetric(vertical: 14);
 
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Form(
-                key: _formKey,
-                child: AutofillGroup(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Image.asset(
-                        'assets/SkyEngineering-Horizontal-Light.png',
-                        height: 128,
+    return AppPageScaffold(
+      useSafeArea: true,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.lg,
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Form(
+              key: _formKey,
+              child: AutofillGroup(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Image.asset(
+                      'assets/SkyEngineering-Horizontal-Light.png',
+                      height: 128,
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    TextFormField(
+                      controller: _emailCtl,
+                      decoration: const InputDecoration(
+                        labelText: 'Email',
+                        hintText: 'you@company.com',
+                        border: OutlineInputBorder(),
                       ),
-                      const SizedBox(height: 24),
-                      TextFormField(
-                        controller: _emailCtl,
-                        decoration: const InputDecoration(
-                          labelText: 'Email',
-                          hintText: 'you@company.com',
-                          border: OutlineInputBorder(),
-                        ),
-                        keyboardType: TextInputType.emailAddress,
-                        autofillHints: const [AutofillHints.username],
-                        textInputAction: TextInputAction.next,
-                        validator: (v) {
-                          v = v?.trim();
-                          if (v == null || v.isEmpty) return 'Email required';
-                          if (!v.contains('@') || !v.contains('.')) {
-                            return 'Enter a valid email';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _passwordCtl,
-                        decoration: InputDecoration(
-                          labelText: 'Password',
-                          border: const OutlineInputBorder(),
-                          suffixIcon: IconButton(
-                            onPressed: () =>
-                                setState(() => _obscure = !_obscure),
-                            icon: Icon(
-                              _obscure
-                                  ? Icons.visibility
-                                  : Icons.visibility_off,
-                            ),
+                      keyboardType: TextInputType.emailAddress,
+                      autofillHints: const [AutofillHints.username],
+                      textInputAction: TextInputAction.next,
+                      validator: (v) {
+                        v = v?.trim();
+                        if (v == null || v.isEmpty) return 'Email required';
+                        if (!v.contains('@') || !v.contains('.')) {
+                          return 'Enter a valid email';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    TextFormField(
+                      controller: _passwordCtl,
+                      decoration: InputDecoration(
+                        labelText: 'Password',
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          onPressed: () => setState(() => _obscure = !_obscure),
+                          icon: Icon(
+                            _obscure ? Icons.visibility : Icons.visibility_off,
                           ),
                         ),
-                        obscureText: _obscure,
-                        autofillHints: const [AutofillHints.password],
-                        textInputAction: TextInputAction.done,
-                        onFieldSubmitted: (_) => _loading ? null : _signIn(),
-                        validator: (v) {
-                          if (v == null || v.isEmpty) {
-                            return 'Password required';
-                          }
-                          if (v.length < 6) return 'Min 6 characters';
-                          return null;
-                        },
                       ),
-                      const SizedBox(height: 24),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: FilledButton(
-                              onPressed: _loading ? null : _signIn,
-                              style: FilledButton.styleFrom(
-                                shape: buttonShape,
-                                padding: buttonPadding,
-                              ),
-                              child: _loading
-                                  ? const SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Text('Sign In'),
+                      obscureText: _obscure,
+                      autofillHints: const [AutofillHints.password],
+                      textInputAction: TextInputAction.done,
+                      onFieldSubmitted: (_) => _loading ? null : _signIn(),
+                      validator: (v) {
+                        if (v == null || v.isEmpty) {
+                          return 'Password required';
+                        }
+                        if (v.length < 6) return 'Min 6 characters';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: _loading ? null : _signIn,
+                            style: FilledButton.styleFrom(
+                              shape: buttonShape,
+                              padding: buttonPadding,
                             ),
+                            child: _loading
+                                ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Text('Sign In'),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: _loading ? null : _register,
-                              style: OutlinedButton.styleFrom(
-                                shape: buttonShape,
-                                padding: buttonPadding,
-                                foregroundColor: outlinedTextColor,
-                                side: BorderSide(color: outlinedBorderColor),
-                              ),
-                              child: const Text('Create Account'),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: _loading ? null : _register,
+                            style: OutlinedButton.styleFrom(
+                              shape: buttonShape,
+                              padding: buttonPadding,
+                              foregroundColor: outlinedTextColor,
+                              side: BorderSide(color: outlinedBorderColor),
                             ),
+                            child: const Text('Create Account'),
                           ),
-                        ],
-                      ),
-                    ],
-                  ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),

@@ -1,14 +1,11 @@
 // lib/src/theme/app_theme.dart
 import 'package:flutter/material.dart';
 
-class AppTheme {
-  // Brand palette
-  static const int _primaryHex = 0xFF00426A; // dark brand blue
-  static const int _onSurfaceHex = 0xFFB2B4B3; // light grey text
-  static const int _accentHex = 0xFFF1C400; // sparing accent (yellow)
+import 'tokens.dart';
 
+class AppTheme {
   static ThemeData dark() {
-    final seed = const Color(_primaryHex);
+    const seed = AppColors.brandPrimary;
 
     final base = ThemeData(
       useMaterial3: true,
@@ -22,9 +19,9 @@ class AppTheme {
     final cs = base.colorScheme.copyWith(
       primary: seed,
       onPrimary: Colors.white,
-      surface: seed, // use brand blue as surfaces
-      onSurface: const Color(_onSurfaceHex),
-      secondary: const Color(_accentHex),
+      surface: AppColors.brandPrimaryDark,
+      onSurface: AppColors.onSurface,
+      secondary: AppColors.accentYellow,
       onSecondary: Colors.black,
     );
 
@@ -32,18 +29,15 @@ class AppTheme {
       colorScheme: cs,
       scaffoldBackgroundColor: cs.surface,
       canvasColor: cs.surface,
-
-      // <-- This is the line that fixes your build error
       cardTheme: CardThemeData(
         color: cs.surface,
-        elevation: 1,
-        margin: const EdgeInsets.all(8),
+        elevation: AppElevations.card,
+        margin: const EdgeInsets.all(AppSpacing.sm),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadii.lg,
           side: BorderSide(color: cs.outlineVariant),
         ),
       ),
-
       listTileTheme: ListTileThemeData(
         textColor: cs.onSurface,
         iconColor: cs.onSurface,
@@ -51,14 +45,16 @@ class AppTheme {
           color: cs.onSurface.withValues(alpha: 0.85),
         ),
       ),
-
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: cs.onSurface,
           textStyle: const TextStyle(fontWeight: FontWeight.w600),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
         ),
       ),
-
       appBarTheme: AppBarTheme(
         backgroundColor: cs.surface,
         foregroundColor: cs.onSurface,
@@ -71,51 +67,62 @@ class AppTheme {
         ),
         iconTheme: IconThemeData(color: cs.onSurface),
       ),
-
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: cs.primary,
           foregroundColor: cs.onPrimary,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.sm,
           ),
+          shape: RoundedRectangleBorder(borderRadius: AppRadii.md),
         ),
       ),
-
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: cs.secondary, // accent
+          backgroundColor: cs.secondary,
           foregroundColor: cs.onSecondary,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.sm,
           ),
+          shape: RoundedRectangleBorder(borderRadius: AppRadii.md),
         ),
       ),
-
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: cs.surface.withValues(alpha: 0.25),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppRadii.md,
           borderSide: BorderSide(color: cs.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppRadii.md,
           borderSide: BorderSide(color: cs.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppRadii.md,
           borderSide: BorderSide(color: cs.secondary, width: 1.5),
         ),
         labelStyle: TextStyle(color: cs.onSurface.withValues(alpha: 0.9)),
         hintStyle: TextStyle(color: cs.onSurface.withValues(alpha: 0.7)),
       ),
-
       dividerTheme: DividerThemeData(
         color: cs.onSurface.withValues(alpha: 0.2),
         thickness: 1,
+      ),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: AppColors.accentYellow,
+        foregroundColor: Colors.black,
+        elevation: AppElevations.floating,
+        extendedPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.sm,
+        ),
       ),
     );
   }

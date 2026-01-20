@@ -15,6 +15,7 @@ import '../dialogs/select_subphases_dialog.dart';
 import 'form_helpers.dart';
 import '../dialogs/task_edit_dialog.dart';
 import '../ui/loading_overlay.dart';
+import '../theme/tokens.dart';
 
 const _kTaskStatuses = <String>[
   'In Progress',
@@ -23,7 +24,11 @@ const _kTaskStatuses = <String>[
   'Completed',
 ];
 const _kSubphaseStatuses = <String>['In Progress', 'On Hold', 'Completed'];
-const _accentYellow = Color(0xFFF1C400);
+@visibleForTesting
+bool isProjectTaskActiveStatus(String? status) {
+  final normalized = (status ?? '').trim().toLowerCase();
+  return normalized == 'in progress';
+}
 
 class TasksBySubphaseSection extends StatefulWidget {
   final String projectId;
@@ -44,7 +49,7 @@ class TasksBySubphaseSection extends StatefulWidget {
 }
 
 class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
-  bool _activeOnly = false; // show only In Progress + Pending
+  bool _activeOnly = false; // show only truly active tasks (In Progress)
 
   @override
   Widget build(BuildContext context) {
@@ -150,12 +155,12 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                     padding: EdgeInsets.zero,
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    foregroundColor: _accentYellow,
+                    foregroundColor: AppColors.accentYellow,
                   ),
                   child: Text(
                     _activeOnly ? 'Show Inactive Tasks' : 'Hide Inactive Tasks',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: _accentYellow,
+                          color: AppColors.accentYellow,
                           fontWeight: FontWeight.w600,
                         ),
                   ),
@@ -166,10 +171,9 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
             // Helper to filter a list by activeOnly (In Progress + Pending)
             List<TaskItem> maybeFilter(List<TaskItem> input) {
               if (!_activeOnly) return input;
-              return input.where((t) {
-                final s = t.taskStatus;
-                return s == 'In Progress' || s == 'Pending';
-              }).toList();
+              return input
+                  .where((t) => isProjectTaskActiveStatus(t.taskStatus))
+                  .toList();
             }
 
             final otherTasks = maybeFilter(other);
@@ -236,7 +240,7 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                     heroTag: null,
                     onPressed: () => _showAddTaskDialog(context,
                         widget.projectId, sel, widget.ownerUidForWrites),
-                    backgroundColor: _accentYellow,
+                    backgroundColor: AppColors.accentYellow,
                     foregroundColor: Colors.black,
                     child: const Icon(Icons.add),
                   ),
@@ -386,7 +390,7 @@ class _SubphaseBox extends StatelessWidget {
                             style: const TextStyle(
                               fontWeight: FontWeight.w600,
                               fontSize: 15,
-                              color: _accentYellow,
+                              color: AppColors.accentYellow,
                             ),
                             maxLines: 2,
                             softWrap: true,
@@ -810,7 +814,8 @@ class _SubphaseTaskListState extends State<_SubphaseTaskList> {
     return true;
   }
 
-  static bool _hasDifferentInstances(List<TaskItem> next, List<TaskItem> current) {
+  static bool _hasDifferentInstances(
+      List<TaskItem> next, List<TaskItem> current) {
     if (next.length != current.length) return true;
     for (var i = 0; i < next.length; i++) {
       if (!identical(next[i], current[i])) {

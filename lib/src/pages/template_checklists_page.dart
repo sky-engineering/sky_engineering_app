@@ -6,6 +6,8 @@ import '../data/models/checklist.dart';
 import '../data/models/project.dart';
 import '../data/repositories/project_repository.dart';
 import '../dialogs/checklist_edit_dialog.dart';
+import '../theme/tokens.dart';
+import '../widgets/app_page_scaffold.dart';
 
 class TemplateChecklistsPage extends StatefulWidget {
   const TemplateChecklistsPage({super.key});
@@ -152,58 +154,45 @@ class _TemplateChecklistsPageState extends State<TemplateChecklistsPage> {
       },
     );
 
-    final scaffold = Scaffold(
-      appBar: AppBar(
-        title: const Text('Checklists'),
-      ),
+    return AppPageScaffold(
+      title: 'Checklists',
+      useSafeArea: true,
+      padding: const EdgeInsets.all(AppSpacing.md),
       body: listContent,
-    );
-
-    return Stack(
-      children: [
-        scaffold,
-        Positioned(
-          right: 24,
-          bottom: 32,
-          child: SizedBox(
-            width: 220,
-            height: 220,
-            child: Stack(
-              alignment: Alignment.bottomRight,
-              clipBehavior: Clip.none,
-              children: [
-                _RadialFabOption(
-                  label: 'Project Checklist',
-                  icon: Icons.assignment_add,
-                  offset: const Offset(88, 54),
-                  visible: _fabExpanded,
-                  onTap: () {
-                    setState(() => _fabExpanded = false);
-                    _createProjectChecklist();
-                  },
-                ),
-                _RadialFabOption(
-                  label: 'Template Checklist',
-                  icon: Icons.playlist_add,
-                  offset: const Offset(30, 118),
-                  visible: _fabExpanded,
-                  onTap: () {
-                    setState(() => _fabExpanded = false);
-                    _createTemplate();
-                  },
-                ),
-                FloatingActionButton(
-                  backgroundColor: const Color(0xFFF1C400),
-                  foregroundColor: Colors.black,
-                  tooltip: 'Add checklist',
-                  onPressed: () => setState(() => _fabExpanded = !_fabExpanded),
-                  child: const Icon(Icons.add),
-                ),
-              ],
-            ),
+      floatingActionButton: Stack(
+        alignment: Alignment.bottomRight,
+        clipBehavior: Clip.none,
+        children: [
+          _RadialFabOption(
+            label: 'Project Checklist',
+            icon: Icons.assignment_add,
+            offset: const Offset(88, 54),
+            visible: _fabExpanded,
+            onTap: () {
+              setState(() => _fabExpanded = false);
+              _createProjectChecklist();
+            },
           ),
-        ),
-      ],
+          _RadialFabOption(
+            label: 'Template Checklist',
+            icon: Icons.playlist_add,
+            offset: const Offset(30, 118),
+            visible: _fabExpanded,
+            onTap: () {
+              setState(() => _fabExpanded = false);
+              _createTemplate();
+            },
+          ),
+          FloatingActionButton(
+            backgroundColor: const Color(0xFFF1C400),
+            foregroundColor: Colors.black,
+            tooltip: 'Add checklist',
+            onPressed: () => setState(() => _fabExpanded = !_fabExpanded),
+            child: const Icon(Icons.add),
+          ),
+        ],
+      ),
+      fabLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 

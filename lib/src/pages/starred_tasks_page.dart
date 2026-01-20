@@ -13,6 +13,8 @@ import 'personal_checklist_page.dart';
 import '../data/repositories/project_repository.dart';
 import '../data/repositories/task_repository.dart';
 import '../data/repositories/external_task_repository.dart';
+import '../theme/tokens.dart';
+import '../widgets/app_page_scaffold.dart';
 import 'project_detail_page.dart';
 import '../dialogs/task_edit_dialog.dart';
 import '../dialogs/personal_task_edit_dialog.dart';
@@ -741,7 +743,10 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
   @override
   Widget build(BuildContext context) {
     if (_user == null) {
-      return const Scaffold(
+      return const AppPageScaffold(
+        title: 'Starred Tasks',
+        useSafeArea: true,
+        padding: EdgeInsets.all(AppSpacing.md),
         body: Center(child: Text('Please sign in to view starred tasks')),
       );
     }
@@ -749,8 +754,11 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
     final hasEntries = _entries.isNotEmpty;
 
     if (_loading && !hasEntries) {
-      return Scaffold(
-        body: const Center(child: CircularProgressIndicator()),
+      return const AppPageScaffold(
+        title: 'Starred Tasks',
+        useSafeArea: true,
+        padding: EdgeInsets.all(AppSpacing.md),
+        body: Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -759,17 +767,14 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
     if (hasEntries) {
       slivers.add(
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(0, 12, 0, 24),
+          padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
           sliver: SliverReorderableList(
             itemCount: _entries.length,
             onReorder: _handleReorder,
             itemBuilder: (context, index) {
               final entry = _entries[index];
-              final padding = EdgeInsets.fromLTRB(
-                12,
-                0,
-                12,
-                index == _entries.length - 1 ? 0 : 12,
+              final padding = EdgeInsets.only(
+                bottom: index == _entries.length - 1 ? 0 : AppSpacing.md,
               );
               if (entry.isTask) {
                 final task = entry.task!;
@@ -859,24 +864,25 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
       );
     } else if (!_loading) {
       slivers.add(
-        SliverToBoxAdapter(
-          child: const Padding(
-            padding: EdgeInsets.fromLTRB(12, 24, 12, 12),
-            child: _Empty(),
-          ),
-        ),
+        const SliverToBoxAdapter(child: _Empty()),
       );
     }
 
     if (slivers.isEmpty) {
-      return Scaffold(
+      return AppPageScaffold(
+        title: 'Starred Tasks',
+        useSafeArea: true,
+        padding: const EdgeInsets.all(AppSpacing.md),
         body: _loading
             ? const Center(child: CircularProgressIndicator())
             : const _Empty(),
       );
     }
 
-    return Scaffold(
+    return AppPageScaffold(
+      title: 'Starred Tasks',
+      useSafeArea: true,
+      padding: const EdgeInsets.all(AppSpacing.md),
       body: CustomScrollView(slivers: slivers),
     );
   }

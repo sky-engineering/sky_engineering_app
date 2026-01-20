@@ -3,19 +3,25 @@ import 'package:flutter/material.dart';
 import '../data/models/client.dart';
 import '../data/repositories/client_repository.dart';
 import '../dialogs/client_editor_dialog.dart';
-import '../app/shell.dart';
-
-const _accentYellow = Color(0xFFF1C400);
+import '../theme/tokens.dart';
+import '../widgets/app_page_scaffold.dart';
 
 class ClientsPage extends StatelessWidget {
   ClientsPage({super.key});
 
   final ClientRepository _repo = ClientRepository();
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Clients')),
-      bottomNavigationBar: const ShellBottomNav(popCurrentRoute: true),
+    return AppPageScaffold(
+      title: 'Clients',
+      includeShellBottomNav: true,
+      popShellRoute: true,
+      padding: EdgeInsets.zero,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => showClientEditorDialog(context),
+        child: const Icon(Icons.add),
+      ),
       body: StreamBuilder<List<ClientRecord>>(
         stream: _repo.streamAll(),
         builder: (context, snapshot) {
@@ -25,7 +31,7 @@ class ClientsPage extends StatelessWidget {
           if (snapshot.hasError) {
             return Center(
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(AppSpacing.lg),
                 child: Text('Failed to load clients: ${snapshot.error}'),
               ),
             );
@@ -46,12 +52,6 @@ class ClientsPage extends StatelessWidget {
             },
           );
         },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => showClientEditorDialog(context),
-        backgroundColor: _accentYellow,
-        foregroundColor: Colors.black,
-        child: const Icon(Icons.add),
       ),
     );
   }
