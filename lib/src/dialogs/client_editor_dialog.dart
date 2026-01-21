@@ -177,13 +177,16 @@ Future<void> showClientEditorDialog(
                   Row(
                     children: [
                       Expanded(
-                        child: appTextField(
-                          'Client code',
-                          codeCtl,
-                          required: true,
-                          hint: 'e.g., 001',
+                        child: TextFormField(
+                          controller: codeCtl,
                           keyboardType: TextInputType.number,
                           maxLength: 3,
+                          decoration: const InputDecoration(
+                            labelText: 'Client code',
+                            hintText: 'e.g., 001',
+                            border: OutlineInputBorder(),
+                            counterText: '',
+                          ),
                           validator: (value) {
                             final v = value?.trim() ?? '';
                             if (v.isEmpty) return 'Required';

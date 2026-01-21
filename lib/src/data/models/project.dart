@@ -20,6 +20,7 @@ const kBigPictureLaneValues = <String>[
   'finishingTouches',
   'strongProposals',
   'inactive',
+  'unassigned',
 ];
 
 /// Each project stores the selected subphases + per-project status.

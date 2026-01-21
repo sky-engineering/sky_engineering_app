@@ -6,6 +6,7 @@ import 'template_checklists_page.dart';
 import 'big_picture_page.dart';
 import 'proposals_page.dart';
 import 'subphases_page.dart';
+import 'contract_snapshot_page.dart';
 import '../dialogs/city_inspect_links_dialog.dart';
 import '../dialogs/other_links_dialog.dart';
 import '../pages/clients_page.dart';
@@ -71,6 +72,11 @@ class DashboardPage extends StatelessWidget {
           Navigator.of(context)
               .push(MaterialPageRoute(builder: (_) => BigPicturePage()));
         }),
+        linkButton('Contract Snapshot', () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => ContractSnapshotPage()),
+          );
+        }),
         linkButton('Proposals', () {
           Navigator.of(context)
               .push(MaterialPageRoute(builder: (_) => ProposalsPage()));
@@ -116,7 +122,6 @@ class DashboardPage extends StatelessWidget {
     );
 
     return AppPageScaffold(
-      title: 'Dashboard',
       scrollable: true,
       useSafeArea: true,
       padding: const EdgeInsets.all(AppSpacing.lg),

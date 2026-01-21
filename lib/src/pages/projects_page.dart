@@ -67,7 +67,6 @@ class _ProjectsPageState extends State<ProjectsPage> {
     final repo = ProjectRepository();
 
     return AppPageScaffold(
-      title: 'Projects',
       useSafeArea: true,
       padding: const EdgeInsets.all(AppSpacing.md),
       body: StreamBuilder<List<Project>>(

@@ -77,41 +77,43 @@ class _InvoicesPageState extends State<InvoicesPage> {
     final dateFormat = DateFormat('MM/dd/yy');
 
     final filterCard = SectionCard(
-      header: const SectionHeader(title: 'Filters'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: () => setState(() => _unpaidOnly = !_unpaidOnly),
-              style: TextButton.styleFrom(
-                padding: EdgeInsets.zero,
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                foregroundColor: AppColors.accentYellow,
+          Row(
+            children: [
+              Expanded(
+                child: SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'Client', label: Text('Clients')),
+                    ButtonSegment(value: 'Vendor', label: Text('Vendors')),
+                  ],
+                  selected: {_typeFilter},
+                  showSelectedIcon: false,
+                  onSelectionChanged: (set) {
+                    if (set.isEmpty) return;
+                    setState(() => _typeFilter = set.first);
+                  },
+                ),
               ),
-              child: Text(
-                _unpaidOnly ? 'Show Paid Invoices' : 'Hide Paid Invoices',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.accentYellow,
-                      fontWeight: FontWeight.w600,
-                    ),
+              const SizedBox(width: AppSpacing.sm),
+              TextButton(
+                onPressed: () => setState(() => _unpaidOnly = !_unpaidOnly),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  foregroundColor: AppColors.accentYellow,
+                ),
+                child: Text(
+                  _unpaidOnly ? 'Show Paid Invoices' : 'Hide Paid Invoices',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.accentYellow,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'Client', label: Text('Clients')),
-              ButtonSegment(value: 'Vendor', label: Text('Vendors')),
             ],
-            selected: {_typeFilter},
-            showSelectedIcon: false,
-            onSelectionChanged: (set) {
-              if (set.isEmpty) return;
-              setState(() => _typeFilter = set.first);
-            },
           ),
           const SizedBox(height: AppSpacing.md),
           TextField(
@@ -169,7 +171,6 @@ class _InvoicesPageState extends State<InvoicesPage> {
     );
 
     return AppPageScaffold(
-      title: 'Invoices',
       useSafeArea: true,
       padding: const EdgeInsets.all(AppSpacing.lg),
       fabLocation: FloatingActionButtonLocation.endFloat,

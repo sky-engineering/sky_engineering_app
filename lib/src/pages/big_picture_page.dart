@@ -4,7 +4,6 @@ import '../data/models/project.dart';
 import '../data/models/task.dart';
 import '../data/repositories/project_repository.dart';
 import '../data/repositories/task_repository.dart';
-import '../theme/tokens.dart';
 import '../widgets/app_page_scaffold.dart';
 import 'project_detail_page.dart';
 
@@ -13,6 +12,7 @@ enum _BigPictureLane {
   finishingTouches,
   strongProposals,
   inactive,
+  unassigned,
 }
 
 extension _BigPictureLaneMeta on _BigPictureLane {
@@ -26,6 +26,8 @@ extension _BigPictureLaneMeta on _BigPictureLane {
         return 'Proposals';
       case _BigPictureLane.inactive:
         return 'On Hold or Pause';
+      case _BigPictureLane.unassigned:
+        return 'Unassigned';
     }
   }
 }
@@ -44,6 +46,9 @@ class _BigPicturePageState extends State<BigPicturePage> {
   final ProjectRepository _projectRepository = ProjectRepository();
   final TaskRepository _taskRepository = TaskRepository();
   final Map<String, _BigPictureLane> _pendingLaneByProjectId = {};
+  List<Project> _visibleProjects = const [];
+  String? _strongProposalsProjectId;
+  bool _isResetting = false;
 
   @override
   Widget build(BuildContext context) {
@@ -51,15 +56,11 @@ class _BigPicturePageState extends State<BigPicturePage> {
     final colors = _buildSections(baseColor);
 
     return AppPageScaffold(
-      title: 'Big Picture',
+      title: 'Workload',
       useSafeArea: true,
       scrollable: true,
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.md,
-        AppSpacing.md,
-        AppSpacing.md,
-        AppSpacing.xxl,
-      ),
+      actions: [_buildResetButton(context)],
+      padding: EdgeInsets.zero,
       body: StreamBuilder<List<Project>>(
         stream: _projectRepository.streamAll(),
         builder: (context, snapshot) {
@@ -83,7 +84,9 @@ class _BigPicturePageState extends State<BigPicturePage> {
                     !(project.isArchived || project.status == 'Archive'),
               )
               .toList();
+          _visibleProjects = visibleProjects;
           final strongProposalsProject = _findProposalsProject(visibleProjects);
+          _strongProposalsProjectId = strongProposalsProject?.id;
           final partitions = _partitionProjects(visibleProjects);
           final sections = _laneSections(colors);
 
@@ -111,14 +114,111 @@ class _BigPicturePageState extends State<BigPicturePage> {
                         _handleDrop(project, sections[i].lane),
                     onProjectTap: _openProjectDetail,
                   ),
-                if (i != sections.length - 1)
-                  const SizedBox(height: AppSpacing.md),
               ],
             ],
           );
         },
       ),
     );
+  }
+
+  Widget _buildResetButton(BuildContext context) {
+    final theme = Theme.of(context);
+    final backgroundColor = theme.colorScheme.secondary;
+    final textColor = theme.colorScheme.onSecondary;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: FilledButton(
+        onPressed: _isResetting ? null : _resetAllProjectsToUnassigned,
+        style: FilledButton.styleFrom(
+          backgroundColor: backgroundColor,
+          foregroundColor: textColor,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+          visualDensity: VisualDensity.compact,
+        ),
+        child: _isResetting
+            ? SizedBox(
+                height: 16,
+                width: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(textColor),
+                ),
+              )
+            : const Text('Reset'),
+      ),
+    );
+  }
+
+  Future<void> _resetAllProjectsToUnassigned() async {
+    if (_isResetting) {
+      return;
+    }
+    final proposalsId = _strongProposalsProjectId;
+    final projectsToReset = _visibleProjects.where((project) {
+      if (proposalsId != null && project.id == proposalsId) {
+        return false;
+      }
+      final lane = _laneFromStoredValue(project.bigPictureLane);
+      return lane != _BigPictureLane.strongProposals &&
+          lane != _BigPictureLane.unassigned;
+    }).toList();
+
+    if (projectsToReset.isEmpty) {
+      return;
+    }
+
+    final previousLanes = <String, _BigPictureLane?>{
+      for (final project in projectsToReset)
+        project.id: _laneFromStoredValue(project.bigPictureLane),
+    };
+
+    setState(() {
+      _isResetting = true;
+      for (final project in projectsToReset) {
+        _pendingLaneByProjectId[project.id] = _BigPictureLane.unassigned;
+      }
+    });
+
+    final failedIds = <String>[];
+    for (final project in projectsToReset) {
+      try {
+        await _projectRepository.update(
+          project.id,
+          {'bigPictureLane': _BigPictureLane.unassigned.name},
+        );
+      } catch (_) {
+        failedIds.add(project.id);
+      }
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    if (failedIds.isNotEmpty) {
+      setState(() {
+        for (final id in failedIds) {
+          final previousLane = previousLanes[id];
+          if (previousLane == null) {
+            _pendingLaneByProjectId.remove(id);
+          } else {
+            _pendingLaneByProjectId[id] = previousLane;
+          }
+        }
+        _isResetting = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not reset some projects. Please try again.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isResetting = false;
+    });
   }
 
   void _openProjectDetail(Project project) {
@@ -204,7 +304,7 @@ class _BigPicturePageState extends State<BigPicturePage> {
       if (pending != null && stored == pending) {
         pendingMatches.add(project.id);
       }
-      final lane = pending ?? stored ?? _BigPictureLane.revenue;
+      final lane = pending ?? stored ?? _BigPictureLane.unassigned;
       map[lane]!.add(project);
     }
 
@@ -228,10 +328,23 @@ class _BigPicturePageState extends State<BigPicturePage> {
   }
 
   List<Color> _buildSections(Color base) {
-    return List<Color>.generate(4, (index) {
-      final t = index / 3;
-      return Color.lerp(base, Colors.white, t * 0.6)!;
-    });
+    final lanes = _BigPictureLane.values;
+    final gradientCount = lanes.length - 1;
+    final colors = <Color>[];
+    var gradientIndex = 0;
+
+    for (final lane in lanes) {
+      if (lane == _BigPictureLane.unassigned) {
+        colors.add(Colors.white);
+        continue;
+      }
+      final fraction =
+          gradientCount <= 1 ? 0.0 : gradientIndex / (gradientCount - 1);
+      colors.add(Color.lerp(base, Colors.white, fraction * 0.6)!);
+      gradientIndex++;
+    }
+
+    return colors;
   }
 
   List<_LaneSection> _laneSections(List<Color> colors) {

@@ -61,7 +61,6 @@ class _ProfilePageState extends State<ProfilePage> {
     final u = _me;
     if (u == null) {
       return const AppPageScaffold(
-        title: 'Profile',
         useSafeArea: true,
         padding: EdgeInsets.all(AppSpacing.md),
         body: Center(child: Text('Please sign in to view your profile')),
@@ -73,7 +72,6 @@ class _ProfilePageState extends State<ProfilePage> {
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const AppPageScaffold(
-            title: 'Profile',
             useSafeArea: true,
             padding: EdgeInsets.all(AppSpacing.md),
             body: Center(child: CircularProgressIndicator()),
@@ -84,7 +82,6 @@ class _ProfilePageState extends State<ProfilePage> {
         _seedIfNeeded(profile);
 
         return AppPageScaffold(
-          title: 'Profile',
           useSafeArea: true,
           padding: EdgeInsets.zero,
           body: Form(

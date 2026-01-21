@@ -1,7 +1,6 @@
 // lib/src/pages/subphases_page.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../data/models/subphase_template.dart';
 import '../data/repositories/subphase_template_repository.dart';
@@ -24,97 +23,6 @@ class _SubphasesPageState extends State<SubphasesPage> {
   final _phaseRepo = PhaseTemplateRepository();
   List<String>? _phaseOrder;
   bool _fabExpanded = false;
-  String? _ownerOverride;
-  bool _ownerListLoading = false;
-  bool _ownerListRequested = false;
-  List<String> _ownerOptions = const [];
-
-  @override
-  void initState() {
-    super.initState();
-    _ownerOverride = '';
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final access = UserAccessScope.maybeOf(context);
-    if ((access?.isAdmin ?? false) && !_ownerListRequested) {
-      _ownerListRequested = true;
-      _refreshOwnerOptions();
-    }
-  }
-
-  Future<void> _refreshOwnerOptions() async {
-    if (!mounted) return;
-    setState(() => _ownerListLoading = true);
-    final owners = <String>{};
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser != null && currentUser.uid.isNotEmpty) {
-      owners.add(currentUser.uid);
-    }
-    try {
-      final firestore = FirebaseFirestore.instance;
-      final phaseSnap = await firestore.collection('phases').get();
-      for (final doc in phaseSnap.docs) {
-        final data = doc.data();
-        final owner = (data['ownerUid'] ?? '') as String? ?? '';
-        if (owner.isNotEmpty) {
-          owners.add(owner);
-        }
-      }
-      final subphaseSnap = await firestore.collection('task_templates').get();
-      for (final doc in subphaseSnap.docs) {
-        final data = doc.data();
-        final owner = (data['ownerUid'] ?? '') as String? ?? '';
-        if (owner.isNotEmpty) {
-          owners.add(owner);
-        }
-      }
-    } catch (e) {
-      debugPrint('Failed to load template owners: $e');
-    }
-    if (!mounted) return;
-    final list = owners.where((o) => o.isNotEmpty).toList()..sort();
-    setState(() {
-      _ownerOptions = list;
-      _ownerListLoading = false;
-      _ownerOverride ??= '';
-    });
-  }
-
-  List<String> _ownerChoices(String myUid) {
-    final owners = <String>{..._ownerOptions};
-    owners.add('');
-    if (myUid.isNotEmpty) {
-      owners.add(myUid);
-    }
-    final selected = _ownerOverride ?? '';
-    owners.add(selected);
-    final list = owners.toList()..sort();
-    if (list.remove('')) {
-      list.insert(0, '');
-    }
-    if (myUid.isNotEmpty && list.remove(myUid)) {
-      list.insert(list.isNotEmpty ? 1 : 0, myUid);
-    }
-    return list;
-  }
-
-  String _ownerLabel(String ownerUid, String myUid) {
-    if (ownerUid.isEmpty) return 'All';
-    if (ownerUid == myUid) return 'You';
-    if (ownerUid.length <= 8) return ownerUid;
-    final head = ownerUid.substring(0, 4);
-    final tail = ownerUid.substring(ownerUid.length - 2);
-    return '$head...$tail';
-  }
-
-  String _ownerMenuLabel(String ownerUid, String myUid) {
-    if (ownerUid.isEmpty) return 'All owners';
-    if (ownerUid == myUid) return '$ownerUid (you)';
-    return ownerUid;
-  }
 
   void _refreshPhases() {
     if (mounted) {
@@ -153,61 +61,15 @@ class _SubphasesPageState extends State<SubphasesPage> {
     final scopedAccess = UserAccessScope.maybeOf(context);
     final fallbackAccess = UserAccessController.instance.current;
     final isAdmin = scopedAccess?.isAdmin ?? fallbackAccess?.isAdmin ?? false;
-    final ownerUid = (_ownerOverride ?? '').trim();
+    const ownerUid = '';
     final canEdit = isAdmin;
-    final ownerChoices = isAdmin ? _ownerChoices(me.uid) : const <String>[];
-    final ownerTextColor = Theme.of(context).colorScheme.onPrimary;
-    final editableOwnerUid =
-        ownerUid.isNotEmpty ? ownerUid : (me.uid.isNotEmpty ? me.uid : '');
+    final editableOwnerUid = me.uid;
 
     return AppPageScaffold(
       title: 'Task Structure',
       includeShellBottomNav: true,
       popShellRoute: true,
       padding: EdgeInsets.zero,
-      actions: [
-        if (isAdmin && ownerChoices.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(right: AppSpacing.sm),
-            child: PopupMenuButton<String>(
-              tooltip: 'Select template owner',
-              onSelected: (value) {
-                if (value == ownerUid) return;
-                setState(() {
-                  _ownerOverride = value;
-                  _phaseOrder = null;
-                });
-              },
-              itemBuilder: (context) => ownerChoices
-                  .map(
-                    (uid) => PopupMenuItem<String>(
-                      value: uid,
-                      child: Text(_ownerMenuLabel(uid, me.uid)),
-                    ),
-                  )
-                  .toList(),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_ownerListLoading)
-                    const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  else
-                    const Icon(Icons.manage_accounts_outlined),
-                  const SizedBox(width: AppSpacing.xs),
-                  Text(
-                    _ownerLabel(ownerUid, me.uid),
-                    style: TextStyle(color: ownerTextColor),
-                  ),
-                  Icon(Icons.arrow_drop_down, color: ownerTextColor),
-                ],
-              ),
-            ),
-          ),
-      ],
       floatingActionButton: canEdit ? _buildFab(editableOwnerUid) : null,
       fabLocation: FloatingActionButtonLocation.endFloat,
       body: FutureBuilder<List<PhaseTemplate>>(
