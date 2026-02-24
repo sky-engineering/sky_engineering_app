@@ -9,6 +9,7 @@ import 'subphases_page.dart';
 import 'contract_snapshot_page.dart';
 import '../dialogs/city_inspect_links_dialog.dart';
 import '../dialogs/other_links_dialog.dart';
+import 'yearly_calendar_page.dart';
 import '../pages/clients_page.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_page_scaffold.dart';
@@ -71,6 +72,11 @@ class DashboardPage extends StatelessWidget {
         linkButton('Workload', () {
           Navigator.of(context)
               .push(MaterialPageRoute(builder: (_) => BigPicturePage()));
+        }),
+        linkButton('Yearly Calendar', () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const YearlyCalendarPage()),
+          );
         }),
         linkButton('Contract Snapshot', () {
           Navigator.of(context).push(

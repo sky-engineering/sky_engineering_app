@@ -1,4 +1,4 @@
-// lib/src/pages/note_editor_page.dart
+﻿// lib/src/pages/note_editor_page.dart
 import 'dart:async';
 import 'dart:typed_data' as typed_data;
 
@@ -708,14 +708,10 @@ class _ProjectPickerDialogState extends State<_ProjectPickerDialog> {
                       ? Icons.radio_button_checked
                       : Icons.radio_button_off,
                 ),
-                title: Text(label),
-                subtitle: project.folderName != null
-                    ? Text(
-                        project.folderName!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      )
-                    : null,
+                title: Text(
+                  label,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
                 selected: selected,
               );
             },
@@ -771,3 +767,4 @@ class _SavingNoteDialog extends StatelessWidget {
     );
   }
 }
+

@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../services/user_service.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_page_scaffold.dart';
+import 'yearly_calendar_page.dart';
 
 class HomePage extends StatefulWidget {
   final User user;
@@ -78,6 +79,18 @@ class _HomePageState extends State<HomePage> {
             Text(widget.user.email ?? '(no email)'),
             const SizedBox(height: AppSpacing.lg),
             const Text('Firestore user document ensured.'),
+            const SizedBox(height: AppSpacing.lg),
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const YearlyCalendarPage(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.calendar_month),
+              label: const Text('Open Yearly Calendar'),
+            ),
           ],
         ),
       ),
