@@ -140,5 +140,15 @@ service cloud.firestore {
       allow create: if canWriteOwner(request.resource.data.ownerUid);
       allow update, delete: if canWriteOwner(resource.data.ownerUid);
     }
+    // CALENDAR EVENT TYPES -- any signed-in user can read/write shared types
+    match /calendar_event_types/{typeId} {
+      allow read, write: if signedIn();
+    }
+
+    // CALENDAR EVENTS -- any signed-in user can read/write shared events
+    match /calendar_events/{eventId} {
+      allow read, write: if signedIn();
+    }
+
   }
 }

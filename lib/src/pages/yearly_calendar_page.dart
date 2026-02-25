@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,17 +11,17 @@ import '../widgets/app_page_scaffold.dart';
 
 const List<String> _weekdayLabels = <String>['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const List<Color> _eventColorOptions = <Color>[
-  Color(0xFFE57373),
-  Color(0xFFF06292),
-  Color(0xFFBA68C8),
-  Color(0xFF9575CD),
-  Color(0xFF7986CB),
-  Color(0xFF64B5F6),
-  Color(0xFF4DD0E1),
-  Color(0xFF4DB6AC),
-  Color(0xFF81C784),
-  Color(0xFFFFB74D),
-  Color(0xFFA1887F),
+  Color(0xFFB71C1C),
+  Color(0xFF880E4F),
+  Color(0xFF4A148C),
+  Color(0xFF311B92),
+  Color(0xFF1A237E),
+  Color(0xFF0D47A1),
+  Color(0xFF004D40),
+  Color(0xFF00695C),
+  Color(0xFF1B5E20),
+  Color(0xFFE65100),
+  Color(0xFF3E2723),
 ];
 
 const int _minVisibleEventBands = 4;
@@ -47,15 +49,24 @@ class _YearlyCalendarPageState extends State<YearlyCalendarPage> {
 
   late List<_EventType> _eventTypes;
   late List<_CalendarEvent> _events;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  bool get _useFirestore => true;
 
   @override
   void initState() {
     super.initState();
     _eventTypes = _defaultEventTypes();
     _events = const <_CalendarEvent>[];
-    _loadEventTypes();
-    _loadEvents();
     _gridYear = DateTime.now().year;
+    _initializeCalendarData();
+  }
+
+  Future<void> _initializeCalendarData() async {
+    if (_useFirestore) {
+      await _migrateLegacyDataIfNeeded();
+    }
+    await _loadEventTypes();
+    await _loadEvents();
   }
 
   @override
@@ -79,18 +90,19 @@ class _YearlyCalendarPageState extends State<YearlyCalendarPage> {
     };
 
     return AppPageScaffold(
-      title: 'Yearly Calendar',
+      title: 'Calendar',
       actions: [
-        IconButton(
-          tooltip: 'Event types',
-          onPressed: _openEventTypesDialog,
-          icon: const Icon(Icons.info_outline),
-          style: IconButton.styleFrom(
-            foregroundColor: Colors.white,
-            backgroundColor: Colors.transparent,
-            hoverColor: Colors.white24,
+        if (!_isYearGridView)
+          TextButton(
+            onPressed: _handleTodayTap,
+            child: const Text('Today'),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+              side: const BorderSide(color: Colors.white, width: 0.5),
+              shape: RoundedRectangleBorder(borderRadius: AppRadii.sm),
+            ),
           ),
-        ),
         IconButton(
           tooltip:
               _isYearGridView ? 'Show timeline view' : 'Show year grid view',
@@ -100,6 +112,16 @@ class _YearlyCalendarPageState extends State<YearlyCalendarPage> {
                 ? Icons.view_agenda_outlined
                 : Icons.calendar_view_month,
           ),
+          style: IconButton.styleFrom(
+            foregroundColor: Colors.white,
+            backgroundColor: Colors.transparent,
+            hoverColor: Colors.white24,
+          ),
+        ),
+        IconButton(
+          tooltip: 'Event types',
+          onPressed: _openEventTypesDialog,
+          icon: const Icon(Icons.info_outline),
           style: IconButton.styleFrom(
             foregroundColor: Colors.white,
             backgroundColor: Colors.transparent,
@@ -147,6 +169,8 @@ class _YearlyCalendarPageState extends State<YearlyCalendarPage> {
                           onShiftYear: _shiftGridYear,
                           canShiftPrev: canGoPrevYear,
                           canShiftNext: canGoNextYear,
+                          events: _events,
+                          eventTypes: eventTypeMap,
                         )
                       : _YearSection(
                           year: year,
@@ -414,8 +438,20 @@ class _YearlyCalendarPageState extends State<YearlyCalendarPage> {
 
   Future<void> _addEvent(_CalendarEvent event) async {
     if (!mounted) return;
+    if (_useFirestore) {
+      try {
+        final saved = await _saveEventToFirestore(event);
+        if (!mounted) return;
+        setState(() => _events = [..._events, saved]);
+        _showEventSnackBar(
+            'Saved "${saved.title}" (${_eventTypeName(saved.eventTypeId)}).');
+        return;
+      } catch (error, stackTrace) {
+        _logError('addEventFirestore', error, stackTrace);
+      }
+    }
     setState(() => _events = [..._events, event]);
-    await _persistEvents();
+    await _persistEventsToPrefs();
     _showEventSnackBar(
         'Saved "${event.title}" (${_eventTypeName(event.eventTypeId)}).');
   }
@@ -426,12 +462,30 @@ class _YearlyCalendarPageState extends State<YearlyCalendarPage> {
   ) async {
     final index = _events.indexOf(original);
     if (index == -1 || !mounted) return;
+    if (_useFirestore) {
+      try {
+        final saved = await _saveEventToFirestore(
+          updated.copyWith(id: original.id ?? updated.id),
+        );
+        setState(() {
+          final next = [..._events];
+          next[index] = saved;
+          _events = next;
+        });
+        _showEventSnackBar(
+          'Updated "${saved.title}" (${_eventTypeName(saved.eventTypeId)}).',
+        );
+        return;
+      } catch (error, stackTrace) {
+        _logError('updateEventFirestore', error, stackTrace);
+      }
+    }
     setState(() {
       final next = [..._events];
       next[index] = updated;
       _events = next;
     });
-    await _persistEvents();
+    await _persistEventsToPrefs();
     _showEventSnackBar(
       'Updated "${updated.title}" (${_eventTypeName(updated.eventTypeId)}).',
     );
@@ -443,7 +497,21 @@ class _YearlyCalendarPageState extends State<YearlyCalendarPage> {
         _events.where((event) => event != target).toList(growable: false);
     if (next.length == _events.length) return;
     setState(() => _events = next);
-    await _persistEvents();
+    if (_useFirestore) {
+      final eventId = target.id;
+      if (eventId != null) {
+        try {
+          await _deleteEventFromFirestore(eventId);
+          _showEventSnackBar(
+            'Deleted "${target.title}" (${_eventTypeName(target.eventTypeId)}).',
+          );
+          return;
+        } catch (error, stackTrace) {
+          _logError('deleteEventFirestore', error, stackTrace);
+        }
+      }
+    }
+    await _persistEventsToPrefs();
     _showEventSnackBar(
       'Deleted "${target.title}" (${_eventTypeName(target.eventTypeId)}).',
     );
@@ -460,6 +528,21 @@ class _YearlyCalendarPageState extends State<YearlyCalendarPage> {
     setState(() {
       _isYearGridView = !_isYearGridView;
     });
+  }
+
+  void _handleTodayTap() {
+    final now = DateTime.now();
+    if (_isYearGridView) {
+      setState(() {
+        _isYearGridView = false;
+        _gridYear = now.year;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _jumpToCurrentMonth();
+      });
+    } else {
+      _jumpToCurrentMonth();
+    }
   }
 
   void _shiftGridYear(int delta) {
@@ -484,22 +567,241 @@ class _YearlyCalendarPageState extends State<YearlyCalendarPage> {
       _EventType(
         id: 'milestones',
         name: 'Milestones',
-        color: const Color(0xFFFFB74D),
+        color: const Color(0xFFE65100),
       ),
       _EventType(
         id: 'deadlines',
         name: 'Deadlines',
-        color: const Color(0xFF64B5F6),
+        color: const Color(0xFF0D47A1),
       ),
     ];
   }
 
   Future<void> _loadEventTypes() async {
+    if (_useFirestore) {
+      try {
+        await _loadEventTypesFromFirestore();
+        return;
+      } catch (error, stackTrace) {
+        _logError('loadEventTypesFirestore', error, stackTrace);
+      }
+    }
+    await _loadEventTypesFromPrefs();
+  }
+
+  Future<void> _loadEvents() async {
+    if (_useFirestore) {
+      try {
+        await _loadEventsFromFirestore();
+        return;
+      } catch (error, stackTrace) {
+        _logError('loadEventsFirestore', error, stackTrace);
+      }
+    }
+    await _loadEventsFromPrefs();
+  }
+
+  Future<void> _persistEventTypes() async {
+    if (_useFirestore) {
+      try {
+        await _setEventTypesInFirestore(_eventTypes);
+        return;
+      } catch (error, stackTrace) {
+        _logError('persistEventTypesFirestore', error, stackTrace);
+      }
+    }
+    await _persistEventTypesToPrefs();
+  }
+
+  Future<void> _setEventTypesInFirestore(List<_EventType> types) async {
+    final ref = _eventTypesCollection();
+    final snapshot = await ref.get();
+    final incomingIds = types.map((type) => type.id).toSet();
+    final batch = _firestore.batch();
+    for (final doc in snapshot.docs) {
+      if (!incomingIds.contains(doc.id)) {
+        batch.delete(doc.reference);
+      }
+    }
+    for (final type in types) {
+      final data = type.toJson()..remove('id');
+      batch.set(ref.doc(type.id), data);
+    }
+    await batch.commit();
+  }
+
+  Future<void> _replaceEventsInFirestore(List<_CalendarEvent> events) async {
+    final ref = _eventsCollection();
+    final batch = _firestore.batch();
+    final existing = await ref.get();
+    for (final doc in existing.docs) {
+      batch.delete(doc.reference);
+    }
+    for (final event in events) {
+      final doc = ref.doc(event.id ?? ref.doc().id);
+      batch.set(doc, _eventToFirestoreMap(event.copyWith(id: doc.id)));
+    }
+    await batch.commit();
+  }
+
+  Future<_CalendarEvent> _saveEventToFirestore(
+    _CalendarEvent event,
+  ) async {
+    final collection = _eventsCollection();
+    final doc = event.id != null ? collection.doc(event.id) : collection.doc();
+    final next = event.copyWith(id: doc.id);
+    await doc.set(_eventToFirestoreMap(next));
+    return next;
+  }
+
+  Future<void> _deleteEventFromFirestore(String eventId) async {
+    await _eventsCollection().doc(eventId).delete();
+  }
+
+  Future<void> _migrateLegacyDataIfNeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    final legacyTypes = _readEventTypesFromPrefs(prefs);
+    final legacyEvents = _readEventsFromPrefs(prefs);
+    final hasLegacy = (legacyTypes?.isNotEmpty ?? false) ||
+        (legacyEvents?.isNotEmpty ?? false);
+    if (!hasLegacy) return;
+    final typeSnapshot = await _eventTypesCollection().limit(1).get();
+    if (typeSnapshot.docs.isEmpty && (legacyTypes?.isNotEmpty ?? false)) {
+      await _setEventTypesInFirestore(legacyTypes!);
+      if (mounted) {
+        setState(() => _eventTypes = legacyTypes);
+      }
+    }
+    final eventSnapshot = await _eventsCollection().limit(1).get();
+    if (eventSnapshot.docs.isEmpty && (legacyEvents?.isNotEmpty ?? false)) {
+      await _replaceEventsInFirestore(legacyEvents!);
+      if (mounted) {
+        setState(() => _events = legacyEvents);
+      }
+    }
+    await prefs.remove(_eventTypesPrefsKey);
+    await prefs.remove(_eventsPrefsKey);
+  }
+
+  List<_EventType>? _readEventTypesFromPrefs(SharedPreferences prefs) {
+    final raw = prefs.getString(_eventTypesPrefsKey);
+    if (raw == null) return null;
+    final parsed = jsonDecode(raw);
+    if (parsed is! List) return null;
+    return parsed
+        .whereType<Map<dynamic, dynamic>>()
+        .map((item) => _EventType.fromJson(
+              item.map((key, value) => MapEntry(key.toString(), value)),
+            ))
+        .toList();
+  }
+
+  List<_CalendarEvent>? _readEventsFromPrefs(SharedPreferences prefs) {
+    final raw = prefs.getString(_eventsPrefsKey);
+    if (raw == null) return null;
+    final parsed = jsonDecode(raw);
+    if (parsed is! List) return null;
+    return parsed
+        .whereType<Map<dynamic, dynamic>>()
+        .map((item) => _CalendarEvent.fromJson(
+              item.map((key, value) => MapEntry(key.toString(), value)),
+            ))
+        .toList();
+  }
+
+  Future<void> _persistEventTypesToPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final payload = jsonEncode(
+      _eventTypes.map((type) => type.toJson()).toList(growable: false),
+    );
+    await prefs.setString(_eventTypesPrefsKey, payload);
+  }
+
+  Future<void> _persistEventsToPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final payload = jsonEncode(
+      _events.map((event) => event.toJson()).toList(growable: false),
+    );
+    await prefs.setString(_eventsPrefsKey, payload);
+  }
+
+  void _logError(String context, Object error, StackTrace stackTrace) {
+    debugPrint('Calendar $context error: $error');
+    debugPrintStack(stackTrace: stackTrace);
+  }
+
+  CollectionReference<Map<String, dynamic>> _eventTypesCollection() {
+    return _firestore.collection('calendar_event_types');
+  }
+
+  CollectionReference<Map<String, dynamic>> _eventsCollection() {
+    return _firestore.collection('calendar_events');
+  }
+
+  Map<String, dynamic> _eventToFirestoreMap(_CalendarEvent event) {
+    return {
+      'title': event.title,
+      'eventTypeId': event.eventTypeId,
+      'startDate': Timestamp.fromDate(event.startDate),
+      if (event.endDate != null) 'endDate': Timestamp.fromDate(event.endDate!),
+      if (event.notes != null && event.notes!.isNotEmpty) 'notes': event.notes,
+    };
+  }
+
+  _CalendarEvent _calendarEventFromDoc(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data();
+    final Timestamp startTs = data['startDate'] as Timestamp;
+    final Timestamp? endTs = data['endDate'] as Timestamp?;
+    return _CalendarEvent(
+      id: doc.id,
+      title: data['title'] as String,
+      eventTypeId: data['eventTypeId'] as String,
+      startDate: startTs.toDate(),
+      endDate: endTs?.toDate(),
+      notes: data['notes'] as String?,
+    );
+  }
+
+  Future<void> _loadEventTypesFromFirestore() async {
+    final snapshot = await _eventTypesCollection().orderBy('name').get();
+    final types = snapshot.docs
+        .map(
+          (doc) => _EventType.fromJson({
+            'id': doc.id,
+            ...doc.data(),
+          }),
+        )
+        .toList(growable: false);
+    if (!mounted) return;
+    if (types.isEmpty) {
+      final defaults = _defaultEventTypes();
+      setState(() => _eventTypes = defaults);
+      await _setEventTypesInFirestore(defaults);
+    } else {
+      setState(() => _eventTypes = types);
+    }
+  }
+
+  Future<void> _loadEventsFromFirestore() async {
+    final snapshot = await _eventsCollection()
+        .orderBy('startDate')
+        .orderBy('title')
+        .get();
+    final events = snapshot.docs
+        .map((doc) => _calendarEventFromDoc(doc))
+        .toList(growable: false);
+    if (!mounted) return;
+    setState(() => _events = events);
+  }
+
+  Future<void> _loadEventTypesFromPrefs() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_eventTypesPrefsKey);
       if (raw == null) {
-        await _persistEventTypes(prefs: prefs);
+        await _persistEventTypesToPrefs();
         return;
       }
       final parsed = jsonDecode(raw);
@@ -519,7 +821,7 @@ class _YearlyCalendarPageState extends State<YearlyCalendarPage> {
     }
   }
 
-  Future<void> _loadEvents() async {
+  Future<void> _loadEventsFromPrefs() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_eventsPrefsKey);
@@ -537,22 +839,6 @@ class _YearlyCalendarPageState extends State<YearlyCalendarPage> {
     } catch (_) {
       // Ignore malformed preference data.
     }
-  }
-
-  Future<void> _persistEventTypes({SharedPreferences? prefs}) async {
-    final target = prefs ?? await SharedPreferences.getInstance();
-    final payload = jsonEncode(
-      _eventTypes.map((type) => type.toJson()).toList(growable: false),
-    );
-    await target.setString(_eventTypesPrefsKey, payload);
-  }
-
-  Future<void> _persistEvents() async {
-    final prefs = await SharedPreferences.getInstance();
-    final payload = jsonEncode(
-      _events.map((event) => event.toJson()).toList(growable: false),
-    );
-    await prefs.setString(_eventsPrefsKey, payload);
   }
 }
 
@@ -682,6 +968,8 @@ class _CompactYearView extends StatelessWidget {
     this.onShiftYear,
     this.canShiftPrev = false,
     this.canShiftNext = false,
+    required this.events,
+    required this.eventTypes,
   });
 
   final int year;
@@ -690,6 +978,8 @@ class _CompactYearView extends StatelessWidget {
   final ValueChanged<int>? onShiftYear;
   final bool canShiftPrev;
   final bool canShiftNext;
+  final List<_CalendarEvent> events;
+  final Map<String, _EventType> eventTypes;
 
   @override
   Widget build(BuildContext context) {
@@ -742,6 +1032,8 @@ class _CompactYearView extends StatelessWidget {
                         month: months[row * 3 + col],
                         onDayTap: onDayTap,
                         onDayLongPress: onDayLongPress,
+                        events: events,
+                        eventTypes: eventTypes,
                       ),
                     ),
                   ],
@@ -780,142 +1072,77 @@ class _MonthCalendarCard extends StatelessWidget {
     final theme = Theme.of(context);
     final monthName = DateFormat('MMMM').format(DateTime(year, month));
     final weeks = _generateWeekRows(year, month);
+    final displayWeeks = weeks.toList(growable: true);
+    while (displayWeeks.length < 6) {
+      displayWeeks.add(List<int?>.filled(7, null));
+    }
     final today = DateTime.now();
-    final layout = _buildMonthEventLayout();
+    final layout = _buildMonthEventLayoutForMonth(
+      year: year,
+      month: month,
+      events: events,
+      eventTypes: eventTypes,
+    );
 
-    return Card(
+    return Padding(
       key: monthKey,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: AppRadii.md),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              monthName,
-              style: theme.textTheme.titleMedium,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Column(
-              children: [
-                for (var weekIndex = 0;
-                    weekIndex < weeks.length;
-                    weekIndex++) ...[
-                  if (weekIndex != 0)
-                    Divider(
-                      height: 1,
-                      color: theme.dividerColor.withOpacity(0.5),
-                    ),
-                  Padding(
-                    padding:
-                        const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-                    child: Row(
-                      children: [
-                        for (var dayIndex = 0;
-                            dayIndex < weeks[weekIndex].length;
-                            dayIndex++)
-                          Expanded(
-                            child: _DayCell(
-                              date: _resolveMonthDate(
-                                year,
-                                month,
-                                weeks[weekIndex][dayIndex],
-                              ),
-                              isToday: weeks[weekIndex][dayIndex] != null &&
-                                  today.year == year &&
-                                  today.month == month &&
-                                  today.day == weeks[weekIndex][dayIndex],
-                              isWeekend: dayIndex == 0 || dayIndex == 6,
-                              eventBands: layout.bandsFor(
-                                weeks[weekIndex][dayIndex],
-                              ),
-                              eventTypes: eventTypes,
-                              onTap: onDayTap,
-                              onLongPress: onDayLongPress,
-                            ),
-                          ),
-                      ],
-                    ),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            monthName,
+            style: theme.textTheme.titleMedium,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Column(
+            children: [
+              for (var weekIndex = 0;
+                  weekIndex < displayWeeks.length;
+                  weekIndex++) ...[
+                if (weekIndex != 0)
+                  Divider(
+                    height: 1,
+                    color: theme.dividerColor.withOpacity(0.5),
                   ),
-                ],
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                  child: Row(
+                    children: [
+                      for (var dayIndex = 0;
+                          dayIndex < displayWeeks[weekIndex].length;
+                          dayIndex++)
+                        Expanded(
+                          child: _DayCell(
+                            date: _resolveMonthDate(
+                              year,
+                              month,
+                              displayWeeks[weekIndex][dayIndex],
+                            ),
+                            isToday: displayWeeks[weekIndex][dayIndex] !=
+                                    null &&
+                                today.year == year &&
+                                today.month == month &&
+                                today.day == displayWeeks[weekIndex][dayIndex],
+                            isWeekend: dayIndex == 0 || dayIndex == 6,
+                            eventBands: layout.bandsFor(
+                              displayWeeks[weekIndex][dayIndex],
+                            ),
+                            eventTypes: eventTypes,
+                            laneSlots: layout.laneCount,
+                            onTap: onDayTap,
+                            onLongPress: onDayLongPress,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ],
-            ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ),
     );
-  }
-
-  _MonthEventLayout _buildMonthEventLayout() {
-    final monthStart = DateTime(year, month, 1);
-    final monthEnd = DateTime(year, month + 1, 0);
-    final bandMap = <int, List<_EventBandSegment>>{};
-    final laneAvailability = <int>[];
-
-    final relevantEvents = events.where((event) {
-      final type = eventTypes[event.eventTypeId];
-      if (type == null || !type.enabled) return false;
-      final normalizedStart = _normalizeDate(event.startDate);
-      final normalizedEnd = _normalizeDate(event.endDate ?? event.startDate);
-      return !normalizedEnd.isBefore(monthStart) &&
-          !normalizedStart.isAfter(monthEnd);
-    }).toList(growable: false)
-      ..sort((a, b) {
-        final startCompare = a.startDate.compareTo(b.startDate);
-        if (startCompare != 0) return startCompare;
-        return a.title.compareTo(b.title);
-      });
-
-    for (final event in relevantEvents) {
-      final normalizedStart = _normalizeDate(event.startDate);
-      final normalizedEnd = _normalizeDate(event.endDate ?? event.startDate);
-      final displayStart =
-          normalizedStart.isBefore(monthStart) ? monthStart : normalizedStart;
-      final displayEnd =
-          normalizedEnd.isAfter(monthEnd) ? monthEnd : normalizedEnd;
-      final startDay = displayStart.day;
-      final endDay = displayEnd.day;
-
-      var lane = -1;
-      for (var laneIndex = 0;
-          laneIndex < laneAvailability.length;
-          laneIndex++) {
-        if (laneAvailability[laneIndex] < startDay) {
-          lane = laneIndex;
-          laneAvailability[laneIndex] = endDay;
-          break;
-        }
-      }
-
-      if (lane == -1) {
-        lane = laneAvailability.length;
-        laneAvailability.add(endDay);
-      }
-
-      for (var day = startDay; day <= endDay; day++) {
-        final date = DateTime(year, month, day);
-        final segments = bandMap.putIfAbsent(day, () => <_EventBandSegment>[]);
-        segments.add(
-          _EventBandSegment(
-            event: event,
-            lane: lane,
-            continuesFromPreviousDay: date.isAfter(normalizedStart),
-            continuesToNextDay: date.isBefore(normalizedEnd),
-          ),
-        );
-      }
-    }
-
-    for (final daySegments in bandMap.values) {
-      daySegments.sort((a, b) => a.lane.compareTo(b.lane));
-    }
-
-    return _MonthEventLayout(bandMap: bandMap);
-  }
-
-  DateTime _normalizeDate(DateTime date) {
-    return DateTime(date.year, date.month, date.day);
   }
 }
 
@@ -925,78 +1152,173 @@ class _CompactMonthCard extends StatelessWidget {
     required this.month,
     required this.onDayTap,
     this.onDayLongPress,
+    required this.events,
+    required this.eventTypes,
   });
 
   final int year;
   final int month;
   final ValueChanged<DateTime> onDayTap;
   final ValueChanged<DateTime>? onDayLongPress;
+  final List<_CalendarEvent> events;
+  final Map<String, _EventType> eventTypes;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final monthLabel = DateFormat('MMM').format(DateTime(year, month));
     final weeks = _generateWeekRows(year, month);
+    final displayWeeks = weeks.toList(growable: true);
+    while (displayWeeks.length < 6) {
+      displayWeeks.add(List<int?>.filled(7, null));
+    }
     final today = DateTime.now();
     final isCurrentMonth = year == today.year && month == today.month;
-    return Card(
-      margin: EdgeInsets.zero,
-      color: isCurrentMonth
-          ? theme.colorScheme.secondaryContainer.withOpacity(0.25)
-          : null,
-      shape: RoundedRectangleBorder(borderRadius: AppRadii.sm),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xs),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              monthLabel,
-              style: theme.textTheme.labelLarge,
-            ),
-            const SizedBox(height: AppSpacing.xs / 2),
-            Column(
-              children: [
-                for (final week in weeks)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      for (var dayIndex = 0;
-                          dayIndex < week.length;
-                          dayIndex++) ...[
-                        if (dayIndex != 0)
-                          const SizedBox(width: AppSpacing.xs / 2),
-                        Expanded(
-                          child: _CompactDayCell(
-                            date:
-                                _resolveMonthDate(year, month, week[dayIndex]),
-                            isToday: week[dayIndex] != null &&
-                                today.year == year &&
-                                today.month == month &&
-                                today.day == week[dayIndex],
-                            isWeekend: dayIndex == 0 || dayIndex == 6,
-                            onTap: onDayTap,
-                            onLongPress: onDayLongPress,
-                          ),
+    final layout = _buildMonthEventLayoutForMonth(
+      year: year,
+      month: month,
+      events: events,
+      eventTypes: eventTypes,
+    );
+
+    Widget content = Padding(
+      padding: const EdgeInsets.all(AppSpacing.xs),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            monthLabel,
+            style: _scaleTextStyle(theme.textTheme.labelLarge, 0.8),
+          ),
+          const SizedBox(height: AppSpacing.xs / 2),
+          Column(
+            children: [
+              for (final week in displayWeeks)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (var dayIndex = 0; dayIndex < week.length; dayIndex++)
+                      Expanded(
+                        child: _CompactDayCell(
+                          date: _resolveMonthDate(year, month, week[dayIndex]),
+                          isToday: week[dayIndex] != null &&
+                              today.year == year &&
+                              today.month == month &&
+                              today.day == week[dayIndex],
+                          isWeekend: dayIndex == 0 || dayIndex == 6,
+                          eventBands: layout.bandsFor(week[dayIndex]),
+                          eventTypes: eventTypes,
+                          onTap: onDayTap,
+                          onLongPress: onDayLongPress,
                         ),
-                      ],
-                    ],
-                  ),
-              ],
-            ),
-          ],
-        ),
+                      ),
+                  ],
+                ),
+            ],
+          ),
+        ],
       ),
     );
+
+    if (isCurrentMonth) {
+      content = DecoratedBox(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.secondaryContainer.withOpacity(0.25),
+          borderRadius: AppRadii.sm,
+        ),
+        child: content,
+      );
+    }
+
+    return content;
   }
+}
+
+_MonthEventLayout _buildMonthEventLayoutForMonth({
+  required int year,
+  required int month,
+  required List<_CalendarEvent> events,
+  required Map<String, _EventType> eventTypes,
+}) {
+  final monthStart = DateTime(year, month, 1);
+  final monthEnd = DateTime(year, month + 1, 0);
+  final bandMap = <int, List<_EventBandSegment>>{};
+  final laneAvailability = <int>[];
+
+  final relevantEvents = events.where((event) {
+    final type = eventTypes[event.eventTypeId];
+    if (type == null || !type.enabled) return false;
+    final normalizedStart = _normalizeDay(event.startDate);
+    final normalizedEnd = _normalizeDay(event.endDate ?? event.startDate);
+    return !normalizedEnd.isBefore(monthStart) &&
+        !normalizedStart.isAfter(monthEnd);
+  }).toList(growable: false)
+    ..sort((a, b) {
+      final startCompare = a.startDate.compareTo(b.startDate);
+      if (startCompare != 0) return startCompare;
+      return a.title.compareTo(b.title);
+    });
+
+  for (final event in relevantEvents) {
+    final normalizedStart = _normalizeDay(event.startDate);
+    final normalizedEnd = _normalizeDay(event.endDate ?? event.startDate);
+    final displayStart =
+        normalizedStart.isBefore(monthStart) ? monthStart : normalizedStart;
+    final displayEnd =
+        normalizedEnd.isAfter(monthEnd) ? monthEnd : normalizedEnd;
+    final startDay = displayStart.day;
+    final endDay = displayEnd.day;
+
+    var lane = -1;
+    for (var laneIndex = 0; laneIndex < laneAvailability.length; laneIndex++) {
+      if (laneAvailability[laneIndex] < startDay) {
+        lane = laneIndex;
+        laneAvailability[laneIndex] = endDay;
+        break;
+      }
+    }
+
+    if (lane == -1) {
+      lane = laneAvailability.length;
+      laneAvailability.add(endDay);
+    }
+
+    for (var day = startDay; day <= endDay; day++) {
+      final date = DateTime(year, month, day);
+      final segments = bandMap.putIfAbsent(day, () => <_EventBandSegment>[]);
+      segments.add(
+        _EventBandSegment(
+          event: event,
+          lane: lane,
+          continuesFromPreviousDay: date.isAfter(normalizedStart),
+          continuesToNextDay: date.isBefore(normalizedEnd),
+        ),
+      );
+    }
+  }
+
+  for (final daySegments in bandMap.values) {
+    daySegments.sort((a, b) => a.lane.compareTo(b.lane));
+  }
+
+  return _MonthEventLayout(
+    bandMap: bandMap,
+    laneCount: laneAvailability.length,
+  );
+}
+
+DateTime _normalizeDay(DateTime date) {
+  return DateTime(date.year, date.month, date.day);
 }
 
 class _MonthEventLayout {
   const _MonthEventLayout({
     required this.bandMap,
+    required this.laneCount,
   });
 
   final Map<int, List<_EventBandSegment>> bandMap;
+  final int laneCount;
 
   List<_EventBandSegment> bandsFor(int? day) {
     if (day == null) return const <_EventBandSegment>[];
@@ -1023,15 +1345,22 @@ class _CompactDayCell extends StatelessWidget {
     required this.date,
     required this.isToday,
     required this.isWeekend,
+    required this.eventBands,
+    required this.eventTypes,
     required this.onTap,
     this.onLongPress,
   });
 
   static const double _cellHeight = 24;
+  static const int _maxCompactBands = 4;
+  static const double _compactBandHeight = 2;
+  static const double _compactBandSpacing = 0;
 
   final DateTime? date;
   final bool isToday;
   final bool isWeekend;
+  final List<_EventBandSegment> eventBands;
+  final Map<String, _EventType> eventTypes;
   final ValueChanged<DateTime>? onTap;
   final ValueChanged<DateTime>? onLongPress;
 
@@ -1041,7 +1370,7 @@ class _CompactDayCell extends StatelessWidget {
       return const SizedBox(height: _cellHeight);
     }
     final theme = Theme.of(context);
-    final baseStyle = theme.textTheme.labelSmall;
+    final baseStyle = _scaleTextStyle(theme.textTheme.labelSmall, 0.8);
     final weekendColor = baseStyle?.color?.withOpacity(0.6);
     final textStyle = baseStyle?.copyWith(
       color: isWeekend ? weekendColor : baseStyle?.color,
@@ -1052,11 +1381,45 @@ class _CompactDayCell extends StatelessWidget {
             borderRadius: AppRadii.sm,
           )
         : null;
+
+    final bandSlots = List<Color?>.filled(_maxCompactBands, null);
+    for (final segment in eventBands) {
+      if (segment.lane < 0 || segment.lane >= _maxCompactBands) continue;
+      final type = eventTypes[segment.event.eventTypeId];
+      if (type == null) continue;
+      bandSlots[segment.lane] = type.color;
+    }
+
     final content = Container(
       height: _cellHeight,
-      alignment: Alignment.center,
       decoration: decoration,
-      child: Text('${date!.day}', style: textStyle),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var i = 0; i < _maxCompactBands; i++) ...[
+                    Container(
+                      height: _compactBandHeight,
+                      color: bandSlots[i] ?? Colors.transparent,
+                    ),
+                    if (i != _maxCompactBands - 1)
+                      SizedBox(height: _compactBandSpacing),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.center,
+            child: Text('${date!.day}', style: textStyle),
+          ),
+        ],
+      ),
     );
     if (onTap == null && onLongPress == null) {
       return content;
@@ -1077,6 +1440,7 @@ class _DayCell extends StatelessWidget {
     required this.isWeekend,
     required this.eventBands,
     required this.eventTypes,
+    this.laneSlots,
     this.onTap,
     this.onLongPress,
   });
@@ -1086,6 +1450,7 @@ class _DayCell extends StatelessWidget {
   final bool isWeekend;
   final List<_EventBandSegment> eventBands;
   final Map<String, _EventType> eventTypes;
+  final int? laneSlots;
   final ValueChanged<DateTime>? onTap;
   final ValueChanged<DateTime>? onLongPress;
 
@@ -1105,19 +1470,14 @@ class _DayCell extends StatelessWidget {
     final maxLane = eventBands.fold<int>(-1, (value, segment) {
       return segment.lane > value ? segment.lane : value;
     });
-
-    final laneColors = <Color>[];
-    if (maxLane >= 0) {
-      final segmentsByLane = <int, _EventBandSegment>{
-        for (final segment in eventBands) segment.lane: segment,
-      };
-      for (var lane = 0; lane <= maxLane; lane++) {
-        final segment = segmentsByLane[lane];
-        if (segment == null) continue;
-        final type = eventTypes[segment.event.eventTypeId];
-        if (type == null) continue;
-        laneColors.add(type.color);
-      }
+    final totalSlots = laneSlots ?? (maxLane + 1);
+    final bandSlots =
+        totalSlots > 0 ? List<Color?>.filled(totalSlots, null) : <Color?>[];
+    for (final segment in eventBands) {
+      if (segment.lane < 0 || segment.lane >= bandSlots.length) continue;
+      final type = eventTypes[segment.event.eventTypeId];
+      if (type == null) continue;
+      bandSlots[segment.lane] = type.color;
     }
 
     final decoration = isToday
@@ -1127,36 +1487,14 @@ class _DayCell extends StatelessWidget {
           )
         : null;
 
-    final backgroundBands = laneColors.isEmpty
-        ? null
-        : Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (var i = 0; i < laneColors.length; i++) ...[
-                Container(
-                  height: _eventBandHeight,
-                  color: laneColors[i],
-                ),
-                if (i != laneColors.length - 1)
-                  const SizedBox(height: _eventBandSpacing),
-              ],
-            ],
-          );
-
     final content = Container(
       constraints: const BoxConstraints(minHeight: _minDayCellHeight),
       padding: const EdgeInsets.symmetric(vertical: 4),
       decoration: decoration,
-      child: Stack(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (backgroundBands != null)
-            Positioned(
-              top: 4,
-              left: 0,
-              right: 0,
-              child: backgroundBands,
-            ),
           Align(
             alignment: Alignment.topCenter,
             child: Padding(
@@ -1164,6 +1502,22 @@ class _DayCell extends StatelessWidget {
               child: Text('${date!.day}', style: textStyle),
             ),
           ),
+          if (bandSlots.any((color) => color != null)) ...[
+            const SizedBox(height: 4),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < bandSlots.length; i++) ...[
+                  Container(
+                    height: _eventBandHeight,
+                    color: bandSlots[i] ?? Colors.transparent,
+                  ),
+                  if (i != bandSlots.length - 1)
+                    const SizedBox(height: _eventBandSpacing),
+                ],
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -1293,6 +1647,13 @@ List<List<int?>> _generateWeekRows(int year, int month) {
 DateTime? _resolveMonthDate(int year, int month, int? dayNumber) {
   if (dayNumber == null) return null;
   return DateTime(year, month, dayNumber);
+}
+
+TextStyle? _scaleTextStyle(TextStyle? style, double factor) {
+  if (style == null) return null;
+  final fontSize = style.fontSize;
+  if (fontSize == null) return style;
+  return style.copyWith(fontSize: fontSize * factor);
 }
 
 class _EventTypesDialog extends StatefulWidget {
@@ -1774,6 +2135,7 @@ class _AddEventDialogState extends State<_AddEventDialog> {
               ? () {
                   Navigator.of(context).pop(
                     _CalendarEvent(
+                      id: widget.initialEvent?.id,
                       title: _titleController.text.trim(),
                       eventTypeId: _selectedTypeId!,
                       startDate: _startDate!,
@@ -1898,6 +2260,7 @@ class _AddEventDialogState extends State<_AddEventDialog> {
 
 class _CalendarEvent {
   const _CalendarEvent({
+    this.id,
     required this.title,
     required this.eventTypeId,
     required this.startDate,
@@ -1905,11 +2268,30 @@ class _CalendarEvent {
     this.notes,
   });
 
+  final String? id;
   final String title;
   final String eventTypeId;
   final DateTime startDate;
   final DateTime? endDate;
   final String? notes;
+
+  _CalendarEvent copyWith({
+    String? id,
+    String? title,
+    String? eventTypeId,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? notes,
+  }) {
+    return _CalendarEvent(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      eventTypeId: eventTypeId ?? this.eventTypeId,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      notes: notes ?? this.notes,
+    );
+  }
 
   bool occursOn(DateTime date) {
     final day = _normalize(date);
@@ -1920,6 +2302,7 @@ class _CalendarEvent {
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
+      if (id != null) 'id': id,
       'title': title,
       'eventTypeId': eventTypeId,
       'startDate': startDate.toIso8601String(),
@@ -1930,6 +2313,7 @@ class _CalendarEvent {
 
   factory _CalendarEvent.fromJson(Map<String, dynamic> json) {
     return _CalendarEvent(
+      id: json['id'] as String?,
       title: json['title'] as String,
       eventTypeId: json['eventTypeId'] as String,
       startDate: DateTime.parse(json['startDate'] as String),

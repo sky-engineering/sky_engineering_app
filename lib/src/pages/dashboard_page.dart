@@ -73,7 +73,7 @@ class DashboardPage extends StatelessWidget {
           Navigator.of(context)
               .push(MaterialPageRoute(builder: (_) => BigPicturePage()));
         }),
-        linkButton('Yearly Calendar', () {
+        linkButton('Calendar', () {
           Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const YearlyCalendarPage()),
           );

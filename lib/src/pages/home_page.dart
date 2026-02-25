@@ -89,7 +89,7 @@ class _HomePageState extends State<HomePage> {
                 );
               },
               icon: const Icon(Icons.calendar_month),
-              label: const Text('Open Yearly Calendar'),
+              label: const Text('Open Calendar'),
             ),
           ],
         ),
