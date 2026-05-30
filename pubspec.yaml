@@ -35,6 +35,9 @@ dev_dependencies:
   flutter_native_splash: ^2.4.6
 
 flutter:
+  config:
+    enable-swift-package-manager: false
+
   uses-material-design: true
   assets:
     - assets/logo_white.png
@@ -64,4 +67,3 @@ flutter_native_splash:
     image: assets/icon-square-white.png
     icon_background_color: "#00426A"
     icon_background_color_dark: "#00426A"
-
