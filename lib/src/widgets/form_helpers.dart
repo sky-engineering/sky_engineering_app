@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 
 import '../theme/tokens.dart';
 
 String fmtDate(DateTime? d) {
   if (d == null) return '--';
-  return '--';
+  return DateFormat.yMd().format(d);
 }
 
 /// Shared text field with Sky spacing/validation defaults.
@@ -52,7 +53,7 @@ Widget appDateField({
   required DateTime? value,
   required VoidCallback onPick,
 }) {
-  final txt = value == null ? '--' : '--';
+  final txt = fmtDate(value);
   return InkWell(
     onTap: onPick,
     child: InputDecorator(

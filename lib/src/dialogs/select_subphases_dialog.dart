@@ -123,6 +123,8 @@ Future<void> showSelectSubphasesDialog(
                             responsibility: template.responsibility,
                             isDeliverable: template.isDeliverable,
                             status: prev?.status ?? 'In Progress',
+                            contractAmount: prev?.contractAmount,
+                            invoicedAmount: prev?.invoicedAmount,
                           ).toMap(),
                         );
                       } else if (prev != null) {
@@ -133,6 +135,7 @@ Future<void> showSelectSubphasesDialog(
                     try {
                       await projRepo.update(projectId, {
                         'selectedSubphases': picked,
+                        'contractAmount': _sumContractAmount(picked),
                       });
                       if (navigator.mounted) {
                         navigator.pop();
@@ -247,6 +250,17 @@ Future<void> showSelectSubphasesDialog(
       );
     },
   );
+}
+
+double _sumContractAmount(List<Map<String, dynamic>> subphases) {
+  var total = 0.0;
+  for (final subphase in subphases) {
+    final amount = subphase['contractAmount'];
+    if (amount is num) {
+      total += amount.toDouble();
+    }
+  }
+  return total;
 }
 
 Future<List<SubphaseTemplate>> _loadSubphaseTemplates(

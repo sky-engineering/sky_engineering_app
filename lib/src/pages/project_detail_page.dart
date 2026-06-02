@@ -190,34 +190,35 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
         physics: const ClampingScrollPhysics(),
         padding: const EdgeInsets.all(16),
         children: [
-          _kv(context, 'Client', project.clientName),
-          if ((project.contactName ?? '').isNotEmpty ||
-              (project.contactEmail ?? '').isNotEmpty ||
-              phoneDisplay.isNotEmpty)
-            SectionCard(
-              color: _subtleSurfaceTint(context),
-              header: const SectionHeader(title: 'Contact'),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if ((project.contactName ?? '').isNotEmpty)
-                    Text(project.contactName!),
-                  if ((project.contactEmail ?? '').isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(project.contactEmail!),
-                  ],
-                  if (phoneDisplay.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(phoneDisplay),
-                  ],
+          SectionCard(
+            color: _subtleSurfaceTint(context),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  project.clientName,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                if ((project.contactName ?? '').isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(project.contactName!),
                 ],
-              ),
+                if ((project.contactEmail ?? '').isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(project.contactEmail!),
+                ],
+                if (phoneDisplay.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(phoneDisplay),
+                ],
+              ],
             ),
+          ),
           if (showSchedulingCard)
             SectionCard(
               color: _subtleSurfaceTint(context),
               header: SectionHeader(
-                title: 'Scheduling Notes',
+                title: 'Notes',
                 action: canManageProject
                     ? IconButton(
                         tooltip: 'Edit scheduling notes',
@@ -513,14 +514,6 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
     final surface = Theme.of(context).colorScheme.surface;
     return Color.alphaBlend(const Color(0x14FFFFFF), surface);
   }
-
-  Widget _kv(BuildContext context, String k, String v) {
-    return SectionCard(
-      color: _subtleSurfaceTint(context),
-      header: SectionHeader(title: k),
-      child: Text(v, style: Theme.of(context).textTheme.bodyMedium),
-    );
-  }
 }
 
 class _EditProjectTeamDialog extends StatefulWidget {
@@ -752,7 +745,7 @@ Future<void> _showSchedulingNotesDialog(
     context: context,
     builder: (dialogContext) {
       return AlertDialog(
-        title: const Text('Scheduling Notes'),
+        title: const Text('Notes'),
         content: TextFormField(
           initialValue: notesText,
           maxLines: 5,

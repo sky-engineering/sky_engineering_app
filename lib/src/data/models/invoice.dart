@@ -3,6 +3,49 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../utils/data_parsers.dart';
 
+class InvoiceSubphaseBilling {
+  final String subphaseCode;
+  final String subphaseName;
+  final double totalFee;
+  final double percentComplete;
+  final double totalEarned;
+  final double previousBilling;
+  final double currentBilling;
+
+  const InvoiceSubphaseBilling({
+    required this.subphaseCode,
+    required this.subphaseName,
+    required this.totalFee,
+    required this.percentComplete,
+    required this.totalEarned,
+    required this.previousBilling,
+    required this.currentBilling,
+  });
+
+  factory InvoiceSubphaseBilling.fromMap(Map<String, dynamic> data) {
+    final map = mapFrom(data);
+    return InvoiceSubphaseBilling(
+      subphaseCode: parseString(map['subphaseCode']),
+      subphaseName: parseString(map['subphaseName']),
+      totalFee: parseDouble(map['totalFee']),
+      percentComplete: parseDouble(map['percentComplete']),
+      totalEarned: parseDouble(map['totalEarned']),
+      previousBilling: parseDouble(map['previousBilling']),
+      currentBilling: parseDouble(map['currentBilling']),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'subphaseCode': subphaseCode,
+        'subphaseName': subphaseName,
+        'totalFee': totalFee,
+        'percentComplete': percentComplete,
+        'totalEarned': totalEarned,
+        'previousBilling': previousBilling,
+        'currentBilling': currentBilling,
+      };
+}
+
 /// Canonical invoice model (new schema), with legacy shims so the current UI
 /// continues to compile and run while we migrate screens.
 ///
@@ -50,6 +93,7 @@ class Invoice {
   final DateTime? paidDate;
   final String? documentLink;
   final String invoiceType; // 'Client' | 'Vendor'
+  final List<InvoiceSubphaseBilling> subphaseBillings;
 
   // Meta
   final String? ownerUid;
@@ -96,8 +140,8 @@ class Invoice {
     DateTime? issueDate,
     String? status,
     this.notes,
-
     this.invoiceType = 'Client', // default
+    List<InvoiceSubphaseBilling>? subphaseBillings,
     String? projectNumber,
     this.balanceDue,
     this.dueDate,
@@ -106,31 +150,30 @@ class Invoice {
     this.ownerUid,
     this.createdAt,
     this.updatedAt,
-  }) : projectNumber = _normalizeProjectNumber(projectNumber),
-       invoiceNumber = invoiceNumber ?? number ?? '',
-       invoiceAmount = (invoiceAmount ?? amount ?? 0.0),
-       invoiceDate = invoiceDate ?? issueDate,
-       _statusStored = status,
-       // Normalize amountPaid to [0, invoiceAmount]
-       amountPaid = _normalizePaid(
-         amountPaid ??
-             _derivePaidFromBalance(
-               balanceDue,
-               (invoiceAmount ?? amount ?? 0.0),
-             ),
-         (invoiceAmount ?? amount ?? 0.0),
-       );
+  })  : projectNumber = _normalizeProjectNumber(projectNumber),
+        invoiceNumber = invoiceNumber ?? number ?? '',
+        invoiceAmount = (invoiceAmount ?? amount ?? 0.0),
+        subphaseBillings = subphaseBillings ?? const <InvoiceSubphaseBilling>[],
+        invoiceDate = invoiceDate ?? issueDate,
+        _statusStored = status,
+        // Normalize amountPaid to [0, invoiceAmount]
+        amountPaid = _normalizePaid(
+          amountPaid ??
+              _derivePaidFromBalance(
+                balanceDue,
+                (invoiceAmount ?? amount ?? 0.0),
+              ),
+          (invoiceAmount ?? amount ?? 0.0),
+        );
 
   /// Backward-compatible factory from Firestore doc.
   static Invoice fromDoc(DocumentSnapshot doc) {
     final data = mapFrom(doc.data() as Map<String, dynamic>?);
 
-    final invoiceNumberKey = data.containsKey('invoiceNumber')
-        ? 'invoiceNumber'
-        : 'number';
-    final invoiceAmountKey = data.containsKey('invoiceAmount')
-        ? 'invoiceAmount'
-        : 'amount';
+    final invoiceNumberKey =
+        data.containsKey('invoiceNumber') ? 'invoiceNumber' : 'number';
+    final invoiceAmountKey =
+        data.containsKey('invoiceAmount') ? 'invoiceAmount' : 'amount';
 
     final invoiceNumber = readString(data, invoiceNumberKey);
     final invoiceAmount = readDouble(data, invoiceAmountKey);
@@ -144,9 +187,19 @@ class Invoice {
     );
 
     final invoiceTypeRaw = parseString(data['invoiceType'], fallback: 'Client');
-    final invoiceType = invoiceTypeRaw.toLowerCase() == 'vendor'
-        ? 'Vendor'
-        : 'Client';
+    final invoiceType =
+        invoiceTypeRaw.toLowerCase() == 'vendor' ? 'Vendor' : 'Client';
+    final subphaseBillings = readListOrNull<InvoiceSubphaseBilling>(
+          data,
+          'subphaseBillings',
+          (value) {
+            if (value is Map<String, dynamic>) {
+              return InvoiceSubphaseBilling.fromMap(value);
+            }
+            return null;
+          },
+        ) ??
+        const <InvoiceSubphaseBilling>[];
 
     return Invoice(
       id: doc.id,
@@ -162,6 +215,7 @@ class Invoice {
       paidDate: readDateTime(data, 'paidDate'),
       documentLink: readStringOrNull(data, 'documentLink'),
       invoiceType: invoiceType,
+      subphaseBillings: subphaseBillings,
       ownerUid: readStringOrNull(data, 'ownerUid'),
       createdAt: readDateTime(data, 'createdAt'),
       updatedAt: readDateTime(data, 'updatedAt'),
@@ -172,12 +226,10 @@ class Invoice {
 
   /// Map to Firestore. Writes both new keys and legacy mirrors so old screens keep working.
   Map<String, dynamic> toMap() {
-    final computedBalance = (invoiceAmount - amountPaid)
-        .clamp(0, double.infinity)
-        .toDouble();
+    final computedBalance =
+        (invoiceAmount - amountPaid).clamp(0, double.infinity).toDouble();
 
-    final effectiveStatus =
-        _statusStored ??
+    final effectiveStatus = _statusStored ??
         ((paidDate != null ||
                 amountPaid >= invoiceAmount ||
                 computedBalance <= 0)
@@ -197,6 +249,8 @@ class Invoice {
       'paidDate': timestampFromDate(paidDate),
       'documentLink': documentLink,
       'invoiceType': invoiceType,
+      if (subphaseBillings.isNotEmpty)
+        'subphaseBillings': subphaseBillings.map((b) => b.toMap()).toList(),
       'ownerUid': ownerUid,
 
       // Legacy mirrors
@@ -221,6 +275,7 @@ class Invoice {
     DateTime? paidDate,
     String? documentLink,
     String? invoiceType,
+    List<InvoiceSubphaseBilling>? subphaseBillings,
     String? ownerUid,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -246,6 +301,7 @@ class Invoice {
       paidDate: paidDate ?? this.paidDate,
       documentLink: documentLink ?? this.documentLink,
       invoiceType: invoiceType ?? this.invoiceType,
+      subphaseBillings: subphaseBillings ?? this.subphaseBillings,
       ownerUid: ownerUid ?? this.ownerUid,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

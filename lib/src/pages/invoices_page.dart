@@ -1,7 +1,6 @@
 // lib/src/pages/invoices_page.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../data/models/invoice.dart';
 import '../data/models/project.dart';
@@ -10,32 +9,12 @@ import '../data/repositories/project_repository.dart';
 import '../dialogs/quick_actions.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_page_scaffold.dart';
-import '../widgets/form_helpers.dart';
+import '../widgets/invoices_section.dart' as invoice_dialogs;
 
 enum _InvoiceSort {
   projectNumberAsc,
   invoiceNumberAsc,
   dateDesc,
-}
-
-String _digitsOnly(String s) => s.replaceAll(RegExp(r'[^0-9]'), '');
-
-Future<bool> _projectNumberExists(String text) async {
-  final projects = FirebaseFirestore.instance.collection('projects');
-
-  final exact =
-      await projects.where('projectNumber', isEqualTo: text).limit(1).get();
-  if (exact.docs.isNotEmpty) return true;
-
-  final digits = _digitsOnly(text);
-  if (digits.isEmpty) return false;
-
-  final scan = await projects.limit(500).get();
-  for (final d in scan.docs) {
-    final v = (d.data()['projectNumber'] as String?) ?? '';
-    if (_digitsOnly(v) == digits) return true;
-  }
-  return false;
 }
 
 class InvoicesPage extends StatefulWidget {
@@ -315,43 +294,52 @@ class _InvoicesPageState extends State<InvoicesPage> {
                           ? dateFormat.format(inv.invoiceDate!)
                           : '--/--/--';
 
-                      return Card(
-                        margin: EdgeInsets.zero,
-                        child: ListTile(
-                          dense: true,
-                          visualDensity: const VisualDensity(vertical: -2),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.md,
-                            vertical: AppSpacing.sm,
-                          ),
-                          title: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  inv.invoiceNumber.isNotEmpty
-                                      ? 'Invoice ${inv.invoiceNumber}'
-                                      : 'Invoice ${inv.id.substring(0, 6)}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w600),
+                      return invoice_dialogs.InvoiceQuickPayDismissible(
+                        invoice: inv,
+                        canEdit: true,
+                        child: Card(
+                          margin: EdgeInsets.zero,
+                          child: ListTile(
+                            dense: true,
+                            visualDensity: const VisualDensity(vertical: -2),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                              vertical: AppSpacing.sm,
+                            ),
+                            title: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    inv.invoiceNumber.isNotEmpty
+                                        ? 'Invoice ${inv.invoiceNumber}'
+                                        : 'Invoice ${inv.id.substring(0, 6)}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: AppSpacing.xs),
-                              Text(
-                                currency.format(inv.balance),
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w600),
-                              ),
-                            ],
+                                const SizedBox(width: AppSpacing.xs),
+                                Text(
+                                  currency.format(inv.balance),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            subtitle: Text(
+                              'Project: $displayProj  -  Original: ${currency.format(inv.invoiceAmount)}  -  $invoiceDateLabel',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onTap: () => invoice_dialogs.showEditInvoiceDialog(
+                              context,
+                              inv,
+                              canEdit: true,
+                            ),
                           ),
-                          subtitle: Text(
-                            'Project: $displayProj  -  Original: ${currency.format(inv.invoiceAmount)}  -  $invoiceDateLabel',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          onTap: () =>
-                              _showEditInvoiceDialogInline(context, inv),
                         ),
                       );
                     },
@@ -508,321 +496,5 @@ class _InvoicesPageState extends State<InvoicesPage> {
       return null;
     }
     return int.tryParse(digits);
-  }
-
-  Future<void> _showEditInvoiceDialogInline(
-    BuildContext context,
-    Invoice inv,
-  ) async {
-    final invoiceNumberCtl = TextEditingController(text: inv.invoiceNumber);
-    final projectNumberCtl = TextEditingController(
-      text: _projectNumById[inv.projectId]?.trim().isNotEmpty == true
-          ? _projectNumById[inv.projectId]!
-          : (inv.projectNumber?.toString() ?? ''),
-    );
-    final invoiceAmountCtl = TextEditingController(
-      text: inv.invoiceAmount.toStringAsFixed(2),
-    );
-    final amountPaidCtl = TextEditingController(
-      text: inv.amountPaid.toStringAsFixed(2),
-    );
-    final documentLinkCtl = TextEditingController(text: inv.documentLink ?? '');
-
-    String invoiceType = inv.invoiceType;
-    DateTime? invoiceDate = inv.invoiceDate;
-    DateTime? dueDate = inv.dueDate;
-    DateTime? paidDate = inv.paidDate;
-
-    final formKey = GlobalKey<FormState>();
-    final repo = _invoiceRepo;
-
-    Future<void> pickDate(String which) async {
-      final seed = (which == 'invoice')
-          ? (invoiceDate ?? DateTime.now())
-          : (which == 'due')
-              ? (dueDate ?? DateTime.now())
-              : (paidDate ?? DateTime.now());
-      final d = await showDatePicker(
-        context: context,
-        initialDate: seed,
-        firstDate: DateTime(seed.year - 5),
-        lastDate: DateTime(seed.year + 5),
-      );
-      if (d != null) {
-        switch (which) {
-          case 'invoice':
-            invoiceDate = d;
-            break;
-          case 'due':
-            dueDate = d;
-            break;
-          case 'paid':
-            paidDate = d;
-            break;
-        }
-      }
-    }
-
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (_, setState) {
-            return AppFormDialog(
-              title:
-                  'Invoice ${inv.invoiceNumber.isNotEmpty ? inv.invoiceNumber : inv.id.substring(0, 6)}',
-              width: 520,
-              actions: [
-                AppDialogActions(
-                  leading: TextButton(
-                    onPressed: () async {
-                      final navigator = Navigator.of(dialogContext);
-                      final messenger = ScaffoldMessenger.of(dialogContext);
-                      final ok = await _confirmDialog(
-                        dialogContext,
-                        'Delete this invoice?',
-                      );
-                      if (!ok || !navigator.mounted) return;
-                      try {
-                        await repo.delete(inv.id);
-                        if (navigator.mounted) {
-                          navigator.pop();
-                        }
-                      } catch (e) {
-                        if (!navigator.mounted) return;
-                        if (messenger.mounted) {
-                          messenger.showSnackBar(
-                            SnackBar(content: Text('Failed to delete: $e')),
-                          );
-                        }
-                      }
-                    },
-                    child: const Text('Delete'),
-                  ),
-                  secondary: TextButton(
-                    onPressed: () => Navigator.pop(dialogContext),
-                    child: const Text('Cancel'),
-                  ),
-                  primary: FilledButton(
-                    onPressed: () async {
-                      final messenger = ScaffoldMessenger.of(dialogContext);
-                      final navigator = Navigator.of(dialogContext);
-                      if (!(formKey.currentState?.validate() ?? false)) return;
-
-                      final pnText = projectNumberCtl.text.trim();
-                      if (pnText.isEmpty ||
-                          !(await _projectNumberExists(pnText))) {
-                        if (messenger.mounted) {
-                          messenger.showSnackBar(
-                            const SnackBar(
-                              content: Text('Project Number not found.'),
-                            ),
-                          );
-                        }
-                        return;
-                      }
-
-                      final amt =
-                          double.tryParse(invoiceAmountCtl.text.trim()) ??
-                              inv.invoiceAmount;
-                      final paid = amountPaidCtl.text.trim().isEmpty
-                          ? inv.amountPaid
-                          : (double.tryParse(amountPaidCtl.text.trim()) ??
-                              inv.amountPaid);
-                      final projectNumberValue =
-                          pnText.isNotEmpty ? pnText : null;
-
-                      try {
-                        await repo.update(inv.id, {
-                          'invoiceNumber': invoiceNumberCtl.text.trim(),
-                          'projectNumber': projectNumberValue,
-                          'invoiceAmount': amt,
-                          'amountPaid': paid,
-                          'invoiceDate': invoiceDate != null
-                              ? Timestamp.fromDate(invoiceDate!)
-                              : null,
-                          'dueDate': dueDate != null
-                              ? Timestamp.fromDate(dueDate!)
-                              : null,
-                          'paidDate': paidDate != null
-                              ? Timestamp.fromDate(paidDate!)
-                              : null,
-                          'documentLink': documentLinkCtl.text.trim().isNotEmpty
-                              ? documentLinkCtl.text.trim()
-                              : null,
-                          'invoiceType': invoiceType,
-                        });
-                        if (navigator.mounted) {
-                          navigator.pop();
-                        }
-                      } catch (e) {
-                        if (!navigator.mounted) return;
-                        if (messenger.mounted) {
-                          messenger.showSnackBar(
-                            SnackBar(content: Text('Failed to save: $e')),
-                          );
-                        }
-                      }
-                    },
-                    child: const Text('Save'),
-                  ),
-                ),
-              ],
-              child: Form(
-                key: formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    appTextField(
-                      'Project Number',
-                      projectNumberCtl,
-                      hint: 'e.g., 026-01',
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    appTextField(
-                      'Invoice Number',
-                      invoiceNumberCtl,
-                      required: true,
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    appTextField(
-                      'Invoice Amount',
-                      invoiceAmountCtl,
-                      required: true,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? 'Required' : null,
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    appTextField(
-                      'Amount Paid',
-                      amountPaidCtl,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _appDateField(
-                            context: dialogContext,
-                            label: 'Invoice Date',
-                            value: invoiceDate,
-                            onPick: () async {
-                              await pickDate('invoice');
-                              setState(() {});
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: _appDateField(
-                            context: dialogContext,
-                            label: 'Due Date',
-                            value: dueDate,
-                            onPick: () async {
-                              await pickDate('due');
-                              setState(() {});
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    _appDateField(
-                      context: dialogContext,
-                      label: 'Paid Date',
-                      value: paidDate,
-                      onPick: () async {
-                        await pickDate('paid');
-                        setState(() {});
-                      },
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    DropdownButtonFormField<String>(
-                      initialValue: invoiceType,
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'Client',
-                          child: Text('Client'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'Vendor',
-                          child: Text('Vendor'),
-                        ),
-                      ],
-                      onChanged: (v) =>
-                          setState(() => invoiceType = v ?? invoiceType),
-                      decoration: const InputDecoration(
-                        labelText: 'Invoice Type',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    appTextField(
-                      'Document Link',
-                      documentLinkCtl,
-                      hint: 'https://...',
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // ---- tiny shared UI bits ----
-
-  Future<bool> _confirmDialog(BuildContext context, String msg) async {
-    bool ok = false;
-    await showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          content: Text(msg),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('No'),
-            ),
-            FilledButton(
-              onPressed: () {
-                ok = true;
-                Navigator.pop(context);
-              },
-              child: const Text('Yes'),
-            ),
-          ],
-        );
-      },
-    );
-    return ok;
-  }
-
-  Widget _appDateField({
-    required BuildContext context,
-    required String label,
-    required DateTime? value,
-    required Future<void> Function() onPick,
-  }) {
-    return InkWell(
-      onTap: onPick,
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-        ),
-        child: Text(
-          value != null ? DateFormat.yMMMd().format(value) : 'â',
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
-      ),
-    );
   }
 }

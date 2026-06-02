@@ -23,6 +23,8 @@ const kBigPictureLaneValues = <String>[
   'unassigned',
 ];
 
+const _unset = Object();
+
 /// Each project stores the selected subphases + per-project status.
 class SelectedSubphase {
   final String code; // 4-digit, e.g. "0201"
@@ -30,6 +32,8 @@ class SelectedSubphase {
   final String? responsibility; // snapshot (optional)
   final bool isDeliverable; // snapshot
   final String status; // 'In Progress' | 'On Hold' | 'Completed'
+  final double? contractAmount;
+  final double? invoicedAmount;
 
   const SelectedSubphase({
     required this.code,
@@ -37,6 +41,8 @@ class SelectedSubphase {
     this.responsibility,
     required this.isDeliverable,
     this.status = 'In Progress',
+    this.contractAmount,
+    this.invoicedAmount,
   });
 
   factory SelectedSubphase.fromMap(Map<String, dynamic> data) {
@@ -51,6 +57,8 @@ class SelectedSubphase {
       responsibility: parseStringOrNull(map['responsibility']),
       isDeliverable: parseBool(map['isDeliverable'], fallback: false),
       status: normalizedStatus,
+      contractAmount: parseDoubleOrNull(map['contractAmount']),
+      invoicedAmount: parseDoubleOrNull(map['invoicedAmount']),
     );
   }
 
@@ -60,6 +68,8 @@ class SelectedSubphase {
         if (responsibility != null) 'responsibility': responsibility,
         'isDeliverable': isDeliverable,
         'status': status,
+        if (contractAmount != null) 'contractAmount': contractAmount,
+        if (invoicedAmount != null) 'invoicedAmount': invoicedAmount,
       };
 
   SelectedSubphase copyWith({
@@ -68,6 +78,8 @@ class SelectedSubphase {
     String? responsibility,
     bool? isDeliverable,
     String? status,
+    Object? contractAmount = _unset,
+    Object? invoicedAmount = _unset,
   }) {
     return SelectedSubphase(
       code: code ?? this.code,
@@ -75,6 +87,12 @@ class SelectedSubphase {
       responsibility: responsibility ?? this.responsibility,
       isDeliverable: isDeliverable ?? this.isDeliverable,
       status: status ?? this.status,
+      contractAmount: contractAmount == _unset
+          ? this.contractAmount
+          : contractAmount as double?,
+      invoicedAmount: invoicedAmount == _unset
+          ? this.invoicedAmount
+          : invoicedAmount as double?,
     );
   }
 }
@@ -180,6 +198,16 @@ class Project {
     return kBigPictureLaneValues.contains(trimmed) ? trimmed : null;
   }
 
+  static double _sumSelectedSubphaseContractAmounts(
+    List<SelectedSubphase> selectedSubphases,
+  ) {
+    var total = 0.0;
+    for (final subphase in selectedSubphases) {
+      total += subphase.contractAmount ?? 0.0;
+    }
+    return total;
+  }
+
   // -------- factory from Firestore --------
   static Project fromDoc(DocumentSnapshot doc) {
     final data = mapFrom(doc.data() as Map<String, dynamic>?);
@@ -202,6 +230,9 @@ class Project {
     );
     final selectedSubphases =
         (selectedList == null || selectedList.isEmpty) ? null : selectedList;
+    final contractAmount = selectedList == null
+        ? readDoubleOrNull(data, 'contractAmount')
+        : _sumSelectedSubphaseContractAmounts(selectedList);
 
     final externalList = readListOrNull<ExternalTask>(data, 'externalTasks', (
       value,
@@ -224,7 +255,7 @@ class Project {
       name: readString(data, 'name'),
       clientName: readString(data, 'clientName'),
       status: resolvedStatus,
-      contractAmount: readDoubleOrNull(data, 'contractAmount'),
+      contractAmount: contractAmount,
       contactName: readStringOrNull(data, 'contactName'),
       contactEmail: readStringOrNull(data, 'contactEmail'),
       contactPhone: readStringOrNull(data, 'contactPhone'),

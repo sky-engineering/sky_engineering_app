@@ -12,9 +12,6 @@ Future<void> showEditProjectDialog(BuildContext context, Project p) async {
   final clientCtl = TextEditingController(text: p.clientName);
   final projectNumCtl = TextEditingController(text: p.projectNumber ?? '');
   final folderCtl = TextEditingController(text: p.folderName ?? '');
-  final contractCtl = TextEditingController(
-    text: p.contractAmount != null ? p.contractAmount!.toStringAsFixed(2) : '',
-  );
   final contactNameCtl = TextEditingController(text: p.contactName ?? '');
   final contactPhoneCtl = TextEditingController(
     text: formatPhoneForDisplay(p.contactPhone),
@@ -26,12 +23,6 @@ Future<void> showEditProjectDialog(BuildContext context, Project p) async {
   final repo = ProjectRepository();
   String projectStatus =
       kProjectStatuses.contains(p.status) ? p.status : 'In Progress';
-
-  double? parseMoney(String value) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return null;
-    return double.tryParse(trimmed);
-  }
 
   await showDialog<void>(
     context: context,
@@ -60,14 +51,12 @@ Future<void> showEditProjectDialog(BuildContext context, Project p) async {
                       return;
                     }
 
-                    final amt = parseMoney(contractCtl.text);
                     String? nullIfEmpty(String s) =>
                         s.trim().isEmpty ? null : s.trim();
 
                     await repo.update(p.id, {
                       'name': nameCtl.text.trim(),
                       'clientName': clientCtl.text.trim(),
-                      'contractAmount': amt,
                       'projectNumber': nullIfEmpty(
                         projectNumCtl.text,
                       ),
@@ -144,15 +133,6 @@ Future<void> showEditProjectDialog(BuildContext context, Project p) async {
                     },
                   ),
                   const SizedBox(height: AppSpacing.md),
-                  appTextField(
-                    'Contract Amount',
-                    contractCtl,
-                    hint: 'e.g., 150000.00',
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
                   appTextField(
                     'Scheduling Notes',
                     schedulingNotesCtl,

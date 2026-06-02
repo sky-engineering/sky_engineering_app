@@ -712,7 +712,6 @@ class _Empty extends StatelessWidget {
 Future<void> _showAddDialog(BuildContext context) async {
   final nameCtl = TextEditingController();
   final clientCtl = TextEditingController();
-  final amountCtl = TextEditingController();
   final projectNumCtl = TextEditingController();
   final folderCtl = TextEditingController();
   final contactNameCtl = TextEditingController();
@@ -900,18 +899,6 @@ Future<void> _showAddDialog(BuildContext context) async {
                           ),
                           keyboardType: TextInputType.emailAddress,
                         ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: amountCtl,
-                          decoration: const InputDecoration(
-                            labelText: 'Contract amount',
-                            hintText: 'e.g., 75000',
-                            border: OutlineInputBorder(),
-                          ),
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -938,11 +925,6 @@ Future<void> _showAddDialog(BuildContext context) async {
                     return;
                   }
 
-                  double? amt;
-                  if (amountCtl.text.trim().isNotEmpty) {
-                    amt = double.tryParse(amountCtl.text.trim());
-                  }
-
                   String? nullIfEmpty(String value) {
                     final trimmed = value.trim();
                     return trimmed.isEmpty ? null : trimmed;
@@ -954,7 +936,6 @@ Future<void> _showAddDialog(BuildContext context) async {
                     clientName: clientName,
                     teamOwner: clientName,
                     status: projectStatus,
-                    contractAmount: amt,
                     contactName: nullIfEmpty(contactNameCtl.text),
                     contactEmail: nullIfEmpty(contactEmailCtl.text),
                     contactPhone: normalizePhone(contactPhoneCtl.text),

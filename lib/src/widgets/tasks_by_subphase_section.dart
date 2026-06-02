@@ -5,9 +5,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../data/models/project.dart';
 import '../data/models/task.dart';
+import '../data/models/invoice.dart';
 import '../data/models/subphase_template.dart';
 import '../data/models/external_task.dart';
 import '../data/repositories/task_repository.dart';
+import '../data/repositories/invoice_repository.dart';
 import '../data/repositories/project_repository.dart';
 import '../data/repositories/subphase_template_repository.dart';
 import '../data/repositories/external_task_repository.dart';
@@ -23,11 +25,54 @@ const _kTaskStatuses = <String>[
   'Pending',
   'Completed',
 ];
-const _kSubphaseStatuses = <String>['In Progress', 'On Hold', 'Completed'];
 @visibleForTesting
 bool isProjectTaskActiveStatus(String? status) {
   final normalized = (status ?? '').trim().toLowerCase();
   return normalized == 'in progress';
+}
+
+@visibleForTesting
+String formatSubphaseInvoicedPercent(SelectedSubphase subphase) {
+  final contractAmount = subphase.contractAmount;
+  if (contractAmount == null || contractAmount <= 0) {
+    return '';
+  }
+
+  final percent = ((subphase.invoicedAmount ?? 0) / contractAmount) * 100;
+  if (!percent.isFinite) {
+    return '';
+  }
+  return ' (${percent.toStringAsFixed(0)}%)';
+}
+
+@visibleForTesting
+String formatSubphaseLabel(SelectedSubphase subphase) {
+  return '${subphase.code}  ${subphase.name}'
+      '${formatSubphaseInvoicedPercent(subphase)}';
+}
+
+List<SelectedSubphase> _withTrackedInvoicedAmounts(
+  List<SelectedSubphase> subphases,
+  List<Invoice> invoices,
+) {
+  final billedByCode = <String, double>{};
+  for (final invoice in invoices) {
+    for (final billing in invoice.subphaseBillings) {
+      billedByCode.update(
+        billing.subphaseCode,
+        (value) => value + billing.currentBilling,
+        ifAbsent: () => billing.currentBilling,
+      );
+    }
+  }
+
+  return subphases
+      .map(
+        (subphase) => subphase.copyWith(
+          invoicedAmount: billedByCode[subphase.code] ?? 0.0,
+        ),
+      )
+      .toList();
 }
 
 class TasksBySubphaseSection extends StatefulWidget {
@@ -54,207 +99,214 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
   @override
   Widget build(BuildContext context) {
     final repo = TaskRepository();
-    final sel = (widget.selectedSubphases ?? <SelectedSubphase>[])
+    final invoiceRepo = InvoiceRepository();
+    final baseSel = (widget.selectedSubphases ?? <SelectedSubphase>[])
         .where((s) => _isValidCode(s.code))
         .toList()
       ..sort((a, b) => a.code.compareTo(b.code));
 
-    final statusByCode = {for (final s in sel) s.code: s.status};
-
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: StreamBuilder<List<TaskItem>>(
-          stream: repo.streamByProject(widget.projectId),
-          builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
-              return const Padding(
-                padding: EdgeInsets.all(12),
-                child: CircularProgressIndicator(),
-              );
-            }
-            final allTasks = (snap.data ?? const <TaskItem>[]);
-
-            // Partition tasks: map<code, list> for selected codes; everything else -> other
-            final codeSet = sel.map((e) => e.code).toSet();
-            final Map<String, List<TaskItem>> byCode = {
-              for (final s in sel) s.code: <TaskItem>[],
-            };
-            final List<TaskItem> other = [];
-
-            for (final t in allTasks) {
-              final code = _sanitizeCode(t.taskCode);
-              if (code != null && codeSet.contains(code)) {
-                byCode[code]!.add(t);
-              } else {
-                other.add(t);
-              }
-            }
-
-            for (final list in byCode.values) {
-              list.sort(_compareProjectTasks);
-            }
-            other.sort(_compareProjectTasks);
-
-            // Header row: Tasks + (Select Subphases icon) ... clickable yellow text
-            final header = Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Left cluster (title + select subphases)
-                Expanded(
-                  child: Wrap(
-                    spacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        'Tasks',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      if (widget.canEdit)
-                        IconButton(
-                          tooltip: 'Select Subphases',
-                          visualDensity: VisualDensity.compact,
-                          iconSize: 20,
-                          onPressed: () async {
-                            final messenger = ScaffoldMessenger.of(context);
-                            final primaryOwner =
-                                widget.ownerUidForWrites.trim();
-                            final authOwner =
-                                (FirebaseAuth.instance.currentUser?.uid ?? '')
-                                    .trim();
-                            final resolvedOwner = primaryOwner.isNotEmpty
-                                ? primaryOwner
-                                : authOwner;
-                            if (resolvedOwner.isEmpty) {
-                              messenger.showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Could not determine an owner for this project.',
-                                  ),
-                                ),
-                              );
-                              return;
-                            }
-                            if (!context.mounted) return;
-                            await showSelectSubphasesDialog(
-                              context,
-                              projectId: widget.projectId,
-                              ownerUid: resolvedOwner,
-                              fallbackOwnerUid: authOwner,
-                            );
-                          },
-                          icon: const Icon(Icons.tune),
-                        ),
-                    ],
-                  ),
-                ),
-                // Right: tiny yellow text toggle
-                TextButton(
-                  onPressed: () => setState(() => _activeOnly = !_activeOnly),
-                  style: TextButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    foregroundColor: AppColors.accentYellow,
-                  ),
-                  child: Text(
-                    _activeOnly ? 'Show Inactive Tasks' : 'Hide Inactive Tasks',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.accentYellow,
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                ),
-              ],
+        child: StreamBuilder<List<Invoice>>(
+          stream: invoiceRepo.streamByProject(widget.projectId),
+          builder: (context, invoiceSnap) {
+            final sel = _withTrackedInvoicedAmounts(
+              baseSel,
+              invoiceSnap.data ?? const <Invoice>[],
             );
 
-            // Helper to filter a list by activeOnly (In Progress + Pending)
-            List<TaskItem> maybeFilter(List<TaskItem> input) {
-              if (!_activeOnly) return input;
-              return input
-                  .where((t) => isProjectTaskActiveStatus(t.taskStatus))
-                  .toList();
-            }
+            return StreamBuilder<List<TaskItem>>(
+              stream: repo.streamByProject(widget.projectId),
+              builder: (context, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: CircularProgressIndicator(),
+                  );
+                }
+                final allTasks = (snap.data ?? const <TaskItem>[]);
 
-            final otherTasks = maybeFilter(other);
-            final boxes = <Widget>[
-              header,
-              const SizedBox(height: 4),
-              if (sel.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text(
-                    'No subphases selected for this project yet.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-              ...sel.map((s) {
-                final rawStatus = statusByCode[s.code]?.trim();
-                final status = (rawStatus != null && rawStatus.isNotEmpty)
-                    ? rawStatus
-                    : 'In Progress';
-                final suffix = status == 'In Progress' ? '' : ' - $status';
-                final displayLabel = '${s.code}  ${s.name}$suffix';
-                return _SubphaseBox(
-                  projectId: widget.projectId,
-                  label: displayLabel,
-                  tasks: maybeFilter(byCode[s.code] ?? const <TaskItem>[]),
-                  allSubphases: sel,
-                  canEdit: widget.canEdit,
-                  ownerUidForWrites: widget.ownerUidForWrites,
-                  subphase: s,
-                  currentStatus: status,
-                  onChangeStatus: (newStatus, newName) async {
-                    if (!widget.canEdit) {
-                      return _SubphaseBox._viewOnlySnack(context);
-                    }
-                    await _updateSubphaseStatus(
-                      context,
-                      projectId: widget.projectId,
-                      selected: widget.selectedSubphases ??
-                          const <SelectedSubphase>[],
-                      code: s.code,
-                      newStatus: newStatus,
-                      newName: newName,
-                    );
-                  },
+                // Partition tasks by selected subphase; everything else is Other.
+                final codeSet = sel.map((e) => e.code).toSet();
+                final Map<String, List<TaskItem>> byCode = {
+                  for (final s in sel) s.code: <TaskItem>[],
+                };
+                final List<TaskItem> other = [];
+
+                for (final t in allTasks) {
+                  final code = _sanitizeCode(t.taskCode);
+                  if (code != null && codeSet.contains(code)) {
+                    byCode[code]!.add(t);
+                  } else {
+                    other.add(t);
+                  }
+                }
+
+                for (final list in byCode.values) {
+                  list.sort(_compareProjectTasks);
+                }
+                other.sort(_compareProjectTasks);
+
+                final header = Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Wrap(
+                        spacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(
+                            'Tasks',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          if (widget.canEdit)
+                            IconButton(
+                              tooltip: 'Select Subphases',
+                              visualDensity: VisualDensity.compact,
+                              iconSize: 20,
+                              onPressed: () async {
+                                final messenger = ScaffoldMessenger.of(context);
+                                final primaryOwner =
+                                    widget.ownerUidForWrites.trim();
+                                final authOwner =
+                                    (FirebaseAuth.instance.currentUser?.uid ??
+                                            '')
+                                        .trim();
+                                final resolvedOwner = primaryOwner.isNotEmpty
+                                    ? primaryOwner
+                                    : authOwner;
+                                if (resolvedOwner.isEmpty) {
+                                  messenger.showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Could not determine an owner for this project.',
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
+                                if (!context.mounted) return;
+                                await showSelectSubphasesDialog(
+                                  context,
+                                  projectId: widget.projectId,
+                                  ownerUid: resolvedOwner,
+                                  fallbackOwnerUid: authOwner,
+                                );
+                              },
+                              icon: const Icon(Icons.tune),
+                            ),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () =>
+                          setState(() => _activeOnly = !_activeOnly),
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        foregroundColor: AppColors.accentYellow,
+                      ),
+                      child: Text(
+                        _activeOnly
+                            ? 'Show Inactive Tasks'
+                            : 'Hide Inactive Tasks',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppColors.accentYellow,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ),
+                  ],
                 );
-              }),
-              if (otherTasks.isNotEmpty)
-                _SubphaseBox(
-                  projectId: widget.projectId,
-                  label: 'Other',
-                  tasks: otherTasks,
-                  allSubphases: sel,
-                  canEdit: widget.canEdit,
-                  ownerUidForWrites: widget.ownerUidForWrites,
-                  subphase: null,
-                  currentStatus: null,
-                  onChangeStatus: null,
-                ),
-              const SizedBox(height: 4),
-              if (widget.canEdit)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: FloatingActionButton(
-                    heroTag: null,
-                    onPressed: () => _showAddTaskDialog(context,
-                        widget.projectId, sel, widget.ownerUidForWrites),
-                    backgroundColor: AppColors.accentYellow,
-                    foregroundColor: Colors.black,
-                    child: const Icon(Icons.add),
-                  ),
-                ),
-            ];
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ...boxes.expand((w) sync* {
-                  yield w;
-                  if (w is _SubphaseBox) yield const SizedBox(height: 8);
-                }),
-              ],
+                List<TaskItem> maybeFilter(List<TaskItem> input) {
+                  if (!_activeOnly) return input;
+                  return input
+                      .where((t) => isProjectTaskActiveStatus(t.taskStatus))
+                      .toList();
+                }
+
+                final otherTasks = maybeFilter(other);
+                final boxes = <Widget>[
+                  header,
+                  const SizedBox(height: 4),
+                  if (sel.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        'No subphases selected for this project yet.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ...sel.map((s) {
+                    return _SubphaseBox(
+                      projectId: widget.projectId,
+                      label: formatSubphaseLabel(s),
+                      tasks: maybeFilter(byCode[s.code] ?? const <TaskItem>[]),
+                      allSubphases: sel,
+                      canEdit: widget.canEdit,
+                      ownerUidForWrites: widget.ownerUidForWrites,
+                      subphase: s,
+                      onSaveSubphase: (
+                        newName,
+                        newContractAmount,
+                      ) async {
+                        if (!widget.canEdit) {
+                          return _SubphaseBox._viewOnlySnack(context);
+                        }
+                        await _updateSubphaseDetails(
+                          context,
+                          projectId: widget.projectId,
+                          selected: sel,
+                          code: s.code,
+                          newName: newName,
+                          newContractAmount: newContractAmount,
+                        );
+                      },
+                    );
+                  }),
+                  if (otherTasks.isNotEmpty)
+                    _SubphaseBox(
+                      projectId: widget.projectId,
+                      label: 'Other',
+                      tasks: otherTasks,
+                      allSubphases: sel,
+                      canEdit: widget.canEdit,
+                      ownerUidForWrites: widget.ownerUidForWrites,
+                      subphase: null,
+                      onSaveSubphase: null,
+                    ),
+                  const SizedBox(height: 4),
+                  if (widget.canEdit)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: FloatingActionButton(
+                        heroTag: null,
+                        onPressed: () => _showAddTaskDialog(
+                          context,
+                          widget.projectId,
+                          sel,
+                          widget.ownerUidForWrites,
+                        ),
+                        backgroundColor: AppColors.accentYellow,
+                        foregroundColor: Colors.black,
+                        child: const Icon(Icons.add),
+                      ),
+                    ),
+                ];
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ...boxes.expand((w) sync* {
+                      yield w;
+                      if (w is _SubphaseBox) yield const SizedBox(height: 8);
+                    }),
+                  ],
+                );
+              },
             );
           },
         ),
@@ -304,8 +356,10 @@ class _SubphaseBox extends StatelessWidget {
   final String ownerUidForWrites;
 
   final SelectedSubphase? subphase; // null for Other
-  final String? currentStatus; // null for Other
-  final Future<void> Function(String status, String name)? onChangeStatus;
+  final Future<void> Function(
+    String name,
+    double? contractAmount,
+  )? onSaveSubphase;
 
   const _SubphaseBox({
     required this.projectId,
@@ -315,8 +369,7 @@ class _SubphaseBox extends StatelessWidget {
     required this.canEdit,
     required this.ownerUidForWrites,
     required this.subphase,
-    required this.currentStatus,
-    required this.onChangeStatus,
+    required this.onSaveSubphase,
   });
 
   @override
@@ -324,10 +377,6 @@ class _SubphaseBox extends StatelessWidget {
     final outline = Theme.of(
       context,
     ).colorScheme.outlineVariant.withValues(alpha: 0.4);
-    final statusLabel =
-        (currentStatus != null && currentStatus!.trim().isNotEmpty)
-            ? currentStatus!.trim()
-            : 'In Progress';
     final hasSubphase = subphase != null;
 
     return Container(
@@ -347,18 +396,21 @@ class _SubphaseBox extends StatelessWidget {
                         _viewOnlySnack(context);
                         return;
                       }
-                      final dialogStatus =
-                          _kSubphaseStatuses.contains(statusLabel)
-                              ? statusLabel
-                              : 'In Progress';
-                      await _showSubphaseStatusDialog(
+                      await _showSubphaseDetailsDialog(
                         context,
                         code: subphase!.code,
-                        current: dialogStatus,
                         initialName: subphase!.name,
-                        onPicked: (status, name) async {
-                          if (onChangeStatus != null) {
-                            await onChangeStatus!(status, name);
+                        initialContractAmount: subphase!.contractAmount,
+                        initialInvoicedAmount: subphase!.invoicedAmount,
+                        onPicked: (
+                          name,
+                          contractAmount,
+                        ) async {
+                          if (onSaveSubphase != null) {
+                            await onSaveSubphase!(
+                              name,
+                              contractAmount,
+                            );
                           }
                         },
                       );
@@ -514,72 +566,134 @@ class _SubphaseBox extends StatelessWidget {
     }
   }
 
-  static Future<void> _showSubphaseStatusDialog(
+  static Future<void> _showSubphaseDetailsDialog(
     BuildContext context, {
     required String code,
-    required String current,
     required String initialName,
-    required Future<void> Function(String status, String name) onPicked,
+    required double? initialContractAmount,
+    required double? initialInvoicedAmount,
+    required Future<void> Function(
+      String name,
+      double? contractAmount,
+    ) onPicked,
   }) async {
-    var selected = current;
     var editedName = initialName;
-    await showDialog<void>(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: Text('Subphase $code'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TextFormField(
-                    initialValue: editedName,
-                    onChanged: (value) => editedName = value,
-                    decoration: const InputDecoration(
-                      labelText: 'Display name',
-                      border: OutlineInputBorder(),
+    final contractAmountCtl = TextEditingController(
+      text: initialContractAmount != null
+          ? initialContractAmount.toStringAsFixed(2)
+          : '',
+    );
+
+    double? parseMoney(String value) {
+      final normalized = value.trim().replaceAll(RegExp(r'[\$,]'), '');
+      if (normalized.isEmpty) return null;
+      return double.tryParse(normalized);
+    }
+
+    try {
+      final result = await showDialog<_SubphaseEditResult>(
+        context: context,
+        builder: (context) {
+          return StatefulBuilder(
+            builder: (context, setState) {
+              return AlertDialog(
+                title: Text('Subphase $code'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextFormField(
+                      initialValue: editedName,
+                      onChanged: (value) => editedName = value,
+                      decoration: const InputDecoration(
+                        labelText: 'Display name',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: contractAmountCtl,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Contract Amount',
+                        prefixText: r'$',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Tracked Invoiced Amount',
+                        border: OutlineInputBorder(),
+                      ),
+                      child: Text(
+                        '\$${(initialInvoicedAmount ?? 0).toStringAsFixed(2)}',
+                      ),
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel'),
                   ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: selected,
-                    items: _kSubphaseStatuses
-                        .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                        .toList(),
-                    onChanged: (v) => setState(() => selected = v ?? selected),
-                    decoration: const InputDecoration(
-                      labelText: 'Status',
-                      border: OutlineInputBorder(),
-                    ),
+                  FilledButton(
+                    onPressed: () {
+                      final trimmed = editedName.trim();
+                      final resolvedName =
+                          trimmed.isNotEmpty ? trimmed : initialName;
+                      final contractAmountText = contractAmountCtl.text.trim();
+                      final contractAmount = parseMoney(contractAmountText);
+                      if (contractAmountText.isNotEmpty &&
+                          contractAmount == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Contract Amount must be a valid number.',
+                            ),
+                          ),
+                        );
+                        return;
+                      }
+                      Navigator.pop(
+                        context,
+                        _SubphaseEditResult(
+                          name: resolvedName,
+                          contractAmount: contractAmount,
+                        ),
+                      );
+                    },
+                    child: const Text('Save'),
                   ),
                 ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () async {
-                    final trimmed = editedName.trim();
-                    final resolvedName =
-                        trimmed.isNotEmpty ? trimmed : initialName;
-                    await onPicked(selected, resolvedName);
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                    }
-                  },
-                  child: const Text('Save'),
-                ),
-              ],
-            );
-          },
+              );
+            },
+          );
+        },
+      );
+
+      if (result != null) {
+        await onPicked(
+          result.name,
+          result.contractAmount,
         );
-      },
-    );
+      }
+    } finally {
+      contractAmountCtl.dispose();
+    }
   }
+}
+
+class _SubphaseEditResult {
+  final String name;
+  final double? contractAmount;
+
+  const _SubphaseEditResult({
+    required this.name,
+    required this.contractAmount,
+  });
 }
 
 class _SubphaseTaskList extends StatefulWidget {
@@ -1814,13 +1928,13 @@ Future<void> _insertDefaultsForSubphase(
   }
 }
 
-Future<void> _updateSubphaseStatus(
+Future<void> _updateSubphaseDetails(
   BuildContext context, {
   required String projectId,
   required List<SelectedSubphase> selected,
   required String code,
-  required String newStatus,
   String? newName,
+  double? newContractAmount,
 }) async {
   final repo = ProjectRepository();
   final updated = selected.map((s) {
@@ -1828,7 +1942,26 @@ Future<void> _updateSubphaseStatus(
     final trimmedName = newName?.trim();
     final resolvedName =
         (trimmedName != null && trimmedName.isNotEmpty) ? trimmedName : s.name;
-    return s.copyWith(status: newStatus, name: resolvedName).toMap();
+    return s
+        .copyWith(
+          name: resolvedName,
+          contractAmount: newContractAmount,
+        )
+        .toMap();
   }).toList();
-  await repo.update(projectId, {'selectedSubphases': updated});
+  await repo.update(projectId, {
+    'selectedSubphases': updated,
+    'contractAmount': _sumSubphaseContractAmount(updated),
+  });
+}
+
+double _sumSubphaseContractAmount(List<Map<String, dynamic>> subphases) {
+  var total = 0.0;
+  for (final subphase in subphases) {
+    final amount = subphase['contractAmount'];
+    if (amount is num) {
+      total += amount.toDouble();
+    }
+  }
+  return total;
 }
