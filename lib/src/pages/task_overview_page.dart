@@ -48,9 +48,8 @@ class _TaskOverviewPageState extends State<TaskOverviewPage> {
         const TextStyle(fontSize: 9.5, height: 1.0);
 
     return AppPageScaffold(
-      title: 'Task Overview',
       useSafeArea: true,
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.sm),
       body: StreamBuilder<List<Project>>(
         stream: _projectRepo.streamAll(),
         builder: (context, snapshot) {
@@ -65,8 +64,8 @@ class _TaskOverviewPageState extends State<TaskOverviewPage> {
               projects.where(_includeProject).toList(growable: false);
           visibleProjects.sort(_compareProjects);
           final children = <Widget>[
-            SectionCard(
-              header: const SectionHeader(title: 'Statuses'),
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
               child: SegmentedButton<String>(
                 segments: _statusOptions
                     .map(
@@ -103,14 +102,13 @@ class _TaskOverviewPageState extends State<TaskOverviewPage> {
                 },
               ),
             ),
-            const SizedBox(height: AppSpacing.lg),
           ];
           if (visibleProjects.isEmpty) {
             children.add(
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.lg,
-                  vertical: AppSpacing.xl,
+                  vertical: AppSpacing.sm,
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -133,12 +131,14 @@ class _TaskOverviewPageState extends State<TaskOverviewPage> {
                 ),
               );
               if (i != visibleProjects.length - 1) {
-                children.add(const SizedBox(height: AppSpacing.md));
+                children.add(
+                  const Divider(height: AppSpacing.sm),
+                );
               }
             }
           }
           return ListView(
-            padding: const EdgeInsets.only(bottom: AppSpacing.xl),
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
             physics: const ClampingScrollPhysics(),
             children: children,
           );
@@ -249,37 +249,39 @@ class _ProjectTaskCard extends StatelessWidget {
       await persistComment(value);
     }
 
-    final card = SizedBox(
+    final content = SizedBox(
       width: double.infinity,
-      child: SectionCard(
-        header: InkWell(
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => ProjectDetailPage(projectId: project.id),
-              ),
-            );
-          },
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: titleColor,
-                      ),
-                ),
-              ),
-              const Icon(Icons.open_in_new, size: 18),
-            ],
-          ),
-        ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            InkWell(
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ProjectDetailPage(projectId: project.id),
+                  ),
+                );
+              },
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: titleColor,
+                          ),
+                    ),
+                  ),
+                  if (hasComment) const SizedBox(width: 156),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
             StreamBuilder<List<TaskItem>>(
               stream: taskRepo.streamByProject(project.id),
               builder: (context, snapshot) {
@@ -295,7 +297,7 @@ class _ProjectTaskCard extends StatelessWidget {
                     return InkWell(
                       onTap: () => toggleStar(task),
                       child: Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
+                        padding: const EdgeInsets.only(bottom: 2),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -347,27 +349,34 @@ class _ProjectTaskCard extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        card,
+        content,
         if (!hasComment)
           Positioned(
-            top: 0,
+            top: 4,
             right: 0,
-            child: IconButton(
-              tooltip: 'Add comment',
-              onPressed: openCreateCommentDialog,
-              iconSize: 20,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-              splashRadius: 18,
-              icon: const Icon(
-                Icons.chat_bubble_outline,
-                color: Color(0xFFF1C400),
+            child: Tooltip(
+              message: 'Add comment',
+              child: InkWell(
+                onTap: openCreateCommentDialog,
+                borderRadius: BorderRadius.circular(16),
+                child: const SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Icon(
+                      Icons.circle_outlined,
+                      size: 18,
+                      color: Color(0xFFF1C400),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
         if (hasComment)
           Positioned(
-            top: 18,
+            top: AppSpacing.sm,
             right: 0,
             child: Material(
               color: Colors.transparent,
@@ -377,10 +386,7 @@ class _ProjectTaskCard extends StatelessWidget {
                 child: Container(
                   decoration: const BoxDecoration(
                     color: Color(0xFFF1C400),
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(10),
-                      bottomLeft: Radius.circular(10),
-                    ),
+                    borderRadius: BorderRadius.all(Radius.circular(10)),
                   ),
                   constraints: const BoxConstraints(maxWidth: 150),
                   padding:
@@ -389,11 +395,11 @@ class _ProjectTaskCard extends StatelessWidget {
                     comment,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.right,
+                    textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: Colors.black.withValues(alpha: 0.9),
                           fontWeight: FontWeight.w600,
-                          fontSize: 11,
+                          fontSize: 10,
                           height: 1.1,
                         ),
                   ),

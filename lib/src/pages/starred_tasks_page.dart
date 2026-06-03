@@ -744,7 +744,6 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
   Widget build(BuildContext context) {
     if (_user == null) {
       return const AppPageScaffold(
-        title: 'Starred Tasks',
         useSafeArea: true,
         padding: EdgeInsets.all(AppSpacing.md),
         body: Center(child: Text('Please sign in to view starred tasks')),
@@ -755,7 +754,6 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
 
     if (_loading && !hasEntries) {
       return const AppPageScaffold(
-        title: 'Starred Tasks',
         useSafeArea: true,
         padding: EdgeInsets.all(AppSpacing.md),
         body: Center(child: CircularProgressIndicator()),
@@ -774,7 +772,7 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
             itemBuilder: (context, index) {
               final entry = _entries[index];
               final padding = EdgeInsets.only(
-                bottom: index == _entries.length - 1 ? 0 : AppSpacing.md,
+                bottom: index == _entries.length - 1 ? 0 : AppSpacing.sm,
               );
               if (entry.isTask) {
                 final task = entry.task!;
@@ -870,7 +868,6 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
 
     if (slivers.isEmpty) {
       return AppPageScaffold(
-        title: 'Starred Tasks',
         useSafeArea: true,
         padding: const EdgeInsets.all(AppSpacing.md),
         body: _loading
@@ -880,7 +877,6 @@ class _StarredTasksPageState extends State<StarredTasksPage> {
     }
 
     return AppPageScaffold(
-      title: 'Starred Tasks',
       useSafeArea: true,
       padding: const EdgeInsets.all(AppSpacing.md),
       body: CustomScrollView(slivers: slivers),
@@ -1167,7 +1163,6 @@ class _StarredTileState extends State<_StarredTile> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final task = widget.task;
-    final hasDesc = (task.description ?? '').trim().isNotEmpty;
     final projectLabel = _projectSummary();
     final small = theme.textTheme.bodySmall;
     final Color? baseProjectColor = small?.color;
@@ -1178,7 +1173,7 @@ class _StarredTileState extends State<_StarredTile> {
     final hollowStar = theme.colorScheme.onSurfaceVariant;
 
     final hasSubtasks = task.subtasks.isNotEmpty;
-    final showMultiLine = hasDesc || projectLabel != null;
+    final showMultiLine = projectLabel != null;
     final showExpanded = hasSubtasks && _expanded;
     final crossAxis = (showMultiLine || showExpanded)
         ? CrossAxisAlignment.start
@@ -1200,7 +1195,7 @@ class _StarredTileState extends State<_StarredTile> {
         borderRadius: BorderRadius.circular(16),
         onTap: widget.onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           child: Row(
             crossAxisAlignment: crossAxis,
             children: [
@@ -1209,10 +1204,10 @@ class _StarredTileState extends State<_StarredTile> {
                 child: IconButton(
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(
-                    minWidth: 32,
-                    minHeight: 32,
+                    minWidth: 20,
+                    minHeight: 20,
                   ),
-                  iconSize: 20,
+                  iconSize: 16,
                   splashRadius: 18,
                   onPressed: () {
                     widget.onToggleStar();
@@ -1245,22 +1240,10 @@ class _StarredTileState extends State<_StarredTile> {
                           style: projectStyle ?? small,
                         ),
                       ),
-                    if (hasDesc)
-                      Padding(
-                        padding: EdgeInsets.only(
-                          top: projectLabel != null ? 3 : 2,
-                        ),
-                        child: Text(
-                          task.description!.trim(),
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: small,
-                        ),
-                      ),
                     if (hasSubtasks && _expanded)
                       Padding(
                         padding: EdgeInsets.only(
-                          top: (hasDesc || projectLabel != null) ? 6 : 4,
+                          top: projectLabel != null ? 6 : 4,
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1299,10 +1282,10 @@ class _StarredTileState extends State<_StarredTile> {
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(
                       minWidth: 28,
-                      minHeight: 28,
+                      minHeight: 20,
                     ),
-                    iconSize: 20,
-                    splashRadius: 20,
+                    iconSize: 16,
+                    splashRadius: 18,
                     onPressed: _toggleExpansion,
                     icon: Icon(_expanded ? Icons.remove : Icons.add),
                     tooltip: _expanded ? 'Hide subtasks' : 'Show subtasks',
@@ -1311,9 +1294,15 @@ class _StarredTileState extends State<_StarredTile> {
               const SizedBox(width: 4),
               IconButton(
                 tooltip: 'Open project',
+                iconSize: 16,
+                constraints: const BoxConstraints(
+                  minWidth: 24,
+                  minHeight: 20,
+                ),
+                padding: EdgeInsets.zero,
                 onPressed: widget.onOpenProject,
                 icon: const Icon(Icons.open_in_new),
-              ),
+              )
             ],
           ),
         ),
@@ -1509,9 +1498,9 @@ class _ExternalStarredTile extends StatelessWidget {
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(
                   minWidth: 32,
-                  minHeight: 32,
+                  minHeight: 20,
                 ),
-                iconSize: 20,
+                iconSize: 16,
                 splashRadius: 18,
                 onPressed: () => onToggleStar(),
                 icon: Icon(
@@ -1777,9 +1766,9 @@ class _PersonalStarredTile extends StatelessWidget {
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(
                     minWidth: 32,
-                    minHeight: 32,
+                    minHeight: 20,
                   ),
-                  iconSize: 20,
+                  iconSize: 16,
                   splashRadius: 18,
                   onPressed: () => onToggleStar(),
                   icon: Icon(

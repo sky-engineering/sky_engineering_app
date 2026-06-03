@@ -152,13 +152,10 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
         (project.ownerUid != null && project.ownerUid!.isNotEmpty)
             ? project.ownerUid!
             : (me?.uid ?? '');
-    final phoneDisplay = formatPhoneForDisplay(project.contactPhone);
-    final schedulingNotes = project.schedulingNotes?.trim() ?? '';
     final hasTeamEntries = projectTeamValueMap(project).values.any((value) {
       if (value == null) return false;
       return value.trim().isNotEmpty;
     });
-    final showSchedulingCard = canManageProject || schedulingNotes.isNotEmpty;
     final showTeamCard = canManageProject || hasTeamEntries;
     final externalTasks = project.externalTasks ?? const <ExternalTask>[];
 
@@ -195,66 +192,41 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  project.clientName,
-                  style: Theme.of(context).textTheme.bodyMedium,
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Client: ${project.clientName}',
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Client contact',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 28,
+                        minHeight: 28,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 17,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                      icon: const Icon(Icons.contact_page_outlined),
+                      onPressed: () => _showClientContactDialog(project),
+                    ),
+                  ],
                 ),
-                if ((project.contactName ?? '').isNotEmpty) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(project.contactName!),
-                ],
-                if ((project.contactEmail ?? '').isNotEmpty) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(project.contactEmail!),
-                ],
-                if (phoneDisplay.isNotEmpty) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(phoneDisplay),
+                if (showTeamCard) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  const Divider(height: 1),
+                  const SizedBox(height: AppSpacing.sm),
+                  _projectTeamInfo(context, project, canEdit: canManageProject),
                 ],
               ],
             ),
           ),
-          if (showSchedulingCard)
-            SectionCard(
-              color: _subtleSurfaceTint(context),
-              header: SectionHeader(
-                title: 'Notes',
-                action: canManageProject
-                    ? IconButton(
-                        tooltip: 'Edit scheduling notes',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                          minWidth: 32,
-                          minHeight: 32,
-                        ),
-                        icon: Icon(
-                          Icons.edit_outlined,
-                          size: 18,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                        onPressed: () => _showSchedulingNotesDialog(
-                          context,
-                          project,
-                        ),
-                      )
-                    : null,
-              ),
-              child: Text(
-                schedulingNotes.isNotEmpty
-                    ? schedulingNotes
-                    : canManageProject
-                        ? 'No scheduling notes yet.'
-                        : 'No scheduling notes to display.',
-                style: schedulingNotes.isNotEmpty
-                    ? Theme.of(context).textTheme.bodyMedium
-                    : Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
           const SizedBox(height: 16),
-          if (showTeamCard) ...[
-            _projectTeamCard(context, project, canEdit: canManageProject),
-            const SizedBox(height: 16),
-          ],
           TasksBySubphaseSection(
             projectId: project.id,
             canEdit: canManageProject,
@@ -267,12 +239,6 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
             canEdit: canManageProject,
             assigneeOptions: assigneeOptions,
             tasks: externalTasks,
-          ),
-          const SizedBox(height: 12),
-          _FinancialSummaryCard(
-            projectId: project.id,
-            projectNumber: project.projectNumber,
-            contractAmount: project.contractAmount,
           ),
           const SizedBox(height: 12),
           SectionCard(
@@ -357,6 +323,12 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
             ),
           ),
           const SizedBox(height: 12),
+          _FinancialSummaryCard(
+            projectId: project.id,
+            projectNumber: project.projectNumber,
+            contractAmount: project.contractAmount,
+          ),
+          const SizedBox(height: 12),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -399,7 +371,53 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
     );
   }
 
-  Widget _projectTeamCard(
+  Future<void> _showClientContactDialog(Project project) async {
+    final theme = Theme.of(context);
+    final phoneDisplay = formatPhoneForDisplay(project.contactPhone);
+    final contactName = project.contactName?.trim() ?? '';
+    final contactEmail = project.contactEmail?.trim() ?? '';
+    final hasContact = contactName.isNotEmpty ||
+        phoneDisplay.isNotEmpty ||
+        contactEmail.isNotEmpty;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Client Contact'),
+          content: hasContact
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (contactName.isNotEmpty)
+                      Text(contactName, style: theme.textTheme.bodyMedium),
+                    if (phoneDisplay.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(phoneDisplay, style: theme.textTheme.bodyMedium),
+                    ],
+                    if (contactEmail.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(contactEmail, style: theme.textTheme.bodyMedium),
+                    ],
+                  ],
+                )
+              : Text(
+                  'No client contact details listed.',
+                  style: theme.textTheme.bodyMedium,
+                ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _projectTeamInfo(
     BuildContext context,
     Project project, {
     required bool canEdit,
@@ -424,47 +442,54 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
     final prompt =
         canEdit ? 'Tap to add project partners' : 'No project partners listed';
 
-    return SectionCard(
-      color: _subtleSurfaceTint(context),
-      onTap: canEdit ? () => _editProjectTeam(project) : null,
-      header: SectionHeader(
-        title: 'Project Team',
-        action: canEdit
-            ? Icon(
-                Icons.edit_outlined,
-                size: 18,
-                color: theme.colorScheme.onSurfaceVariant,
-              )
-            : null,
-      ),
-      child: hasEntries
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: entries
-                  .map(
-                    (entry) => Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text.rich(
-                        TextSpan(
-                          children: [
-                            TextSpan(text: '${entry.key}: ', style: labelStyle),
-                            TextSpan(
-                              text: entry.value,
-                              style: theme.textTheme.bodyMedium,
-                            ),
-                          ],
-                        ),
+    final content = hasEntries
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: entries
+                .map(
+                  (entry) => Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(text: '${entry.key}: ', style: labelStyle),
+                          TextSpan(
+                            text: entry.value,
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ],
                       ),
                     ),
-                  )
-                  .toList(),
-            )
-          : Text(
-              prompt,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+                  ),
+                )
+                .toList(),
+          )
+        : Text(
+            prompt,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
             ),
+          );
+
+    if (!canEdit) return content;
+
+    return InkWell(
+      onTap: () => _editProjectTeam(project),
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: content),
+            Icon(
+              Icons.edit_outlined,
+              size: 18,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -732,47 +757,4 @@ class _FinancialSummaryCard extends StatelessWidget {
       ),
     );
   }
-}
-
-Future<void> _showSchedulingNotesDialog(
-  BuildContext context,
-  Project project,
-) async {
-  var notesText = project.schedulingNotes ?? '';
-  final repo = ProjectRepository();
-  await showDialog<void>(
-    context: context,
-    builder: (dialogContext) {
-      return AlertDialog(
-        title: const Text('Notes'),
-        content: TextFormField(
-          initialValue: notesText,
-          maxLines: 5,
-          onChanged: (value) => notesText = value,
-          decoration: const InputDecoration(
-            hintText: 'Enter scheduling notes',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final text = notesText.trim();
-              await repo.update(project.id, {
-                'schedulingNotes': text.isEmpty ? null : text,
-              });
-              if (dialogContext.mounted) {
-                Navigator.pop(dialogContext);
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      );
-    },
-  );
 }

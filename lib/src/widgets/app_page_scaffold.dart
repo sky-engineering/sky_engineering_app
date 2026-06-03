@@ -102,8 +102,8 @@ class SectionCard extends StatelessWidget {
     this.header,
     required this.child,
     this.footer,
-    this.padding = const EdgeInsets.all(AppSpacing.lg),
-    this.gap = AppSpacing.md,
+    this.padding = const EdgeInsets.all(AppSpacing.md),
+    this.gap = AppSpacing.sm,
     this.color,
     this.onTap,
   });

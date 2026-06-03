@@ -163,7 +163,7 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                             IconButton(
                               tooltip: 'Select Subphases',
                               visualDensity: VisualDensity.compact,
-                              iconSize: 20,
+                              iconSize: 16,
                               onPressed: () async {
                                 final proceed = await _confirmSubphaseEdit(
                                   context,
@@ -456,7 +456,7 @@ class _SubphaseBox extends StatelessWidget {
                 ),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
-                  vertical: 2,
+                  vertical: 6,
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1184,11 +1184,11 @@ class _CompactTaskTileState extends State<_CompactTaskTile> {
                     onTap: widget.onToggleStar,
                     child: SizedBox(
                       width: 20,
-                      height: 24,
+                      height: 30,
                       child: Center(
                         child: Icon(
                           task.isStarred ? Icons.star : Icons.star_border,
-                          size: 16,
+                          size: 12,
                           color: task.isStarred
                               ? filledStarColor
                               : hollowStarColor,
@@ -1272,7 +1272,7 @@ class _CompactTaskTileState extends State<_CompactTaskTile> {
                     ),
                     if (hasDesc)
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
+                        padding: const EdgeInsets.only(left: 12, bottom: 4),
                         child: Text(
                           task.description!.trim(),
                           maxLines: 3,
@@ -1282,7 +1282,7 @@ class _CompactTaskTileState extends State<_CompactTaskTile> {
                       ),
                     if (hasSubtasks && _expanded)
                       Padding(
-                        padding: EdgeInsets.only(top: hasDesc ? 2 : 4),
+                        padding: EdgeInsets.only(left: 12, top: hasDesc ? 2 : 4),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: List.generate(_subtasks.length, (index) {
