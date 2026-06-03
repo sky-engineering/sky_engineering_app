@@ -46,6 +46,29 @@ class InvoiceSubphaseBilling {
       };
 }
 
+class InvoiceDirectExpense {
+  final String description;
+  final double amount;
+
+  const InvoiceDirectExpense({
+    required this.description,
+    required this.amount,
+  });
+
+  factory InvoiceDirectExpense.fromMap(Map<String, dynamic> data) {
+    final map = mapFrom(data);
+    return InvoiceDirectExpense(
+      description: parseString(map['description']),
+      amount: parseDouble(map['amount']),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'description': description,
+        'amount': amount,
+      };
+}
+
 /// Canonical invoice model (new schema), with legacy shims so the current UI
 /// continues to compile and run while we migrate screens.
 ///
@@ -94,6 +117,7 @@ class Invoice {
   final String? documentLink;
   final String invoiceType; // 'Client' | 'Vendor'
   final List<InvoiceSubphaseBilling> subphaseBillings;
+  final List<InvoiceDirectExpense> directExpenses;
 
   // Meta
   final String? ownerUid;
@@ -142,6 +166,7 @@ class Invoice {
     this.notes,
     this.invoiceType = 'Client', // default
     List<InvoiceSubphaseBilling>? subphaseBillings,
+    List<InvoiceDirectExpense>? directExpenses,
     String? projectNumber,
     this.balanceDue,
     this.dueDate,
@@ -154,6 +179,7 @@ class Invoice {
         invoiceNumber = invoiceNumber ?? number ?? '',
         invoiceAmount = (invoiceAmount ?? amount ?? 0.0),
         subphaseBillings = subphaseBillings ?? const <InvoiceSubphaseBilling>[],
+        directExpenses = directExpenses ?? const <InvoiceDirectExpense>[],
         invoiceDate = invoiceDate ?? issueDate,
         _statusStored = status,
         // Normalize amountPaid to [0, invoiceAmount]
@@ -200,6 +226,17 @@ class Invoice {
           },
         ) ??
         const <InvoiceSubphaseBilling>[];
+    final directExpenses = readListOrNull<InvoiceDirectExpense>(
+          data,
+          'directExpenses',
+          (value) {
+            if (value is Map<String, dynamic>) {
+              return InvoiceDirectExpense.fromMap(value);
+            }
+            return null;
+          },
+        ) ??
+        const <InvoiceDirectExpense>[];
 
     return Invoice(
       id: doc.id,
@@ -216,6 +253,7 @@ class Invoice {
       documentLink: readStringOrNull(data, 'documentLink'),
       invoiceType: invoiceType,
       subphaseBillings: subphaseBillings,
+      directExpenses: directExpenses,
       ownerUid: readStringOrNull(data, 'ownerUid'),
       createdAt: readDateTime(data, 'createdAt'),
       updatedAt: readDateTime(data, 'updatedAt'),
@@ -251,6 +289,8 @@ class Invoice {
       'invoiceType': invoiceType,
       if (subphaseBillings.isNotEmpty)
         'subphaseBillings': subphaseBillings.map((b) => b.toMap()).toList(),
+      if (directExpenses.isNotEmpty)
+        'directExpenses': directExpenses.map((e) => e.toMap()).toList(),
       'ownerUid': ownerUid,
 
       // Legacy mirrors
@@ -276,6 +316,7 @@ class Invoice {
     String? documentLink,
     String? invoiceType,
     List<InvoiceSubphaseBilling>? subphaseBillings,
+    List<InvoiceDirectExpense>? directExpenses,
     String? ownerUid,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -302,6 +343,7 @@ class Invoice {
       documentLink: documentLink ?? this.documentLink,
       invoiceType: invoiceType ?? this.invoiceType,
       subphaseBillings: subphaseBillings ?? this.subphaseBillings,
+      directExpenses: directExpenses ?? this.directExpenses,
       ownerUid: ownerUid ?? this.ownerUid,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

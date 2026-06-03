@@ -74,7 +74,7 @@ void main() {
         invoicedAmount: 500,
       );
 
-      expect(formatSubphaseLabel(subphase), '0201  Concept Site Plan (50%)');
+      expect(formatSubphaseLabel(subphase), 'Concept Site Plan (50%)');
     });
   });
 }

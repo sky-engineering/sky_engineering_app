@@ -47,8 +47,7 @@ String formatSubphaseInvoicedPercent(SelectedSubphase subphase) {
 
 @visibleForTesting
 String formatSubphaseLabel(SelectedSubphase subphase) {
-  return '${subphase.code}  ${subphase.name}'
-      '${formatSubphaseInvoicedPercent(subphase)}';
+  return '${subphase.name}${formatSubphaseInvoicedPercent(subphase)}';
 }
 
 List<SelectedSubphase> _withTrackedInvoicedAmounts(
@@ -166,6 +165,10 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
                               visualDensity: VisualDensity.compact,
                               iconSize: 20,
                               onPressed: () async {
+                                final proceed = await _confirmSubphaseEdit(
+                                  context,
+                                );
+                                if (!proceed || !context.mounted) return;
                                 final messenger = ScaffoldMessenger.of(context);
                                 final primaryOwner =
                                     widget.ownerUidForWrites.trim();
@@ -317,6 +320,31 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
   static bool _isValidCode(String? code) =>
       code != null && code.trim().length == 4 && int.tryParse(code) != null;
 
+  Future<bool> _confirmSubphaseEdit(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Edit selected subphases?'),
+        content: const Text(
+          'Changing selected subphases can affect which tasks appear for this '
+          'project. Proceed with caution.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Proceed'),
+          ),
+        ],
+      ),
+    );
+
+    return result ?? false;
+  }
+
   static String? _sanitizeCode(String? code) {
     if (!_isValidCode(code)) return null;
     return code!.trim();
@@ -349,7 +377,7 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
 
 class _SubphaseBox extends StatelessWidget {
   final String projectId;
-  final String label; // "0201  Concept Site Plan" or "Other"
+  final String label; // "Concept Site Plan" or "Other"
   final List<TaskItem> tasks;
   final List<SelectedSubphase> allSubphases;
   final bool canEdit;
@@ -452,53 +480,58 @@ class _SubphaseBox extends StatelessWidget {
                       ),
                     ),
                     if (hasSubphase)
-                      IconButton(
-                        tooltip: 'Insert default tasks',
-                        visualDensity: VisualDensity.compact,
-                        iconSize: 20,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                          minWidth: 32,
-                          minHeight: 32,
-                        ),
-                        alignment: Alignment.topCenter,
-                        onPressed: canEdit
-                            ? () async {
-                                final preview = await _loadDefaultsPreview(
-                                  context,
-                                  ownerUid: ownerUidForWrites,
-                                  subphaseCode: subphase!.code,
-                                );
-                                if (preview == null || !context.mounted) {
-                                  return;
+                      Tooltip(
+                        message: 'Insert default tasks',
+                        child: TextButton(
+                          onPressed: canEdit
+                              ? () async {
+                                  final preview = await _loadDefaultsPreview(
+                                    context,
+                                    ownerUid: ownerUidForWrites,
+                                    subphaseCode: subphase!.code,
+                                  );
+                                  if (preview == null || !context.mounted) {
+                                    return;
+                                  }
+                                  final selection =
+                                      await _showDefaultsPreviewDialog(
+                                    context,
+                                    subphase!.name,
+                                    preview.template,
+                                  );
+                                  if (!context.mounted) return;
+                                  if (selection == null ||
+                                      (selection.internal.isEmpty &&
+                                          selection.external.isEmpty)) {
+                                    return;
+                                  }
+                                  await _insertDefaultsForSubphase(
+                                    context,
+                                    projectId,
+                                    subphase!.code,
+                                    ownerUidForWrites,
+                                    templateOverride: preview.template,
+                                    resolvedOwnerUidOverride: preview.ownerUid,
+                                    selectedInternal: selection.internal,
+                                    selectedExternal: selection.external,
+                                  );
                                 }
-                                final selection =
-                                    await _showDefaultsPreviewDialog(
-                                  context,
-                                  subphase!.name,
-                                  preview.template,
-                                );
-                                if (!context.mounted) return;
-                                if (selection == null ||
-                                    (selection.internal.isEmpty &&
-                                        selection.external.isEmpty)) {
-                                  return;
-                                }
-                                await _insertDefaultsForSubphase(
-                                  context,
-                                  projectId,
-                                  subphase!.code,
-                                  ownerUidForWrites,
-                                  templateOverride: preview.template,
-                                  resolvedOwnerUidOverride: preview.ownerUid,
-                                  selectedInternal: selection.internal,
-                                  selectedExternal: selection.external,
-                                );
-                              }
-                            : () => _viewOnlySnack(context),
-                        icon: const Icon(
-                          Icons.playlist_add,
-                          color: Colors.black87,
+                              : () => _viewOnlySnack(context),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.black87,
+                            padding: EdgeInsets.zero,
+                            minimumSize: const Size(32, 32),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          child: Text(
+                            subphase!.code,
+                            style: const TextStyle(
+                              color: Colors.black87,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
                       ),
                   ],

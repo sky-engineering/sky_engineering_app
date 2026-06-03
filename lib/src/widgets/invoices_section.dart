@@ -553,6 +553,157 @@ Future<void> _applyQuickPayInvoice(
   }
 }
 
+class _DirectExpenseDialogResult {
+  const _DirectExpenseDialogResult.save(this.expense) : delete = false;
+  const _DirectExpenseDialogResult.delete()
+      : expense = null,
+        delete = true;
+
+  final InvoiceDirectExpense? expense;
+  final bool delete;
+}
+
+Future<_DirectExpenseDialogResult?> _showDirectExpenseDialog(
+  BuildContext context, {
+  InvoiceDirectExpense? expense,
+  bool allowDelete = false,
+}) async {
+  final descriptionCtl = TextEditingController(
+    text: expense?.description ?? '',
+  );
+  final amountCtl = TextEditingController(
+    text: expense == null ? '' : expense.amount.toStringAsFixed(2),
+  );
+  final formKey = GlobalKey<FormState>();
+
+  try {
+    return await showDialog<_DirectExpenseDialogResult>(
+      context: context,
+      builder: (dialogContext) => AppFormDialog(
+        title: expense == null ? 'Add Direct Expense' : 'Edit Direct Expense',
+        width: 420,
+        actions: [
+          AppDialogActions(
+            leading: allowDelete
+                ? TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(
+                      const _DirectExpenseDialogResult.delete(),
+                    ),
+                    child: const Text('Delete'),
+                  )
+                : null,
+            secondary: TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            primary: FilledButton(
+              onPressed: () {
+                if (!(formKey.currentState?.validate() ?? false)) return;
+                Navigator.of(dialogContext).pop(
+                  _DirectExpenseDialogResult.save(
+                    InvoiceDirectExpense(
+                      description: descriptionCtl.text.trim(),
+                      amount: double.parse(amountCtl.text.trim()),
+                    ),
+                  ),
+                );
+              },
+              child: const Text('Save'),
+            ),
+          ),
+        ],
+        child: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              appTextField(
+                'Description',
+                descriptionCtl,
+                required: true,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              appTextField(
+                'Amount',
+                amountCtl,
+                required: true,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                validator: (value) {
+                  final raw = value?.trim() ?? '';
+                  final amount = double.tryParse(raw);
+                  if (amount == null) return 'Enter a valid amount';
+                  if (amount < 0) return 'Amount cannot be negative';
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  } finally {
+    descriptionCtl.dispose();
+    amountCtl.dispose();
+  }
+}
+
+class _DirectExpensesSection extends StatelessWidget {
+  const _DirectExpensesSection({
+    required this.expenses,
+    required this.canEdit,
+    required this.onAdd,
+    required this.onEdit,
+  });
+
+  final List<InvoiceDirectExpense> expenses;
+  final bool canEdit;
+  final VoidCallback onAdd;
+  final ValueChanged<int> onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final currency = NumberFormat.simpleCurrency();
+    final textTheme = Theme.of(context).textTheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < expenses.length; i++)
+          InkWell(
+            onTap: canEdit ? () => onEdit(i) : null,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      expenses[i].description,
+                      style: textTheme.bodyMedium,
+                    ),
+                  ),
+                  Text(
+                    currency.format(expenses[i].amount),
+                    style: textTheme.bodyMedium,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: canEdit ? onAdd : null,
+            icon: const Icon(Icons.add),
+            label: const Text('Direct Expense'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 Future<void> _showAddInvoiceDialog(
   BuildContext context,
   String? projectId, {
@@ -610,6 +761,7 @@ Future<void> _showAddInvoiceDialog(
   final invoiceNumberCtl = TextEditingController();
   final termsCtl = TextEditingController(text: '30');
   var billingRows = _buildBillingRows(selectedProject);
+  final directExpenses = <InvoiceDirectExpense>[];
 
   final invoiceType = (initialInvoiceType == 'Vendor') ? 'Vendor' : 'Client';
 
@@ -664,7 +816,10 @@ Future<void> _showAddInvoiceDialog(
                         return;
                       }
 
-                      final amt = _sumCurrentBilling(billingRows);
+                      final amt = _invoiceAmountTotal(
+                        billingRows,
+                        directExpenses,
+                      );
                       final termsDays =
                           int.tryParse(termsCtl.text.trim()) ?? 30;
                       final dueDate = invoiceDate?.add(
@@ -710,6 +865,9 @@ Future<void> _showAddInvoiceDialog(
                         dueDate: dueDate,
                         invoiceType: invoiceType,
                         subphaseBillings: subphaseBillings,
+                        directExpenses: List<InvoiceDirectExpense>.from(
+                          directExpenses,
+                        ),
                       );
 
                       try {
@@ -829,10 +987,38 @@ Future<void> _showAddInvoiceDialog(
                       onPercentChanged: () => setState(() {}),
                     ),
                     const SizedBox(height: AppSpacing.sm),
+                    _DirectExpensesSection(
+                      expenses: directExpenses,
+                      canEdit: true,
+                      onAdd: () async {
+                        final result = await _showDirectExpenseDialog(
+                          dialogContext,
+                        );
+                        final expense = result?.expense;
+                        if (expense == null || !dialogContext.mounted) return;
+                        setState(() => directExpenses.add(expense));
+                      },
+                      onEdit: (index) async {
+                        final result = await _showDirectExpenseDialog(
+                          dialogContext,
+                          expense: directExpenses[index],
+                          allowDelete: true,
+                        );
+                        if (result == null || !dialogContext.mounted) return;
+                        setState(() {
+                          if (result.delete) {
+                            directExpenses.removeAt(index);
+                          } else if (result.expense != null) {
+                            directExpenses[index] = result.expense!;
+                          }
+                        });
+                      },
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
                     Align(
                       alignment: Alignment.centerRight,
                       child: Text(
-                        'Invoice Amount: ${NumberFormat.simpleCurrency().format(_sumCurrentBilling(billingRows))}',
+                        'Invoice Amount: ${NumberFormat.simpleCurrency().format(_invoiceAmountTotal(billingRows, directExpenses))}',
                         style: Theme.of(context)
                             .textTheme
                             .titleSmall
@@ -1024,6 +1210,21 @@ double _sumCurrentBilling(List<_InvoiceSubphaseBillingRow> rows) {
     total += row.currentBilling;
   }
   return total;
+}
+
+double _sumDirectExpenses(List<InvoiceDirectExpense> expenses) {
+  var total = 0.0;
+  for (final expense in expenses) {
+    total += expense.amount;
+  }
+  return total;
+}
+
+double _invoiceAmountTotal(
+  List<_InvoiceSubphaseBillingRow> rows,
+  List<InvoiceDirectExpense> expenses,
+) {
+  return _sumCurrentBilling(rows) + _sumDirectExpenses(expenses);
 }
 
 List<InvoiceSubphaseBilling> _buildInvoiceSubphaseBillings(
@@ -1409,6 +1610,7 @@ Future<void> _showEditInvoiceDialog(
     );
   }
   final billingRows = _buildEditBillingRows(selectedProject, inv);
+  final directExpenses = List<InvoiceDirectExpense>.from(inv.directExpenses);
   if (!context.mounted) {
     projectNumberCtl.dispose();
     invoiceNumberCtl.dispose();
@@ -1527,7 +1729,10 @@ Future<void> _showEditInvoiceDialog(
                           return;
                         }
 
-                        final amt = _sumCurrentBilling(billingRows);
+                        final amt = _invoiceAmountTotal(
+                          billingRows,
+                          directExpenses,
+                        );
                         final paid = amountPaidCtl.text.trim().isEmpty
                             ? inv.amountPaid
                             : (double.tryParse(amountPaidCtl.text.trim()) ??
@@ -1560,6 +1765,8 @@ Future<void> _showEditInvoiceDialog(
                             'invoiceType': inv.invoiceType,
                             'subphaseBillings':
                                 subphaseBillings.map((b) => b.toMap()).toList(),
+                            'directExpenses':
+                                directExpenses.map((e) => e.toMap()).toList(),
                           });
                           if (!dialogContext.mounted) return;
                           Navigator.of(
@@ -1640,10 +1847,38 @@ Future<void> _showEditInvoiceDialog(
                       onPercentChanged: () => setState(() {}),
                     ),
                     const SizedBox(height: AppSpacing.sm),
+                    _DirectExpensesSection(
+                      expenses: directExpenses,
+                      canEdit: canEdit,
+                      onAdd: () async {
+                        final result = await _showDirectExpenseDialog(
+                          dialogContext,
+                        );
+                        final expense = result?.expense;
+                        if (expense == null || !dialogContext.mounted) return;
+                        setState(() => directExpenses.add(expense));
+                      },
+                      onEdit: (index) async {
+                        final result = await _showDirectExpenseDialog(
+                          dialogContext,
+                          expense: directExpenses[index],
+                          allowDelete: true,
+                        );
+                        if (result == null || !dialogContext.mounted) return;
+                        setState(() {
+                          if (result.delete) {
+                            directExpenses.removeAt(index);
+                          } else if (result.expense != null) {
+                            directExpenses[index] = result.expense!;
+                          }
+                        });
+                      },
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
                     Align(
                       alignment: Alignment.centerRight,
                       child: Text(
-                        'Invoice Amount: ${NumberFormat.simpleCurrency().format(_sumCurrentBilling(billingRows))}',
+                        'Invoice Amount: ${NumberFormat.simpleCurrency().format(_invoiceAmountTotal(billingRows, directExpenses))}',
                         style: Theme.of(context)
                             .textTheme
                             .titleSmall
