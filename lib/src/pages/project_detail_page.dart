@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../data/models/external_task.dart';
 import 'package:intl/intl.dart';
 import '../utils/external_task_utils.dart';
@@ -10,6 +11,8 @@ import '../data/models/project.dart';
 import '../data/models/invoice.dart';
 import '../data/repositories/project_repository.dart';
 import '../data/repositories/invoice_repository.dart';
+import '../integrations/dropbox/dropbox_api.dart';
+import '../integrations/dropbox/dropbox_auth.dart';
 
 import '../widgets/form_helpers.dart';
 import '../widgets/tasks_by_subphase_section.dart';
@@ -327,6 +330,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
             projectId: project.id,
             projectNumber: project.projectNumber,
             contractAmount: project.contractAmount,
+            folderName: project.folderName,
           ),
           const SizedBox(height: 12),
           const SizedBox(height: 16),
@@ -620,16 +624,121 @@ class _EditProjectTeamDialogState extends State<_EditProjectTeamDialog> {
   }
 }
 
-class _FinancialSummaryCard extends StatelessWidget {
+class _FinancialSummaryCard extends StatefulWidget {
   final String projectId;
   final String? projectNumber;
   final double? contractAmount;
+  final String? folderName;
 
   const _FinancialSummaryCard({
     required this.projectId,
     required this.projectNumber,
     required this.contractAmount,
+    required this.folderName,
   });
+
+  @override
+  State<_FinancialSummaryCard> createState() => _FinancialSummaryCardState();
+}
+
+class _FinancialSummaryCardState extends State<_FinancialSummaryCard> {
+  final DropboxAuth _dropboxAuth = DropboxAuth();
+  late final DropboxApi _dropboxApi = DropboxApi(_dropboxAuth);
+  List<DbxEntry> _internalContractFiles = const <DbxEntry>[];
+  List<DbxEntry> _externalContractFiles = const <DbxEntry>[];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadContractFiles();
+  }
+
+  @override
+  void didUpdateWidget(covariant _FinancialSummaryCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.folderName != widget.folderName) {
+      _internalContractFiles = const <DbxEntry>[];
+      _externalContractFiles = const <DbxEntry>[];
+      _loadContractFiles();
+    }
+  }
+
+  Future<void> _loadContractFiles() async {
+    final projectRoot = _resolveProjectDropboxPath(widget.folderName);
+    if (projectRoot == null) return;
+
+    try {
+      final signedIn = await _dropboxAuth.isSignedIn();
+      if (!signedIn) return;
+
+      final internalFiles = await _listDropboxFiles(
+        '$projectRoot/00 PRMG/01 CTRA/01 Internal',
+      );
+      final externalFiles = await _listDropboxFiles(
+        '$projectRoot/00 PRMG/01 CTRA/02 External',
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _internalContractFiles = internalFiles;
+        _externalContractFiles = externalFiles;
+      });
+    } catch (_) {
+      // Broken/missing Dropbox folders intentionally render no contract files.
+    }
+  }
+
+  Future<List<DbxEntry>> _listDropboxFiles(String path) async {
+    try {
+      final entries = await _dropboxApi.listFolder(path: path);
+      final files = entries.where((entry) => !entry.isFolder).toList()
+        ..sort(
+          (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+        );
+      return files;
+    } catch (_) {
+      return const <DbxEntry>[];
+    }
+  }
+
+  String? _resolveProjectDropboxPath(String? raw) {
+    if (raw == null) return null;
+    var sanitized = raw.replaceAll('\\', '/').trim();
+    if (sanitized.isEmpty) return null;
+    sanitized = sanitized.replaceAll(RegExp(r'/+'), '/');
+    if (sanitized.startsWith('/')) {
+      sanitized = sanitized.substring(1);
+    }
+    if (!sanitized.toUpperCase().startsWith('SKY/')) {
+      sanitized = 'SKY/01 PRJT/$sanitized';
+    }
+    sanitized = sanitized.replaceAll(RegExp(r'/+'), '/');
+    sanitized = sanitized.replaceAll(RegExp(r'/+$'), '');
+    return '/$sanitized';
+  }
+
+  Future<void> _openDropboxFile(BuildContext context, DbxEntry file) async {
+    final path = file.pathDisplay.trim().isNotEmpty
+        ? file.pathDisplay.trim()
+        : file.pathLower.trim();
+    if (path.isEmpty) return;
+
+    try {
+      final uri = await _dropboxApi.getOrCreateSharedLink(path);
+      final launched =
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open Dropbox file.')),
+        );
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open Dropbox file: $e')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -637,8 +746,8 @@ class _FinancialSummaryCard extends StatelessWidget {
 
     return StreamBuilder<List<Invoice>>(
       stream: InvoiceRepository().streamForProject(
-        projectId: projectId,
-        projectNumber: projectNumber,
+        projectId: widget.projectId,
+        projectNumber: widget.projectNumber,
       ),
       builder: (context, snap) {
         final invoices = snap.data ?? const <Invoice>[];
@@ -658,14 +767,14 @@ class _FinancialSummaryCard extends StatelessWidget {
           }
         }
 
-        final contract = contractAmount ?? 0.0;
+        final contract = widget.contractAmount ?? 0.0;
         final pctInvoiced =
             (contract > 0) ? (clientInvoiced / contract) * 100 : 0.0;
         final contractLabel =
-            contractAmount != null ? currency.format(contractAmount) : '--';
-        final progressLabel = (contract > 0)
-            ? 'Contract Progress: ${pctInvoiced.toStringAsFixed(0)}%'
-            : 'Contract Progress: --';
+            widget.contractAmount != null ? currency.format(contract) : '--';
+        final progressLabel =
+            contract > 0 ? '${pctInvoiced.toStringAsFixed(0)}%' : '--';
+        final vendorContractLabel = currency.format(0);
         final theme = Theme.of(context);
         final surface = theme.colorScheme.surface;
         final cardColor = Color.alphaBlend(const Color(0x14FFFFFF), surface);
@@ -677,11 +786,11 @@ class _FinancialSummaryCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Contract Amount: $contractLabel',
+                'Client Contract: $contractLabel',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: AppSpacing.xs),
-              Text(progressLabel, style: theme.textTheme.bodyMedium),
+              _contractFileLinks(context, _internalContractFiles),
               const SizedBox(height: AppSpacing.md),
               Row(
                 children: [
@@ -689,7 +798,8 @@ class _FinancialSummaryCard extends StatelessWidget {
                     child: _metricBox(
                       context,
                       label: 'Client Invoiced',
-                      value: currency.format(clientInvoiced),
+                      value:
+                          '${currency.format(clientInvoiced)} ($progressLabel)',
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
@@ -702,6 +812,13 @@ class _FinancialSummaryCard extends StatelessWidget {
                   ),
                 ],
               ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Vendor Contract: $vendorContractLabel',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              _contractFileLinks(context, _externalContractFiles),
               const SizedBox(height: AppSpacing.md),
               Row(
                 children: [
@@ -726,6 +843,36 @@ class _FinancialSummaryCard extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Widget _contractFileLinks(BuildContext context, List<DbxEntry> files) {
+    if (files.isEmpty) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    return Wrap(
+      spacing: AppSpacing.xs,
+      runSpacing: 0,
+      children: [
+        for (final file in files)
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 260),
+            child: TextButton.icon(
+              onPressed: () => _openDropboxFile(context, file),
+              icon: const Icon(Icons.description_outlined, size: 16),
+              label: Text(
+                file.name,
+                overflow: TextOverflow.ellipsis,
+              ),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 32),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                textStyle: theme.textTheme.bodySmall,
+              ),
+            ),
+          ),
+      ],
     );
   }
 
