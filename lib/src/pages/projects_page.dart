@@ -44,7 +44,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
 
   final DropboxAuth _dropboxAuth = DropboxAuth();
   final InvoiceRepository _invoiceRepo = InvoiceRepository();
-  Set<String>? _dropboxFolderNames;
+  Map<String, String>? _dropboxFolderPathsByName;
   bool _dropboxChecked = false;
 
   final TextEditingController _searchController = TextEditingController();
@@ -192,79 +192,49 @@ class _ProjectsPageState extends State<ProjectsPage> {
           } else {
             children.add(const SizedBox(height: AppSpacing.md));
             final sorted = [...items]..sort(_byProjectNumberNaturalAscThenName);
-            for (var i = 0; i < sorted.length; i++) {
-              final p = sorted[i];
+            final priorityProjects =
+                sorted.where(_isPriorityProject).take(2).toList();
+            final regularProjects = sorted
+                .where((project) => !_isPriorityProject(project))
+                .toList();
 
-              final titleStyle =
-                  Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        fontSize: (Theme.of(context)
-                                    .textTheme
-                                    .titleMedium
-                                    ?.fontSize ??
-                                16) +
-                            1,
-                      );
-              final titleColor = _statusTextColor(context, p);
-              final projectNumber = p.projectNumber?.trim();
-              final displayTitle = (projectNumber?.isNotEmpty ?? false)
-                  ? '$projectNumber ${p.name}'
-                  : p.name;
-
+            if (priorityProjects.isNotEmpty) {
               children.add(
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: Card(
-                    margin: EdgeInsets.zero,
-                    color: _subtleSurfaceTint(context),
-                    child: ListTile(
-                      dense: true,
-                      visualDensity: const VisualDensity(vertical: -2),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 4,
-                      ),
-                      title: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              displayTitle,
-                              style: titleStyle?.copyWith(color: titleColor),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (var i = 0; i < priorityProjects.length; i++) ...[
+                        Expanded(
+                          child: _buildPriorityProjectCard(
+                            context,
+                            priorityProjects[i],
                           ),
-                          _buildLinkStatusIcon(p, context, titleColor),
-                        ],
-                      ),
-                      subtitle: _ProjectListSubtitle(
-                        project: p,
-                        invoiceRepository: _invoiceRepo,
-                      ),
-                      trailing: p.isArchived
-                          ? Padding(
-                              padding: const EdgeInsets.only(left: 6),
-                              child: Icon(
-                                Icons.archive,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
-                              ),
-                            )
-                          : null,
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => ProjectDetailPage(projectId: p.id),
-                          ),
-                        );
-                      },
-                    ),
+                        ),
+                        if (i != priorityProjects.length - 1)
+                          const SizedBox(width: AppSpacing.sm),
+                      ],
+                    ],
                   ),
                 ),
               );
 
-              if (i != sorted.length - 1) {
+              if (regularProjects.isNotEmpty) {
+                children.add(const SizedBox(height: AppSpacing.sm));
+              }
+            }
+
+            for (var i = 0; i < regularProjects.length; i++) {
+              final p = regularProjects[i];
+              children.add(
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: _buildProjectListCard(context, p),
+                ),
+              );
+
+              if (i != regularProjects.length - 1) {
                 children.add(const SizedBox(height: AppSpacing.xs));
               }
             }
@@ -340,47 +310,176 @@ class _ProjectsPageState extends State<ProjectsPage> {
     return false;
   }
 
+  bool _isPriorityProject(Project project) {
+    final number = project.projectNumber?.trim();
+    if (number == '000' || number == '001') {
+      return true;
+    }
+    final name = project.name.trim().toLowerCase();
+    return name == 'admin' || name == 'proposals';
+  }
+
+  String _projectDisplayTitle(Project project) {
+    final projectNumber = project.projectNumber?.trim();
+    return (projectNumber?.isNotEmpty ?? false)
+        ? '$projectNumber ${project.name}'
+        : project.name;
+  }
+
+  TextStyle? _projectTitleStyle(BuildContext context, Project project) {
+    final base = Theme.of(context).textTheme.titleMedium;
+    return base?.copyWith(
+      color: _statusTextColor(context, project),
+      fontWeight: FontWeight.w600,
+      fontSize: (base.fontSize ?? 16) + 1,
+    );
+  }
+
+  Widget _buildProjectListCard(BuildContext context, Project project) {
+    final titleColor = _statusTextColor(context, project);
+
+    return Card(
+      margin: EdgeInsets.zero,
+      color: _subtleSurfaceTint(context),
+      child: ListTile(
+        dense: true,
+        visualDensity: const VisualDensity(vertical: -2),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 4,
+        ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                _projectDisplayTitle(project),
+                style: _projectTitleStyle(context, project),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            _buildLinkStatusIcon(project, context, titleColor),
+          ],
+        ),
+        subtitle: _ProjectListSubtitle(
+          project: project,
+          invoiceRepository: _invoiceRepo,
+        ),
+        trailing: project.isArchived ? _archiveIcon(context) : null,
+        onTap: () => _openProjectDetail(project),
+      ),
+    );
+  }
+
+  Widget _buildPriorityProjectCard(BuildContext context, Project project) {
+    return Card(
+      margin: EdgeInsets.zero,
+      color: Color.alphaBlend(
+        AppColors.accentYellow.withValues(alpha: 0.08),
+        _subtleSurfaceTint(context),
+      ),
+      child: ListTile(
+        dense: true,
+        visualDensity: const VisualDensity(vertical: -2),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 4,
+        ),
+        title: Text(
+          _projectDisplayTitle(project),
+          style: _projectTitleStyle(context, project),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        onTap: () => _openProjectDetail(project),
+      ),
+    );
+  }
+
+  Widget _archiveIcon(BuildContext context) {
+    return Icon(
+      Icons.archive,
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
+  }
+
+  void _openProjectDetail(Project project) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ProjectDetailPage(projectId: project.id),
+      ),
+    );
+  }
+
   Future<void> _loadDropboxFolders() async {
     try {
       final signedIn = await _dropboxAuth.isSignedIn();
       if (!mounted) return;
       if (!signedIn) {
         setState(() {
-          _dropboxFolderNames = null;
+          _dropboxFolderPathsByName = null;
           _dropboxChecked = true;
         });
         return;
       }
       final api = DropboxApi(_dropboxAuth);
-      final entries = await api.listFolder(path: '/SKY/01 PRJT');
-      if (!mounted) return;
-      final folderNames = <String>{};
-      for (final entry in entries) {
-        if (!entry.isFolder) continue;
-        final nameLower = entry.name.trim().toLowerCase();
-        if (nameLower.isNotEmpty) folderNames.add(nameLower);
-        final display = entry.pathDisplay.trim().toLowerCase();
-        if (display.isNotEmpty) {
-          folderNames.add(display);
-          final segments = display
-              .split('/')
-              .where((segment) => segment.isNotEmpty)
-              .toList();
-          if (segments.isNotEmpty) {
-            folderNames.add(segments.last);
-          }
-        }
+      final folderPathsByName = <String, String>{};
+      await _addDropboxFoldersFromPath(
+        api,
+        path: '/SKY/01 PRJT',
+        folderPathsByName: folderPathsByName,
+      );
+      try {
+        await _addDropboxFoldersFromPath(
+          api,
+          path: '/SKY/01 PRJT/Archive',
+          folderPathsByName: folderPathsByName,
+        );
+      } catch (_) {
+        // Some Dropbox accounts may not have an Archive folder configured.
       }
+      if (!mounted) return;
       setState(() {
-        _dropboxFolderNames = folderNames;
+        _dropboxFolderPathsByName = folderPathsByName;
         _dropboxChecked = true;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _dropboxFolderNames = {};
+        _dropboxFolderPathsByName = {};
         _dropboxChecked = true;
       });
+    }
+  }
+
+  Future<void> _addDropboxFoldersFromPath(
+    DropboxApi api, {
+    required String path,
+    required Map<String, String> folderPathsByName,
+  }) async {
+    final entries = await api.listFolder(path: path);
+    for (final entry in entries) {
+      if (!entry.isFolder) continue;
+      final displayPath = entry.pathDisplay.trim().isNotEmpty
+          ? entry.pathDisplay.trim()
+          : entry.pathLower.trim();
+      final normalizedPath =
+          displayPath.startsWith('/') ? displayPath : '/$displayPath';
+
+      final nameLower = entry.name.trim().toLowerCase();
+      if (nameLower.isNotEmpty) {
+        folderPathsByName.putIfAbsent(nameLower, () => normalizedPath);
+      }
+
+      final display = displayPath.toLowerCase();
+      if (display.isNotEmpty) {
+        folderPathsByName.putIfAbsent(display, () => normalizedPath);
+        final segments =
+            display.split('/').where((segment) => segment.isNotEmpty).toList();
+        if (segments.isNotEmpty) {
+          folderPathsByName.putIfAbsent(segments.last, () => normalizedPath);
+        }
+      }
     }
   }
 
@@ -407,8 +506,8 @@ class _ProjectsPageState extends State<ProjectsPage> {
 
     final normalized = _normalizeDropboxFolderName(project.folderName);
     final hasMatch = normalized != null &&
-        (_dropboxFolderNames?.contains(normalized) ?? false);
-    final unavailable = _dropboxFolderNames == null;
+        (_dropboxFolderPathsByName?.containsKey(normalized) ?? false);
+    final unavailable = _dropboxFolderPathsByName == null;
     final color = hasMatch
         ? Colors.green
         : unavailable
@@ -444,7 +543,8 @@ class _ProjectsPageState extends State<ProjectsPage> {
   }
 
   Future<void> _openProjectFolder(Project project) async {
-    final folderPath = _resolveProjectDropboxPath(project);
+    final folderPath =
+        _matchedDropboxPath(project) ?? _resolveProjectDropboxPath(project);
     if (folderPath == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -472,6 +572,12 @@ class _ProjectsPageState extends State<ProjectsPage> {
         SnackBar(content: Text('Could not open Dropbox folder: $e')),
       );
     }
+  }
+
+  String? _matchedDropboxPath(Project project) {
+    final normalized = _normalizeDropboxFolderName(project.folderName);
+    if (normalized == null) return null;
+    return _dropboxFolderPathsByName?[normalized];
   }
 
   Uri _dropboxWebUri(String path) {

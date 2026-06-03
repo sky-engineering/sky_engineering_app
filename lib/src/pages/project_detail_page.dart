@@ -609,7 +609,6 @@ class _FinancialSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currency = NumberFormat.simpleCurrency();
-    final currency0 = NumberFormat.simpleCurrency(decimalDigits: 0);
 
     return StreamBuilder<List<Invoice>>(
       stream: InvoiceRepository().streamForProject(
@@ -638,7 +637,7 @@ class _FinancialSummaryCard extends StatelessWidget {
         final pctInvoiced =
             (contract > 0) ? (clientInvoiced / contract) * 100 : 0.0;
         final contractLabel =
-            contractAmount != null ? currency0.format(contractAmount) : '--';
+            contractAmount != null ? currency.format(contractAmount) : '--';
         final progressLabel = (contract > 0)
             ? 'Contract Progress: ${pctInvoiced.toStringAsFixed(0)}%'
             : 'Contract Progress: --';

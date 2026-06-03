@@ -1,4 +1,4 @@
-﻿// lib/src/pages/note_editor_page.dart
+// lib/src/pages/note_editor_page.dart
 import 'dart:async';
 import 'dart:typed_data' as typed_data;
 
@@ -374,10 +374,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Discard changes?'),
-          content: const Text(
-            'Proceed without saving and all changes will be lost.',
-          ),
+          title: const Text('Are you sure?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
@@ -385,7 +382,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             ),
             FilledButton(
               onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Proceed without saving'),
+              child: const Text('Exit without saving'),
             ),
           ],
         );
@@ -466,12 +463,15 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     try {
       final projects = await _projectRepository.streamAll().first;
       final eligible = projects
-          .where((p) => (p.folderName?.trim().isNotEmpty ?? false))
+          .where(
+            (p) =>
+                !p.isArchived &&
+                p.status.trim() != 'Archive' &&
+                (_isAdminOrProposalsProject(p) ||
+                    (p.folderName?.trim().isNotEmpty ?? false)),
+          )
           .toList();
       eligible.sort((a, b) {
-        if (a.isArchived != b.isArchived) {
-          return a.isArchived ? 1 : -1;
-        }
         final numA = (a.projectNumber ?? '').trim();
         final numB = (b.projectNumber ?? '').trim();
         if (numA.isNotEmpty && numB.isNotEmpty) {
@@ -487,7 +487,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         if (!mounted) return null;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('No projects with Dropbox folders found.'),
+            content: Text('No available note locations found.'),
           ),
         );
         return null;
@@ -512,8 +512,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     String content,
     List<_NoteAttachment> attachments,
   ) async {
-    final projectRoot = _resolveProjectDropboxPath(project);
-    if (projectRoot == null) {
+    final notesFolder = _resolveNotesFolderPath(project);
+    if (notesFolder == null) {
       throw Exception('Selected project is missing a Dropbox folder.');
     }
 
@@ -528,9 +528,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
     final api = DropboxApi(_dropboxAuth);
 
-    await _ensureNotesFolders(api, projectRoot);
+    await _ensureFolderPath(api, notesFolder);
 
-    final notesFolder = _stripTrailingSlashes('$projectRoot/00 PRMG/05 NOTE');
     final timestamp = DateTime.now();
     final fileName = DateFormat('yyyy-MM-dd_HHmmss').format(timestamp);
     final filePath = '$notesFolder/$fileName.pdf';
@@ -549,13 +548,15 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     );
   }
 
-  Future<void> _ensureNotesFolders(DropboxApi api, String projectRoot) async {
-    final normalizedRoot = _stripTrailingSlashes(projectRoot);
-    final prmg = '$normalizedRoot/00 PRMG';
-    final notes = '$prmg/05 NOTE';
-    await api.ensureFolder(normalizedRoot);
-    await api.ensureFolder(prmg);
-    await api.ensureFolder(notes);
+  Future<void> _ensureFolderPath(DropboxApi api, String folderPath) async {
+    final normalized = _stripTrailingSlashes(folderPath);
+    final segments =
+        normalized.split('/').where((segment) => segment.isNotEmpty).toList();
+    var current = '';
+    for (final segment in segments) {
+      current = '$current/$segment';
+      await api.ensureFolder(current);
+    }
   }
 
   Future<typed_data.Uint8List> _buildPdfBytes({
@@ -652,6 +653,25 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     return doc.save();
   }
 
+  String? _resolveNotesFolderPath(Project project) {
+    if (_isAdminOrProposalsProject(project)) {
+      return '/SKY/00 ADMN/01 COMP/Miscellaneous App Notes';
+    }
+
+    final projectRoot = _resolveProjectDropboxPath(project);
+    if (projectRoot == null) return null;
+    return _stripTrailingSlashes('$projectRoot/00 PRMG/05 NOTE');
+  }
+
+  bool _isAdminOrProposalsProject(Project project) {
+    final number = project.projectNumber?.trim();
+    if (number == '000' || number == '001') {
+      return true;
+    }
+    final name = project.name.trim().toLowerCase();
+    return name == 'admin' || name == 'proposals';
+  }
+
   String? _resolveProjectDropboxPath(Project project) {
     final raw = project.folderName;
     if (raw == null) return null;
@@ -690,7 +710,7 @@ class _ProjectPickerDialogState extends State<_ProjectPickerDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Select Project'),
+      title: const Text('Select Location'),
       content: SizedBox(
         width: double.maxFinite,
         height: 360,
@@ -767,4 +787,3 @@ class _SavingNoteDialog extends StatelessWidget {
     );
   }
 }
-

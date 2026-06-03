@@ -106,7 +106,7 @@ class _TasksBySubphaseSectionState extends State<TasksBySubphaseSection> {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(8),
         child: StreamBuilder<List<Invoice>>(
           stream: invoiceRepo.streamByProject(widget.projectId),
           builder: (context, invoiceSnap) {
@@ -539,7 +539,7 @@ class _SubphaseBox extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           if (tasks.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 0, 8, 2),
@@ -1114,7 +1114,10 @@ class _CompactTaskTileState extends State<_CompactTaskTile> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final small = theme.textTheme.bodySmall?.copyWith(fontSize: 12);
+    final small = theme.textTheme.bodySmall?.copyWith(
+      fontSize: 12,
+      height: 1.0,
+    );
     final task = widget.task;
     final canEdit = widget.canEdit;
     final hasDesc = (task.description ?? '').trim().isNotEmpty;
@@ -1166,7 +1169,7 @@ class _CompactTaskTileState extends State<_CompactTaskTile> {
       child: InkWell(
         onTap: widget.onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0.5),
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
           child: Row(
             crossAxisAlignment: hasDesc || (hasSubtasks && _expanded)
                 ? CrossAxisAlignment.start
@@ -1174,20 +1177,25 @@ class _CompactTaskTileState extends State<_CompactTaskTile> {
             children: [
               Padding(
                 padding: EdgeInsets.only(top: hasDesc ? 1 : 0),
-                child: IconButton(
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 32,
-                    minHeight: 32,
+                child: Tooltip(
+                  message: task.isStarred ? 'Unstar' : 'Star',
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: widget.onToggleStar,
+                    child: SizedBox(
+                      width: 20,
+                      height: 24,
+                      child: Center(
+                        child: Icon(
+                          task.isStarred ? Icons.star : Icons.star_border,
+                          size: 16,
+                          color: task.isStarred
+                              ? filledStarColor
+                              : hollowStarColor,
+                        ),
+                      ),
+                    ),
                   ),
-                  iconSize: 18,
-                  splashRadius: 16,
-                  onPressed: widget.onToggleStar,
-                  icon: Icon(
-                    task.isStarred ? Icons.star : Icons.star_border,
-                    color: task.isStarred ? filledStarColor : hollowStarColor,
-                  ),
-                  tooltip: task.isStarred ? 'Unstar' : 'Star',
                 ),
               ),
               const SizedBox(width: 3),
@@ -1204,59 +1212,67 @@ class _CompactTaskTileState extends State<_CompactTaskTile> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
+                              fontWeight: FontWeight.w400,
+                              fontSize: 12,
+                              height: 1.0,
                             ),
                           ),
                         ),
                         if (hasSubtasks)
                           Padding(
                             padding: const EdgeInsets.only(left: 4),
-                            child: IconButton(
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(
-                                minWidth: 28,
-                                minHeight: 28,
-                              ),
-                              iconSize: 18,
-                              splashRadius: 18,
-                              onPressed: _toggleExpansion,
-                              icon: Icon(_expanded ? Icons.remove : Icons.add),
-                              tooltip:
+                            child: Tooltip(
+                              message:
                                   _expanded ? 'Hide subtasks' : 'Show subtasks',
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(8),
+                                onTap: _toggleExpansion,
+                                child: SizedBox(
+                                  width: 16,
+                                  height: 14,
+                                  child: Center(
+                                    child: Icon(
+                                      _expanded ? Icons.remove : Icons.add,
+                                      size: 12,
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         const SizedBox(width: 6),
-                        DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: _kTaskStatuses.contains(task.taskStatus)
-                                ? task.taskStatus
-                                : 'In Progress',
-                            items: _kTaskStatuses
-                                .map(
-                                  (s) => DropdownMenuItem(
-                                    value: s,
-                                    child: Text(s),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: canEdit
-                                ? (v) {
-                                    if (v != null) {
-                                      widget.onChangeStatus(v);
-                                    }
-                                  }
-                                : null,
-                            isDense: true,
-                            icon: const SizedBox.shrink(),
-                            style: small,
+                        PopupMenuButton<String>(
+                          enabled: canEdit,
+                          padding: EdgeInsets.zero,
+                          position: PopupMenuPosition.under,
+                          onSelected: widget.onChangeStatus,
+                          itemBuilder: (context) => _kTaskStatuses
+                              .map(
+                                (status) => PopupMenuItem<String>(
+                                  value: status,
+                                  height: 30,
+                                  child: Text(status, style: small),
+                                ),
+                              )
+                              .toList(),
+                          child: SizedBox(
+                            height: 16,
+                            child: Align(
+                              alignment: Alignment.center,
+                              child: Text(
+                                _kTaskStatuses.contains(task.taskStatus)
+                                    ? task.taskStatus
+                                    : 'In Progress',
+                                style: small,
+                              ),
+                            ),
                           ),
                         ),
                       ],
                     ),
                     if (hasDesc)
                       Padding(
-                        padding: const EdgeInsets.only(top: 1),
+                        padding: const EdgeInsets.only(bottom: 4),
                         child: Text(
                           task.description!.trim(),
                           maxLines: 3,
@@ -1266,7 +1282,7 @@ class _CompactTaskTileState extends State<_CompactTaskTile> {
                       ),
                     if (hasSubtasks && _expanded)
                       Padding(
-                        padding: EdgeInsets.only(top: hasDesc ? 6 : 4),
+                        padding: EdgeInsets.only(top: hasDesc ? 2 : 4),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: List.generate(_subtasks.length, (index) {
